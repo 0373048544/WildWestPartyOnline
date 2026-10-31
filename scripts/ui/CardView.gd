@@ -1,0 +1,83 @@
+extends Button
+
+var visual: Control
+var lift: Tween
+var accent: Color
+var effect: int = 0
+
+func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: bool) -> void:
+	custom_minimum_size = Vector2(210, 214)
+	disabled = not usable
+	tooltip_text = definition.name + "\n" + definition.description
+	accent = [Color("#bc6449"), Color("#6a9b9f"), Color("#a38748"), Color("#7b719d")][int(definition.type)]
+	effect = definition.effect
+	# The Button owns input; its child carries the hover lift outside container layout.
+	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
+		add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	visual = Control.new()
+	visual.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	visual.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(visual)
+	var panel := Panel.new()
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var face := SaloonTheme.panel(Color("#ecdbb7") if usable else Color("#a8a28f"), SaloonTheme.GOLD if chosen else accent, 10)
+	face.set_border_width_all(3 if chosen else 2)
+	panel.add_theme_stylebox_override("panel", face)
+	visual.add_child(panel)
+	var band := ColorRect.new()
+	band.color = accent if usable else accent.darkened(0.3)
+	band.position = Vector2(6, 6)
+	band.size = Vector2(198, 31)
+	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	visual.add_child(band)
+	add_text(definition.name, Rect2(10, 8, 190, 25), 17, SaloonTheme.CREAM)
+	add_text(TextCatalog.text(card.suit) + "  " + str({1: "A", 11: "J", 12: "Q", 13: "K"}.get(int(card.rank), card.rank)), Rect2(12, 40, 186, 20), 13, accent.darkened(0.25))
+	add_text(TextCatalog.text(CardData.CardType.keys()[definition.type]), Rect2(10, 98, 190, 18), 11, accent.darkened(0.3))
+	add_text(definition.description, Rect2(12, 115, 186, 94), 13, Color("#29333a"))
+	var icon := Control.new()
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.draw.connect(func(): draw_symbol(icon))
+	visual.add_child(icon)
+	mouse_entered.connect(func(): hover(true))
+	mouse_exited.connect(func(): hover(false))
+	visual.modulate = Color("#fff0bd") if chosen else Color.WHITE
+
+func add_text(value: String, bounds: Rect2, font_size: int, color: Color) -> void:
+	var text_label := Label.new()
+	text_label.text = value
+	text_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	text_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	text_label.add_theme_font_size_override("font_size", font_size)
+	text_label.add_theme_color_override("font_color", color)
+	text_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	visual.add_child(text_label)
+	# Apply bounds after wrap/font changes so Label minimum-size updates cannot widen it.
+	text_label.position = bounds.position
+	text_label.size = bounds.size
+
+func hover(raised: bool) -> void:
+	if lift:
+		lift.kill()
+	lift = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	lift.tween_property(visual, "position:y", -6.0 if raised else 0.0, 0.16)
+	z_index = 2 if raised else 0
+
+func draw_symbol(icon: Control) -> void:
+	var center := Vector2(105, 80)
+	icon.draw_circle(center, 17, accent.darkened(0.12))
+	var ink := SaloonTheme.CREAM
+	match effect:
+		CardData.EffectType.ATTACK, CardData.EffectType.EQUIP_WEAPON, CardData.EffectType.DUEL:
+			icon.draw_line(center + Vector2(-12, -4), center + Vector2(12, -4), ink, 6)
+			icon.draw_line(center + Vector2(-7, -3), center + Vector2(-3, 10), ink, 5)
+			if effect == CardData.EffectType.DUEL:
+				icon.draw_line(center + Vector2(7, 1), center + Vector2(3, 12), ink, 4)
+		CardData.EffectType.HEAL:
+			icon.draw_line(center + Vector2(-10, 0), center + Vector2(10, 0), ink, 5)
+			icon.draw_line(center + Vector2(0, -10), center + Vector2(0, 10), ink, 5)
+		CardData.EffectType.DODGE:
+			icon.draw_arc(center, 10, -2.6, 0.8, 14, ink, 3)
+			icon.draw_line(center + Vector2(8, 6), center + Vector2(0, 6), ink, 3)
+		_:
+			icon.draw_colored_polygon(PackedVector2Array([center + Vector2(0, -12), center + Vector2(11, 0), center + Vector2(0, 12), center + Vector2(-11, 0)]), ink)

@@ -1,0 +1,406 @@
+﻿{
+  "expected_count": 80,
+  "suit_rank_status": "provisional_fixed_not_verified_against_printed_base_deck",
+  "cards": [
+    {
+      "card_data_id": "shoot",
+      "suit": "HEART",
+      "rank": 1
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "DIAMOND",
+      "rank": 2
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "CLUB",
+      "rank": 3
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "SPADE",
+      "rank": 4
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "HEART",
+      "rank": 5
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "DIAMOND",
+      "rank": 6
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "CLUB",
+      "rank": 7
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "SPADE",
+      "rank": 8
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "HEART",
+      "rank": 9
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "DIAMOND",
+      "rank": 10
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "CLUB",
+      "rank": 11
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "SPADE",
+      "rank": 12
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "HEART",
+      "rank": 13
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "DIAMOND",
+      "rank": 1
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "CLUB",
+      "rank": 2
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "SPADE",
+      "rank": 3
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "HEART",
+      "rank": 4
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "DIAMOND",
+      "rank": 5
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "CLUB",
+      "rank": 6
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "SPADE",
+      "rank": 7
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "HEART",
+      "rank": 8
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "DIAMOND",
+      "rank": 9
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "CLUB",
+      "rank": 10
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "SPADE",
+      "rank": 11
+    },
+    {
+      "card_data_id": "shoot",
+      "suit": "HEART",
+      "rank": 12
+    },
+    {
+      "card_data_id": "dodge",
+      "suit": "DIAMOND",
+      "rank": 13
+    },
+    {
+      "card_data_id": "dodge",
+      "suit": "CLUB",
+      "rank": 1
+    },
+    {
+      "card_data_id": "dodge",
+      "suit": "SPADE",
+      "rank": 2
+    },
+    {
+      "card_data_id": "dodge",
+      "suit": "HEART",
+      "rank": 3
+    },
+    {
+      "card_data_id": "dodge",
+      "suit": "DIAMOND",
+      "rank": 4
+    },
+    {
+      "card_data_id": "dodge",
+      "suit": "CLUB",
+      "rank": 5
+    },
+    {
+      "card_data_id": "dodge",
+      "suit": "SPADE",
+      "rank": 6
+    },
+    {
+      "card_data_id": "dodge",
+      "suit": "HEART",
+      "rank": 7
+    },
+    {
+      "card_data_id": "dodge",
+      "suit": "DIAMOND",
+      "rank": 8
+    },
+    {
+      "card_data_id": "dodge",
+      "suit": "CLUB",
+      "rank": 9
+    },
+    {
+      "card_data_id": "dodge",
+      "suit": "SPADE",
+      "rank": 10
+    },
+    {
+      "card_data_id": "dodge",
+      "suit": "HEART",
+      "rank": 11
+    },
+    {
+      "card_data_id": "drink",
+      "suit": "DIAMOND",
+      "rank": 12
+    },
+    {
+      "card_data_id": "drink",
+      "suit": "CLUB",
+      "rank": 13
+    },
+    {
+      "card_data_id": "drink",
+      "suit": "SPADE",
+      "rank": 1
+    },
+    {
+      "card_data_id": "drink",
+      "suit": "HEART",
+      "rank": 2
+    },
+    {
+      "card_data_id": "drink",
+      "suit": "DIAMOND",
+      "rank": 3
+    },
+    {
+      "card_data_id": "drink",
+      "suit": "CLUB",
+      "rank": 4
+    },
+    {
+      "card_data_id": "panic",
+      "suit": "SPADE",
+      "rank": 5
+    },
+    {
+      "card_data_id": "panic",
+      "suit": "HEART",
+      "rank": 6
+    },
+    {
+      "card_data_id": "panic",
+      "suit": "DIAMOND",
+      "rank": 7
+    },
+    {
+      "card_data_id": "panic",
+      "suit": "CLUB",
+      "rank": 8
+    },
+    {
+      "card_data_id": "cat_balou",
+      "suit": "SPADE",
+      "rank": 9
+    },
+    {
+      "card_data_id": "cat_balou",
+      "suit": "HEART",
+      "rank": 10
+    },
+    {
+      "card_data_id": "cat_balou",
+      "suit": "DIAMOND",
+      "rank": 11
+    },
+    {
+      "card_data_id": "cat_balou",
+      "suit": "CLUB",
+      "rank": 12
+    },
+    {
+      "card_data_id": "showdown",
+      "suit": "SPADE",
+      "rank": 13
+    },
+    {
+      "card_data_id": "showdown",
+      "suit": "HEART",
+      "rank": 1
+    },
+    {
+      "card_data_id": "showdown",
+      "suit": "DIAMOND",
+      "rank": 2
+    },
+    {
+      "card_data_id": "jail",
+      "suit": "CLUB",
+      "rank": 3
+    },
+    {
+      "card_data_id": "jail",
+      "suit": "SPADE",
+      "rank": 4
+    },
+    {
+      "card_data_id": "jail",
+      "suit": "HEART",
+      "rank": 5
+    },
+    {
+      "card_data_id": "schofield",
+      "suit": "DIAMOND",
+      "rank": 6
+    },
+    {
+      "card_data_id": "schofield",
+      "suit": "CLUB",
+      "rank": 7
+    },
+    {
+      "card_data_id": "schofield",
+      "suit": "SPADE",
+      "rank": 8
+    },
+    {
+      "card_data_id": "barrel",
+      "suit": "HEART",
+      "rank": 9
+    },
+    {
+      "card_data_id": "barrel",
+      "suit": "DIAMOND",
+      "rank": 10
+    },
+    {
+      "card_data_id": "horse",
+      "suit": "CLUB",
+      "rank": 11
+    },
+    {
+      "card_data_id": "horse",
+      "suit": "SPADE",
+      "rank": 12
+    },
+    {
+      "card_data_id": "volcanic",
+      "suit": "HEART",
+      "rank": 13
+    },
+    {
+      "card_data_id": "volcanic",
+      "suit": "DIAMOND",
+      "rank": 1
+    },
+    {
+      "card_data_id": "supply",
+      "suit": "CLUB",
+      "rank": 2
+    },
+    {
+      "card_data_id": "supply",
+      "suit": "SPADE",
+      "rank": 3
+    },
+    {
+      "card_data_id": "general_store",
+      "suit": "HEART",
+      "rank": 4
+    },
+    {
+      "card_data_id": "general_store",
+      "suit": "DIAMOND",
+      "rank": 5
+    },
+    {
+      "card_data_id": "indians",
+      "suit": "CLUB",
+      "rank": 6
+    },
+    {
+      "card_data_id": "indians",
+      "suit": "SPADE",
+      "rank": 7
+    },
+    {
+      "card_data_id": "dynamite",
+      "suit": "HEART",
+      "rank": 8
+    },
+    {
+      "card_data_id": "spyglass",
+      "suit": "DIAMOND",
+      "rank": 9
+    },
+    {
+      "card_data_id": "remington",
+      "suit": "CLUB",
+      "rank": 10
+    },
+    {
+      "card_data_id": "carabine",
+      "suit": "SPADE",
+      "rank": 11
+    },
+    {
+      "card_data_id": "winchester",
+      "suit": "HEART",
+      "rank": 12
+    },
+    {
+      "card_data_id": "gatling",
+      "suit": "DIAMOND",
+      "rank": 13
+    },
+    {
+      "card_data_id": "saloon",
+      "suit": "CLUB",
+      "rank": 1
+    },
+    {
+      "card_data_id": "wells_fargo",
+      "suit": "SPADE",
+      "rank": 2
+    }
+  ]
+}

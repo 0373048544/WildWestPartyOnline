@@ -1,0 +1,114 @@
+﻿[
+  {
+    "character_id": "bart_cassidy",
+    "display_name": "Bart Cassidy",
+    "max_hp": 4,
+    "ability_id": "damage_draw",
+    "ability_description_vi": "Mỗi máu mất đi: rút 1 lá, kể cả do Thuốc nổ."
+  },
+  {
+    "character_id": "black_jack",
+    "display_name": "Black Jack",
+    "max_hp": 4,
+    "ability_id": "draw_reveal",
+    "ability_description_vi": "Lộ lá rút thứ hai; nếu Cơ hoặc Rô thì rút thêm 1 lá kín."
+  },
+  {
+    "character_id": "calamity_janet",
+    "display_name": "Calamity Janet",
+    "max_hp": 4,
+    "ability_id": "convert",
+    "ability_description_vi": "Đổi Bắn thành Né và ngược lại, kể cả khi đáp trả."
+  },
+  {
+    "character_id": "el_gringo",
+    "display_name": "El Gringo",
+    "max_hp": 3,
+    "ability_id": "damage_steal",
+    "ability_description_vi": "Mỗi máu mất do người khác: lấy ngẫu nhiên 1 lá trên tay người đó."
+  },
+  {
+    "character_id": "jesse_jones",
+    "display_name": "Jesse Jones",
+    "max_hp": 4,
+    "ability_id": "draw_steal",
+    "ability_description_vi": "Lá rút đầu có thể lấy ngẫu nhiên từ tay đối thủ; lá thứ hai rút từ chồng."
+  },
+  {
+    "character_id": "jourdonnais",
+    "display_name": "Jourdonnais",
+    "max_hp": 4,
+    "ability_id": "innate_barrel",
+    "ability_description_vi": "Có sẵn hiệu ứng Thùng. Cộng thêm một lần lật nếu trang bị Thùng thật."
+  },
+  {
+    "character_id": "kit_carlson",
+    "display_name": "Kit Carlson",
+    "max_hp": 4,
+    "ability_id": "draw_choose",
+    "ability_description_vi": "Xem 3 lá, chọn 2 để giữ; trả lá còn lại lên đầu chồng."
+  },
+  {
+    "character_id": "lucky_duke",
+    "display_name": "Lucky Duke",
+    "max_hp": 4,
+    "ability_id": "judge_choose",
+    "ability_description_vi": "Mỗi lần phán định: lật 2 lá và chọn kết quả, bỏ cả hai."
+  },
+  {
+    "character_id": "paul_regret",
+    "display_name": "Paul Regret",
+    "max_hp": 3,
+    "ability_id": "distance_defense",
+    "ability_description_vi": "Người khác thấy bạn xa hơn 1; cộng dồn với Ngựa."
+  },
+  {
+    "character_id": "pedro_ramirez",
+    "display_name": "Pedro Ramirez",
+    "max_hp": 4,
+    "ability_id": "draw_discard",
+    "ability_description_vi": "Lá rút đầu có thể lấy từ đầu chồng bỏ; lá thứ hai từ chồng rút."
+  },
+  {
+    "character_id": "rose_doolan",
+    "display_name": "Rose Doolan",
+    "max_hp": 4,
+    "ability_id": "distance_sight",
+    "ability_description_vi": "Thấy người khác gần hơn 1; cộng dồn với Ống nhòm."
+  },
+  {
+    "character_id": "sid_ketchum",
+    "display_name": "Sid Ketchum",
+    "max_hp": 4,
+    "ability_id": "discard_heal",
+    "ability_description_vi": "Chọn bỏ đúng 2 lá trên tay để hồi 1 máu, kể cả khi hấp hối."
+  },
+  {
+    "character_id": "slab_the_killer",
+    "display_name": "Slab the Killer",
+    "max_hp": 4,
+    "ability_id": "double_dodge",
+    "ability_description_vi": "Đối thủ cần 2 lần Né để tránh lá Bắn của bạn."
+  },
+  {
+    "character_id": "suzy_lafayette",
+    "display_name": "Suzy Lafayette",
+    "max_hp": 4,
+    "ability_id": "empty_draw",
+    "ability_description_vi": "Khi hết bài trên tay, lập tức rút 1 lá."
+  },
+  {
+    "character_id": "vulture_sam",
+    "display_name": "Vulture Sam",
+    "max_hp": 4,
+    "ability_id": "death_collect",
+    "ability_description_vi": "Khi người khác chết, thu toàn bộ bài trên tay và trang bị của họ vào tay."
+  },
+  {
+    "character_id": "willy_the_kid",
+    "display_name": "Willy the Kid",
+    "max_hp": 4,
+    "ability_id": "unlimited_shoot",
+    "ability_description_vi": "Dùng không giới hạn lá Bắn trong lượt; vẫn tuân thủ tầm súng."
+  }
+]
