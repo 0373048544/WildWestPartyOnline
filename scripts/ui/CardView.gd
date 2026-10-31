@@ -1,9 +1,17 @@
 extends Button
 
+signal preview_requested
+signal preview_closed
+
 var visual: Control
 var lift: Tween
 var accent: Color
 var effect: int = 0
+var selected_lift: float = 0.0
+var compact_mode: bool = false
+var block_activation: bool = false
+var holding: bool = false
+var hold_time: float = 0.0
 
 func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: bool) -> void:
 	custom_minimum_size = Vector2(210, 214)
@@ -41,6 +49,8 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	visual.add_child(icon)
 	mouse_entered.connect(func(): hover(true))
 	mouse_exited.connect(func(): hover(false))
+	button_down.connect(func(): holding = true; hold_time = 0; block_activation = false)
+	button_up.connect(func(): holding = false)
 	visual.modulate = Color("#fff0bd") if chosen else Color.WHITE
 
 func add_text(value: String, bounds: Rect2, font_size: int, color: Color) -> void:
@@ -60,8 +70,33 @@ func hover(raised: bool) -> void:
 	if lift:
 		lift.kill()
 	lift = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	lift.tween_property(visual, "position:y", -6.0 if raised else 0.0, 0.16)
-	z_index = 2 if raised else 0
+	lift.tween_property(visual, "position:y", minf(selected_lift, -22.0 if raised and compact_mode else (-6.0 if raised else 0.0)), 0.16)
+	z_index = 100 if raised else get_index()
+	if raised:
+		preview_requested.emit()
+	else:
+		preview_closed.emit()
+
+func compact(chosen: bool, reaction: bool) -> void:
+	compact_mode = true
+	custom_minimum_size = Vector2(158, 162)
+	size = custom_minimum_size
+	visual.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+	visual.size = Vector2(210, 214)
+	visual.scale = Vector2.ONE * 0.75
+	selected_lift = -30 if chosen else 0
+	visual.position.y = selected_lift
+	if reaction:
+		var glow := create_tween().set_loops()
+		glow.tween_property(visual, "modulate", Color("#fff0b5"), 0.55)
+		glow.tween_property(visual, "modulate", Color.WHITE, 0.55)
+
+func _process(delta: float) -> void:
+	if holding:
+		hold_time += delta
+		if hold_time >= 0.45 and not block_activation:
+			block_activation = true
+			preview_requested.emit()
 
 func draw_symbol(icon: Control) -> void:
 	var center := Vector2(105, 80)

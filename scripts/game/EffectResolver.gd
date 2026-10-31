@@ -77,7 +77,7 @@ func play(game: Node, sender: int, uid: int, target: int) -> void:
 
 func attack(game: Node, sender: int, target: int, _card: Dictionary) -> void:
 	game.players[sender].shoot_used_this_turn = true
-	NetworkManager.broadcast_animation(sender, "shoot", target)
+	game.network.broadcast_animation(sender, "shoot", target)
 	game.flow.push({"kind": "attack", "source": sender, "target": target, "required": 2 if game.players[sender].ability_id == "double_dodge" else 1})
 
 func heal(game: Node, sender: int, _target: int, _card: Dictionary) -> void:
@@ -97,6 +97,7 @@ func jail(game: Node, _sender: int, target: int, card: Dictionary) -> void:
 	game.players[target].equipment.jail = card
 
 func duel(game: Node, sender: int, target: int, _card: Dictionary) -> void:
+	game.network.broadcast_table_event({"kind": "duel", "player": sender, "target": target})
 	game.flow.push({"kind": "duel", "source": sender, "target": target})
 
 func steal(game: Node, sender: int, target: int, _card: Dictionary) -> void:
@@ -114,11 +115,12 @@ func store(game: Node, sender: int, _target: int, _card: Dictionary) -> void:
 	game.flow.start_store(sender)
 
 func gatling(game: Node, sender: int, _target: int, _card: Dictionary) -> void:
-	NetworkManager.broadcast_animation(sender, "gatling", 0)
+	game.network.broadcast_animation(sender, "gatling", 0)
 	for id in game.living_order(sender, false):
 		game.flow.push({"kind": "attack", "source": sender, "target": id, "required": 1})
 
 func indians(game: Node, sender: int, _target: int, _card: Dictionary) -> void:
 	for id in game.living_order(sender, false):
 		game.flow.push({"kind": "indians", "source": sender, "target": id})
+
 

@@ -1,134 +1,144 @@
-# Wild West Party Online
+﻿# Miền Tây Đại Chiến
 
-Tên hiển thị trong game: **Miền Tây Đại Chiến**.
+Project Godot 4.7.2, client Web + server Godot headless có thẩm quyền, giao diện tiếng Việt và saloon 3D tạo bằng primitive. Không dùng artwork bên ngoài. ENet được giữ cho kiểm thử desktop; giao diện người chơi mặc định dùng WebSocket và mã phòng.
 
-Giao diện đã được Việt hóa: menu, tạo/tham gia phòng, phòng chờ, vai trò, lá bài, giai đoạn, trang bị, nhật ký, phản ứng, kết quả, thông báo lỗi và công cụ kiểm thử. Bản dịch tập trung trong localization/vi.gd (TextCatalog). Tên class, method, enum, ID lá bài, RPC và lệnh debug vẫn giữ tiếng Anh. Lỗi kết nối trên giao thức được dịch tại giao diện; tên người chơi do người dùng nhập được giữ nguyên.
+## Web multiplayer cục bộ
 
-Font ưu tiên Segoe UI, Arial, rồi DejaVu Sans cùng cơ chế font dự phòng của Godot. Bộ kiểm thử xác nhận các ký tự tiếng Việt có dấu. Khung bài, xuống dòng và cửa sổ phản ứng đã được điều chỉnh cho tiếng Việt ở 1440×900.
+Đã chuẩn bị build tại build/web. Khi server và web server đang chạy, mở:
 
-Kiểm tra bản dịch, font và bố cục:
+    http://127.0.0.1:8080
 
-    godot --headless --path . tests/LocalizationTest.tscn
+Nhập tên → TẠO PHÒNG → sao chép mã 6 ký tự. Người khác mở cùng URL, nhập tên + mã → THAM GIA. Ready và Start diễn ra trong phòng chung. Không nhập IP hoặc cổng trong giao diện.
 
-Để kiểm tra bằng trình dựng đồ họa và lưu ảnh các màn hình vào tests/artifacts/vietnamese (không đưa vào Git):
+Tái tạo build (Godot 4.7.2 và Node 22+):
 
-    godot --path . tests/LocalizationTest.tscn -- --capture
+    node tools/fetch-web-templates.cjs
+    powershell -NoProfile -ExecutionPolicy Bypass -File tools/Export-Web.ps1 -Godot "C:/path/to/Godot_v4.7.2-stable_win64_console.exe"
 
-A playable host-authoritative Godot 4.7.2 desktop prototype for a private group of friends. All graphics are generated from primitive meshes and materials. No external art or dependencies.
+Script tải chỉ lấy hai template Web không luồng từ bản phát hành chính thức, kiểm tra CRC của entry ZIP và lưu vào build/templates. Không cần cài template toàn nền tảng vào hồ sơ người dùng.
 
-## Run and connect
+Chạy hai terminal tại thư mục project:
 
-Open project.godot in Godot 4.7.2 and press F6 on scenes/menu/MainMenu.tscn, or F5 to run the main scene.
+    godot --headless --path . server/DedicatedServer.tscn -- --development
 
-1. Instance 1: choose HOST GAME, enter your name, keep port 7000, and press HOST.
-2. Instances 2–4: choose JOIN GAME, enter a name, use 127.0.0.1 and port 7000, and press JOIN.
-3. Everyone presses READY / NOT READY once. The host presses START GAME.
-4. Read your private role and press CONTINUE.
+    node tools/serve-web.cjs
 
-For local testing, use the Godot editor's Debug > Customize Run Instances option, enable multiple instances and set the count to 4. Run the project and select Host in one window and Join in the other three. Alternatively, open four terminal windows and run:
+Hoặc chạy tools/Run-Local-Web.ps1 -Godot "C:/path/to/Godot.exe" để khởi động hai tiến trình ẩn và in PID. Dừng đúng hai PID được in khi không cần nữa. Server mặc định chỉ lắng nghe 127.0.0.1:7000; HTTP chỉ lắng nghe 127.0.0.1:8080.
 
-    godot --path .
+Mặc định 4–7 người; chỉ server có --development trong debug build mới cho phép đúng 2 người. Host là chủ phòng và có thể chuyển sang người đang kết nối khác; vai trò trong game được xáo riêng, không đổi khi chuyển chủ phòng.
 
-Debug/editor builds accept 2–4 ready players. The two-player test uses Sheriff versus Outlaw; three-player testing uses Sheriff, Outlaw and Renegade. Release builds require four players. Four-player roles are exactly one Sheriff, two Outlaws and one Renegade.
+Endpoint tập trung trong config/network.cfg (desktop client), web/network-config.js (Web), hoặc WWPO_SERVER_URL (desktop). HTTPS dùng WSS; cấu hình mẫu trỏ WSS cùng origin /ws để dùng với TLS reverse proxy sau này. Mốc hiện tại chỉ chạy local, chưa có triển khai cloud hay public.
 
-On a LAN, clients enter the host's LAN IP. Allow Godot through Windows Firewall on the appropriate private network. Internet hosting requires the host's UDP port (default 7000) forwarded to their computer, or an existing private VPN connection. There is no matchmaking or relay.
+Refresh tab khôi phục bằng sessionStorage của tab. Mất socket được giữ chỗ 45 giây; reconnect khôi phục đúng ID, tay bài, vai trò và nhân vật. Menu/đồng hồ server vẫn chạy. Sau thời gian chờ, áp dụng đường xử lý bỏ cuộc hiện có. Phiên và phòng lưu trong RAM, không phục hồi sau server restart.
 
-## Controls and rules
+Web export dùng Compatibility/WebGL 2, không bật threads hoặc extension native. Bản Web tắt bóng đèn hướng để giảm tải và có layout theo chiều màn hình. File WASM khoảng 38 MB trước nén HTTP; nên dùng compression khi chuẩn bị hosting sau này. Có thể xuất release bằng tools/Export-Web.ps1 -Release. Build sinh ra không đưa vào Git.
 
-- Click a hand card to play it. Targeted cards highlight valid player panels and seat rings; click a highlighted panel to submit. Escape or CANCEL TARGET cancels.
-- END TURN enters the discard phase when your hand exceeds your current HP. Click excess cards to discard; the turn advances automatically when the limit is met.
-- During a reaction, use the offered Dodge, Drink or Shoot, or take the hit. The server expires the prompt after eight seconds.
-- Your role and hand are private. The Sheriff is public; death reveals the fallen player's role. All roles are revealed at game over.
-- Only the host can PLAY AGAIN or RETURN TO LOBBY. Any player can leave.
+Chi tiết kiến trúc phòng, giao thức, riêng tư và khôi phục: [server/README.md](server/README.md).
 
-Everyone starts with four cards and 4 HP; the Sheriff has 5 HP. Each turn draws two. The 32-card deck includes Shoot, Dodge, Drink, Rifle, Horse, Spyglass, Lucky Barrel, Supply and Showdown. Shoot is limited to once per turn. Rifle grants range 2; Horse and Spyglass modify circular distance, skipping dead seats. A Barrel publicly reveals and discards the checked card. Equipment cannot be duplicated. Showdown alternates Shoot responses and ignores distance.
+## Chơi thử
 
-Emergency Drink restores a fatally wounded player to 1 HP. Death discards all possessions. Killing an Outlaw draws three cards. The future Deputy penalty is implemented. Sheriff death gives the Outlaws victory unless the Renegade is the sole survivor; eliminating all enemies gives the Sheriff team victory.
+Mở project.godot và nhấn F5 cũng chạy được client desktop kết nối cùng dedicated server. Tạo/tham gia bằng mã phòng giống bản Web.
 
-Disconnected players forfeit, reveal their role and discard their cards. No kill reward is granted for a disconnect. Turns and pending reactions resolve safely. Host departure ends the session.
+HOST luôn vào PHÒNG CHỜ trước. Tất cả bấm sẵn sàng, chủ phòng bấm BẮT ĐẦU. Bình thường hỗ trợ 4–7 người; debug cho phép đúng 2 người. Không hỗ trợ 3 người. Host chỉ có quyền quản lý phòng, không được ưu tiên vai trò, máu hoặc lượt.
 
-## Architecture
+Mỗi ván server xáo vai trò và chia riêng hai lựa chọn nhân vật cho từng người. Chỉ khi mọi người chọn xong (hoặc hết 25 giây) nhân vật được công khai. Cảnh sát trưởng được chọn ngẫu nhiên mở lượt đầu. Chơi lại làm mới vai trò, lựa chọn nhân vật, bộ bài, tay bài và lượt.
 
-- autoload/NetworkManager.gd: ENet setup, admission, connection errors and RPC transport. Remote actions derive the actor from the RPC sender ID.
-- autoload/GameManager.gd: server-only player registry, lifecycle, validated intentions, death, victory and sanitized snapshots.
-- scripts/game/: separate deck, distance, turns, reaction deadlines, effect dispatch and procedural table presentation.
-- scripts/cards/: card definitions, effect/target/type enums and unique card instances.
-- scripts/player/: gameplay-only PlayerState and visual-only PlayerAvatar.
-- scripts/ui/App.gd: signal-driven menus, lobby, cards, player panels and overlays. The UI submits intentions and uses server-provided valid targets.
-- scenes/menu/Lobby.tscn and scripts/ui/Lobby.gd: dedicated lobby screen with synchronized names, HOST badge, explicit ready status and host-only Start. Start requires enough players and every player ready. Hosting always opens this screen before gameplay. The selected server port appears in the lobby.
-- resources/characters/characters.json: character definitions ready for future ability identifiers.
+Trong Godot, có thể dùng Debug > Customize Run Instances và chạy 4 client kết nối server chung. API host_game/join_game ENet vẫn còn cho test desktop cũ; UI chính không gọi API này. Người chơi browser không cần UDP, VPN hoặc port forwarding.
 
-The host sends one sanitized public snapshot and separate rpc_id private snapshots. No opponent hands, hidden roles, draw order or server reaction context are broadcast. Valid target lists are sent only to the owner. RPC receive methods accept only the host authority. Requests are validated for ownership, phase, target, range, card existence and reaction ID, with a short per-peer action rate limit. Debug actions additionally require host identity and OS.is_debug_build(). Reveal Roles is a host-local notice.
+## Điều khiển trên bàn
 
-The host is trusted and necessarily knows the entire match. Clients have no server player registry. This prototype does not provide encryption, anti-cheat against a modified host, account identity or reconnect tokens.
+- Tay bài là thành phần 2D chính. Bài xếp chồng nhẹ; rê chuột hoặc nhấn giữ khoảng 0,45 giây để xem mô tả đầy đủ. Nhấn giữ rồi thả không tự dùng bài.
+- Chạm/nhấp lá Bắn, Hoảng loạn, Cat Balou, Đấu súng hoặc Nhà giam → các cao bồi hợp lệ sáng lên → chạm/nhấp trực tiếp cao bồi. Mũi tên cong xem trước và thông tin khoảng cách/tầm súng chỉ dùng dữ liệu công khai.
+- Chạm lại lá đang chọn, nút × HỦY nhỏ cạnh tay, Esc hoặc chuột phải để hủy. Không có hàng nút chọn người chơi hoặc menu tên cho tấn công.
+- Khi bị Bắn, Đấu súng, Thổ dân hoặc hấp hối: các lá đáp trả hợp lệ trên chính tay bài sáng lên. Chạm lá để trả lời hoặc chọn CHỊU ĐÒN/KHÔNG CỨU. Janet dùng cùng lá bài vật lý để đổi Bắn/Né theo ngữ cảnh.
+- Sid khi thiếu máu có biểu tượng ✚ nhỏ cạnh tay bài. Chạm để chọn/bỏ chọn đúng hai lá, rồi chọn HỒI 1 MÁU. Không có nút kỹ năng lớn thường trực.
+- Hoảng loạn/Cat Balou: sau khi chọn cao bồi, chạm vùng TAY KÍN (server chọn ngẫu nhiên, không lộ tên bài), vũ khí hoặc trang bị đang sáng trước ghế.
+- Cửa hàng: bài ngửa xuất hiện giữa bàn; người đang có quyền chọn chạm lá muốn lấy. Những người khác chỉ xem.
+- Jesse/Pedro chọn chồng rút/chồng bỏ trực tiếp trên bàn. Jesse cũng có thể chạm vùng tay kín của đối thủ. Rút đầu lượt bình thường hoàn toàn tự động.
+- Bỏ bài cuối lượt: hiện BỎ X LÁ; chạm từng lá để bỏ. Server tự chuyển lượt khi đủ giới hạn theo máu.
+- KẾT THÚC LƯỢT chỉ xuất hiện gần tay bài trong giai đoạn hành động của bạn.
+- Chạm cao bồi khi không nhắm mục tiêu để xem thẻ thông tin: nhân vật, kỹ năng, máu, số bài, vũ khí, trang bị, khoảng cách và vai trò công khai. Chạm chỗ trống để đóng. Vai trò bí mật của đối thủ không hiện.
+- Menu ☰ hoặc Esc khi không chọn bài mở TIẾP TỤC / LUẬT CHƠI / RỜI TRẬN. Đồng hồ và trận online vẫn tiếp tục trong menu.
+- Nhật ký mặc định chỉ hiện hai hành động gần nhất, có thể mở rộng. Debug chỉ hiện cho host trong bản debug, nằm sau nút DEBUG ở menu tạm dừng.
+- Game Over công khai vai trò; chỉ host được CHƠI LẠI hoặc VỀ PHÒNG CHỜ.
 
-## Validation
+## Luật và dữ liệu hiện tại
 
-With the Godot executable on PATH:
+RoleData hỗ trợ phân bố 4/5/6/7 người. Cảnh sát trưởng công khai, +1 máu; Phó cảnh sát, Tội phạm và Kẻ phản bội được gửi riêng. Vai trò được công khai khi chết và khi hết trận.
 
-    godot --headless --path . --editor --quit
-    godot --headless --path . --quit-after 5
+CharacterData nạp 16 nhân vật từ resources/characters/characters.json, gồm các kỹ năng rút bài, đổi Bắn/Né, khoảng cách, hai lần Né, hồi máu, nhặt bài khi chết và không giới hạn Bắn. Chọn nhân vật và các lựa chọn kín được gửi riêng cho người sở hữu.
+
+Bộ bài 80 lá có định nghĩa và số lượng trong resources/cards/definitions.json và base_deck.json. Có Bắn, Né, Rượu, Hoảng loạn, Cat Balou, Đấu súng, Nhà giam, năm vũ khí, Thùng, Ngựa, Ống nhòm, Tiếp tế, Cửa hàng, Thổ dân, Thuốc nổ, Súng liên thanh, Quán rượu và Wells Fargo.
+
+**Chất/số hiện là cấu hình prototype cố định, chưa đối chiếu chính xác từng lá của bản in gốc.** Không random chất/số mỗi ván. File base_deck.json ghi rõ trạng thái này; muốn khớp chính xác bộ gốc cần thay các entry và giữ kiểm tra tổng 80 lá. tools/generate_base_data.py có thể tái tạo dữ liệu prototype nếu máy có Python.
+
+Tay đầu bằng máu tối đa của nhân vật, gồm thưởng Cảnh sát trưởng. Rút hai mỗi lượt trừ kỹ năng. Bình thường chỉ một lá Bắn trong giai đoạn hành động; dùng sai mục tiêu không tiêu giới hạn. Volcanic/Willy cho bắn nhiều; đáp trả Đấu súng/Thổ dân không tiêu giới hạn. Bắn chuyển đổi của Janet có tiêu giới hạn khi tấn công.
+
+Khoảng cách vòng bỏ qua người chết; Ngựa/Paul và Ống nhòm/Rose cộng dồn. Vũ khí chỉ tăng tầm, không thay khoảng cách. Rượu không hồi khi chỉ còn hai người; sát thương chết người có thể cần nhiều Rượu. Thuốc nổ được phán định trước Nhà giam. Server quản lý hàng đợi phản ứng, giới hạn thời gian và mọi lựa chọn.
+
+## Kiến trúc
+
+- autoload/NetworkManager.gd: facade client/desktop debug, snapshot và sự kiện; WebSocket dùng RoomClient/NetworkTransport, ENet dùng adapter debug.
+- server/DedicatedServer.gd và RoomBridge.gd: danh bạ phòng/phiên, host, khôi phục, mỗi phòng có GameManager độc lập dùng chung luật. Server không phải người chơi.
+- scripts/network/: WebSocketTransport, ENetTransport, RoomProtocol, NetworkConfig và RoomClient. JSON STATE gửi riêng từng connection với public + private đúng người trong cùng revision.
+- autoload/GameManager.gd: match lifecycle, lượt, ý định hợp lệ, máu/chết/thắng và snapshot.
+- scripts/game/RoleData.gd, CharacterSelection.gd, AbilityResolver.gd, DrawPhaseResolver.gd, RulesFlow.gd: phân vai, chọn nhân vật, kỹ năng, rút bài, hàng đợi phản ứng/phán định.
+- scripts/ui/App.gd: menu/phòng chờ và điều phối. MatchHUD.gd: HUD gọn, tay bài, phản ứng theo ngữ cảnh và menu tạm dừng.
+- scripts/ui/HandFan.gd và CardView.gd / scenes/ui/CardUI.tscn: bài xếp chồng, chọn, xem trước và nhấn giữ.
+- scripts/ui/TargetingController.gd, TargetingArrow.gd: Area3D ray picking, chuột/chạm, mũi tên và hủy.
+- scripts/game/TableView.gd, TableObjects.gd và TableObject.gd: avatar, trạng thái gọn trong 3D, vùng tay kín/trang bị, chồng rút/bỏ và bài Cửa hàng.
+- scripts/vfx/TableEffects.gd: bài bay, phán định, chớp súng, −N máu, +1, bụi, BOOM; hiệu ứng tự dọn.
+- scripts/game/SaloonRoom.gd, SaloonLantern.gd, scripts/player/PlayerAvatar.gd: môi trường/cao bồi procedural.
+- localization/vi.gd: bản dịch. Font hệ thống Segoe UI / Arial / DejaVu Sans và fallback.
+
+UX không thay đổi luật. Client chỉ gửi ID lá bài/người chơi, lựa chọn có request ID hoặc hai ID bài cho Sid. Máy chủ xác thực lại. Vùng tay kín chỉ mang player ID + zone, không chứa lá bài bí mật. Sự kiện VFX chỉ gửi count, player ID và bài đã công khai (bỏ/phán định/Cửa hàng), không truyền tay bài kín hoặc lựa chọn nhân vật.
+
+Dedicated server là bên tin cậy. Host browser chỉ có dữ liệu của một người chơi, không giữ registry luật, tay bài đối thủ hay deck order. Session token 256 bit chỉ gửi cho connection sở hữu, lưu trong sessionStorage của tab và không nằm trong public state. ENet debug vẫn có host desktop tin cậy; đó không phải đường chơi Web.
+
+## Kiểm thử
+
+Các lệnh sau không cần framework ngoài:
+
     godot --headless --path . tests/RulesTest.tscn
+    godot --headless --path . tests/TargetingTest.tscn
+    godot --headless --path . tests/GameplayUXTest.tscn
+    godot --headless --path . tests/LocalizationTest.tscn
     godot --headless --path . tests/PresentationTest.tscn
+    godot --headless --path . tests/VisualEffectsTest.tscn
 
-RulesTest performs 96 checks covering deck composition and reshuffling, role distribution, distance and equipment, turns, Shoot/Dodge/Drink, emergency survival, death rewards, Showdown, Barrel, privacy, all victories, restart, disconnects, malformed requests and reaction timeouts. PresentationTest constructs every screen and checks that the game layout fits the default viewport.
+RulesTest kiểm tra 1.934 điều kiện, gồm 100 lần phân vai cho từng cấu hình 4–7 người, kỹ năng, bài, thưởng/phạt, thắng và riêng tư. GameplayUXTest kiểm tra trực tiếp tay bài, Janet, Sid, lựa chọn trên bàn, menu, preview và ngăn chọn ngoài lượt. TargetingTest dùng sự kiện chuột/chạm thực qua ray picking 3D.
 
-The four-process Windows integration test uses localhost UDP port 17070 and instantiates the actual application UI in every peer:
+Có thể thêm -- --capture khi chạy không headless với GameplayUXTest, TargetingTest, LocalizationTest hoặc VisualEffectsTest để lưu ảnh cục bộ vào tests/artifacts (bỏ qua bởi Git và Godot importer).
 
-    powershell -NoProfile -ExecutionPolicy Bypass -File tests/RunNetworkTest.ps1 -Godot "C:/path/to/Godot_v4.7.2-stable_win64_console.exe"
+Test nhiều tiến trình ENet trên Windows (cổng 17070):
 
-It checks admission, names/ready state, four-player start, owner-only snapshots, automated legal gameplay, game-over delivery, match restart and return to lobby. Logs are written to tests/network-*.log and *.err. Its final victories are triggered deterministically on the host; combat itself is covered by RulesTest.
+    powershell -NoProfile -ExecutionPolicy Bypass -File tests/RunNetworkTest.ps1 -Godot "C:/path/to/Godot_v4.7.2-stable_win64_console.exe" -ProcessCount 4
 
-For the focused two-instance lobby test on 127.0.0.1:7000:
+Dùng -ProcessCount 8 để chạy 7 người + kiểm tra người thứ tám bị từ chối. Test phòng chờ hai người trên cổng 7000:
 
     powershell -NoProfile -ExecutionPolicy Bypass -File tests/RunNetworkTest.ps1 -Godot "C:/path/to/Godot_v4.7.2-stable_win64_console.exe" -TestScene tests/LobbyTest.tscn -ProcessCount 2
 
-This presses the real UI controls and verifies Host → Lobby, Join → the same Lobby, synchronized names/ready/unready, host badge, host-only Start, minimum-player enforcement, disconnect/rejoin, synchronized GameTable loading and host-disconnect cleanup. Port 7000 must be available.
+Test mạng có thể cần quyền firewall/chạy tiến trình. Test headless trong sandbox có thể in cảnh báo Windows certificate store; game dùng ENet, không dùng TLS. Kết quả PASS và lỗi GDScript cần được xem riêng với cảnh báo môi trường này.
 
-Use -ProcessCount 5 with the default NetworkTest scene to additionally check Server full rejection. Run godot --headless --path . tests/ConnectionFailureTest.tscn to check invalid IP/port and real ENet failure/timeout against unhosted localhost port 17071.
+Kiểm thử dedicated server đang chạy và HTTP Web:
 
-## Debug tools
+    node tests/web/protocol-test.cjs
+    node tests/web/room-capacity-test.cjs
+    node tests/web/browser-test.cjs
+    node tests/web/browser-test.cjs --mobile
 
-Visible only to the host in debug builds: lobby Force Start (still requires at least two players), Reveal Roles, Give Shoot, Draw Card, Damage Player, Heal Player, Next Turn and Force Win Check. Select the target using the dropdown. Give Shoot creates a unique extra test card; restarting restores the normal deck.
+Hai test đầu dùng WebSocket thực: tạo/join, cách ly phòng, ready, quyền host, private choices/hands, reconnect, chuyển host, đủ 7 người, từ chối người thứ tám và dọn phòng rỗng. Browser test chạy hai context Edge tách biệt bằng DevTools, không cần npm dependency, thao tác vào UI và 3D thật. --mobile bật giả lập màn hình ngang điện thoại và sự kiện touch, không chỉ gửi chuột. Có thể đặt WWPO_BROWSER để chọn executable Chrome/Edge. Ảnh lưu tests/artifacts/web.
 
-## Known limitations and TODO
+BrowserTestBridge chỉ được bật trong Web DEBUG khi URL có ?e2e=1; dữ liệu quan sát chỉ là dữ liệu browser đang sở hữu/nhìn thấy, không có token, server registry hoặc tay đối thủ. Release build không tạo bridge.
 
-- Current lobby caps at four. Role tables support five to seven, while deck balance, lobby UI and admission must be expanded together.
-- The lobby has a dedicated scene. Other UI screens and overlays are built in GDScript rather than separate editable scenes for each widget.
-- Target selection uses player panels; 3D rings indicate targets but do not accept clicks.
-- Avatars and animations remain stylized procedural placeholders; no character abilities, ragdolls or walking.
-- No reconnect, host migration, spectator joining, save games, accounts, matchmaking or turn timer. Reaction timers continue while the role overlay is open.
-- Desktop layout targets 1440×900. Very small windows and accessibility need a dedicated pass.
-- Headless tests exercise UI construction and networking but do not replace a visual playtest or testing between separate computers.
-- Future work: character ability registry, more card definitions, reusable UI scene assets, visual polish and release export presets.
+## Giới hạn / TODO
 
-## Nâng cấp hình ảnh saloon
+- Đã xuất và chạy bản Web trên Chromium/Edge desktop và giả lập touch. Chưa kiểm thử Firefox, Safari/iPhone hoặc Android thật; vẫn cần kiểm thử thiết bị thực và tab chạy nền.
+- Bài nhiều xếp chồng sát hơn; tay bài cực lớn có thể khó chạm chọn, nên bổ sung phân trang/zoom trên màn hình nhỏ.
+- Chưa có âm thanh. Có presentation_feedback để gắn âm thanh nút; toàn bộ art/props hiện là mesh và nét vẽ gốc.
+- Phán định dùng bài dựng 3D; hiệu ứng không chặn hay kéo dài thời gian xử lý phía server.
+- Có reconnect 45 giây và chuyển quyền chủ phòng; chưa có lưu bền qua server restart, spectator joining, save game hay matchmaking. Rời phòng chủ động là bỏ cuộc.
+- Các lựa chọn riêng phức tạp như Kit Carlson / Lucky Duke vẫn dùng khung chọn bài riêng; các phản ứng chiến đấu dùng trực tiếp tay bài.
+- Chưa đối chiếu chất/số với bộ bài in gốc. Không tuyên bố tương thích chính xác mọi FAQ/phiên bản của trò gốc.
+- Chưa triển khai public. Cần TLS termination/WSS, chính sách origin và vận hành trước bước hosting; xem tài liệu server. Bộ bài/nhân vật/luật không được mở rộng trong lần chuyển nền tảng này.
 
-- Menu dùng nền saloon vẽ bằng code, tông xanh đêm/nâu ấm, cửa sổ phát sáng, bụi bay nhẹ, tiêu đề nhấp sáng và nút có trạng thái rê chuột/nhấn.
-- Phòng chờ có khung từng người theo màu ghế, trạng thái sẵn sàng màu xanh, số người hiện tại và bảng điều khiển tập trung.
-- Bàn chơi có sàn ván gỗ, tường, xà gỗ, biển quán, đèn lồng, kệ chai, thùng rượu, bàn viền đồng và mặt nỉ xanh. Dùng một đèn hướng có bóng, một đèn lấp đầy không bóng, vật liệu dùng lại và mesh ít đa giác. Không dùng texture hoặc tài nguyên bên ngoài.
-- Cao bồi có mắt, ria mép, khăn cổ, đai lưng, ủng và mũ quá khổ; màu áo, dải mũ và bệ ghế đồng bộ theo người chơi.
-- Lá bài có khung giấy, dải tên theo loại, biểu tượng vẽ bằng code, chất/số, mô tả tiếng Việt, rê chuột nhấc nhẹ và viền vàng khi chọn mục tiêu.
-- Camera giữ góc theo ghế, chuyển vị trí mượt và rung nhẹ khi trúng đòn. Mục tiêu hợp lệ có vòng vàng và bảng người chơi được đánh dấu.
-- Hoạt ảnh gồm thở/lắc nhẹ, giật súng, né nghiêng người, trúng đòn lắc mũ, uống rượu nảy vui và ngã nghiêng. VFX gồm chớp súng, bụi/tia nhỏ, chữ −1/+1 và chữ NÉ.
-- Cửa sổ vai trò/phản ứng có bảng riêng và hiệu ứng hiện nhẹ; màn hình kết quả có điểm nhấn vàng và câu đùa miền Tây.
-
-Các file chính mới:
-
-- scripts/ui/SaloonTheme.gd và SaloonBackdrop.gd: giao diện và nền chung.
-- scenes/ui/CardUI.tscn, scripts/ui/CardView.gd: lá bài tái sử dụng.
-- scripts/game/SaloonRoom.gd: căn phòng và bàn chơi.
-- scenes/props/SaloonLantern.tscn, scripts/game/SaloonLantern.gd: đèn lồng.
-- scripts/vfx/TableEffects.gd và scenes/vfx/FloatingText.tscn: VFX tự hủy.
-- tests/VisualEffectsTest.tscn: kiểm tra hoạt ảnh, vòng mục tiêu, camera, khởi động lại và hoàn tất lượt.
-
-Chạy kiểm tra hiệu ứng:
-
-    godot --headless --path . tests/VisualEffectsTest.tscn
-    godot --path . tests/VisualEffectsTest.tscn -- --capture
-
-Ảnh kiểm tra lưu tại tests/artifacts/polish; ảnh các màn hình lưu bằng LocalizationTest --capture. Đây là file kiểm tra cục bộ, không đưa vào Git.
-
-Giới hạn: chưa thêm âm thanh. App có signal presentation_feedback để gắn âm thanh nút sau này; sự kiện hình ảnh mạng hiện có dùng cho âm thanh hành động trong tương lai. Chưa dùng sương mù, bloom hoặc shader nặng; ánh sáng đèn lồng là vật liệu phát sáng, không tạo riêng từng nguồn sáng. Bóng hiện còn sắc. Giao diện ưu tiên 1440×900 và có cuộn ngang cho nhiều lá bài; màn hình nhỏ và các cấu hình máy khác cần kiểm tra thêm. Cần thêm artwork lá bài gốc và âm thanh nếu muốn phát hành.
-
-Nâng cấp này chỉ thay phần trình bày; giữ nguyên RPC, networking, vai trò và luật chơi phía máy chủ.

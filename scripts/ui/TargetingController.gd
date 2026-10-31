@@ -3,6 +3,7 @@ extends Node
 
 signal target_chosen(player_id: int)
 signal cancelled
+signal world_chosen(token: Dictionary)
 var table: Node3D
 var selected_card: int = -1
 var valid_target_ids: Array = []
@@ -12,6 +13,7 @@ var local_player: int = 0
 var target_info: Dictionary = {}
 var targeting_arrow: TargetingArrow
 var tooltip: Label3D
+var blocked: bool = false
 
 func _ready() -> void:
 	targeting_arrow = TargetingArrow.new()
@@ -84,19 +86,42 @@ func pick_at(screen_position: Vector2) -> int:
 	var result: Dictionary = table.get_world_3d().direct_space_state.intersect_ray(ray)
 	return int(result.collider.get_meta("player_id", 0)) if not result.is_empty() else 0
 
+func pick_object(screen_position: Vector2) -> Dictionary:
+	var ray := PhysicsRayQueryParameters3D.create(table.camera.project_ray_origin(screen_position),
+		table.camera.project_ray_origin(screen_position) + table.camera.project_ray_normal(screen_position) * 100, 2)
+	ray.collide_with_areas = true
+	ray.collide_with_bodies = false
+	var result: Dictionary = table.get_world_3d().direct_space_state.intersect_ray(ray)
+	return result.collider.get_meta("table_token", {}) if not result.is_empty() else {}
+
 func _input(event: InputEvent) -> void:
-	if selected_card < 0:
+	if blocked:
 		return
 	if event is InputEventMouseMotion:
-		update_hover_target(pick_at(event.position))
-	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+		if selected_card >= 0:
+			update_hover_target(pick_at(event.position))
+	elif selected_card >= 0 and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
 		cancel_targeting()
 		get_viewport().set_input_as_handled()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if selected_card < 0:
+	if blocked:
 		return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		select_target(pick_at(event.position))
+		interact(event.position)
 	elif event is InputEventScreenTouch and event.pressed:
-		select_target(pick_at(event.position))
+		interact(event.position)
+
+func interact(at: Vector2) -> void:
+	if selected_card >= 0:
+		select_target(pick_at(at))
+		return
+	var token := pick_object(at)
+	if table.objects.token_allowed(token):
+		world_chosen.emit(token)
+		return
+	var id := pick_at(at)
+	if id > 0:
+		table.show_context(id)
+	else:
+		table.hide_context()

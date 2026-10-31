@@ -1,5 +1,6 @@
 ﻿extends Node
 
+var network: Node
 var players: Dictionary = {}
 var started: bool = false
 var match_id: int = 0
@@ -16,6 +17,8 @@ var rate_limits: Dictionary = {}
 var log_role_assignments: bool = false
 
 func _ready() -> void:
+	if network == null:
+		network = NetworkManager
 	flow = RulesFlow.new(self)
 
 func clear() -> void:
@@ -34,7 +37,7 @@ func add_player(id: int, title: String) -> void:
 		players[id] = PlayerState.new(id, title, players.size())
 
 func _process(_delta: float) -> void:
-	if not multiplayer.is_server() or not started or not winner.is_empty():
+	if not network.is_authority() or not started or not winner.is_empty():
 		return
 	if turns.phase == "CHARACTER_SELECTION" and Time.get_ticks_msec() >= selection.deadline:
 		selection.expire(self)
@@ -52,10 +55,10 @@ func role_distribution(count: int) -> Array:
 func start_match(force: bool = false) -> void:
 	var connected: Array = players.values().filter(func(p): return p.is_connected)
 	var valid_count: bool = connected.size() >= 4 and connected.size() <= 7
-	if OS.is_debug_build() and connected.size() == 2:
+	if network.allow_two_players() and connected.size() == 2:
 		valid_count = true
 	if not valid_count or (not force and connected.any(func(p): return not p.ready)):
-		fail(1, "Cần 4–7 người đã sẵn sàng; bản kiểm thử cho phép đúng 2 người.")
+		fail(network.host_player_id(), "Cần 4–7 người đã sẵn sàng; bản kiểm thử cho phép đúng 2 người.")
 		return
 	if started and winner.is_empty():
 		return
@@ -108,6 +111,8 @@ func draw_cards(id: int, amount: int) -> Array:
 		if not card.is_empty():
 			players[id].hand.append(card)
 			drawn.append(card)
+	if not drawn.is_empty():
+		network.broadcast_table_event({"kind": "draw", "player": id, "count": drawn.size()})
 	return drawn
 
 func begin_turn(id: int) -> void:
@@ -131,7 +136,7 @@ func advance_turn() -> void:
 	begin_turn(turns.next_living(players))
 
 func handle_intent(sender: int, action: String, args: Dictionary) -> void:
-	if not multiplayer.is_server() or not players.has(sender):
+	if not network.is_authority() or not players.has(sender):
 		return
 	var now := Time.get_ticks_msec()
 	if now - int(rate_limits.get(sender, -1000)) < 80:
@@ -139,13 +144,13 @@ func handle_intent(sender: int, action: String, args: Dictionary) -> void:
 	rate_limits[sender] = now
 	if action == "ready" and not started:
 		players[sender].ready = not players[sender].ready
-	elif action == "start" and sender == 1 and not started:
+	elif action == "start" and network.is_room_host(sender) and not started:
 		start_match()
-	elif action == "restart" and sender == 1 and not winner.is_empty():
+	elif action == "restart" and network.is_room_host(sender) and not winner.is_empty():
 		for p in players.values():
 			p.ready = true
 		start_match()
-	elif action == "lobby" and sender == 1 and not winner.is_empty():
+	elif action == "lobby" and network.is_room_host(sender) and not winner.is_empty():
 		started = false
 		winner = ""
 		reactions.active = {}
@@ -159,7 +164,7 @@ func handle_intent(sender: int, action: String, args: Dictionary) -> void:
 				players[id].ready = false
 	elif action == "character" and started and winner.is_empty():
 		selection.choose(self, sender, str(args.get("character", "")))
-	elif action == "debug" and sender == 1 and OS.is_debug_build():
+	elif action == "debug" and network.is_room_host(sender) and OS.is_debug_build():
 		debug_action(args)
 	elif started and winner.is_empty() and players[sender].is_alive and turns.phase != "CHARACTER_SELECTION":
 		match action:
@@ -211,6 +216,7 @@ func find_kind(id: int, kind: String) -> Dictionary:
 func consume(id: int, card: Dictionary) -> void:
 	players[id].hand.erase(card)
 	deck.discard(card)
+	network.broadcast_table_event({"kind": "discard", "player": id, "card": card.duplicate()})
 	abilities.hand_changed(self, id)
 
 func beer_enabled() -> bool:
@@ -235,7 +241,8 @@ func damage(target: int, source: int, amount: int = 1) -> void:
 	if not living(target) or amount <= 0:
 		return
 	players[target].current_hp -= amount
-	NetworkManager.broadcast_animation(target, "hit", source)
+	network.broadcast_table_event({"kind": "damage", "player": target, "amount": amount})
+	network.broadcast_animation(target, "hit", source)
 	record("%s mất %d máu." % [players[target].display_name, amount])
 	abilities.on_damage(self, target, source, amount)
 	if players[target].current_hp <= 0:
@@ -245,7 +252,7 @@ func heal(id: int, amount: int) -> void:
 	var before: int = players[id].current_hp
 	players[id].current_hp = mini(players[id].max_hp, before + amount)
 	if players[id].current_hp > before:
-		NetworkManager.broadcast_animation(id, "drink", id)
+		network.broadcast_animation(id, "drink", id)
 
 func discard_all(p: PlayerState) -> void:
 	for card in p.hand:
@@ -267,7 +274,7 @@ func kill_player(id: int, source: int) -> void:
 	abilities.on_death(self, p)
 	discard_all(p)
 	record(TextCatalog.text("%s fell: %s") % [p.display_name, TextCatalog.text(PlayerState.ROLE_NAMES[p.role])])
-	NetworkManager.broadcast_animation(id, "death", source)
+	network.broadcast_animation(id, "death", source)
 	if players.has(source) and players[source].is_alive and source != id:
 		if p.role == PlayerState.Role.OUTLAW:
 			draw_cards(source, 3)
@@ -336,17 +343,14 @@ func record(message: String) -> void:
 		log_lines.pop_front()
 
 func fail(id: int, message: String) -> void:
-	if id == 1:
-		NetworkManager.notice(message)
-	elif NetworkManager.can_send(id):
-		NetworkManager.notice.rpc_id(id, message)
+	network.send_notice(id, message)
 
 func public_snapshot() -> Dictionary:
 	var rows: Array = []
 	for p in players.values():
 		rows.append(p.public_snapshot(not winner.is_empty(), turns.phase != "CHARACTER_SELECTION"))
 	return {"players": rows, "started": started, "match_id": match_id, "winner": winner,
-		"server_port": NetworkManager.session_port, "minimum_players": 2 if OS.is_debug_build() else 4, "max_players": 7,
+		"server_port": network.session_port, "host_player_id": network.host_player_id(), "minimum_players": 2 if network.allow_two_players() else 4, "max_players": 7,
 		"current_player": turns.current_player, "phase": turns.phase, "round": turns.round_number,
 		"draw_count": deck.draw_pile.size(), "discard_count": deck.discard_pile.size(),
 		"discard_top": deck.discard_pile.back() if not deck.discard_pile.is_empty() else {},
@@ -374,18 +378,8 @@ func private_snapshot(id: int) -> Dictionary:
 	return result
 
 func publish() -> void:
-	if not multiplayer.is_server():
-		return
-	var snapshot := public_snapshot()
-	NetworkManager.receive_public(snapshot)
-	for id in players:
-		if not players[id].is_connected:
-			continue
-		if id == 1:
-			NetworkManager.receive_private(private_snapshot(id))
-		elif NetworkManager.can_send(id):
-			NetworkManager.receive_public.rpc_id(id, snapshot)
-			NetworkManager.receive_private.rpc_id(id, private_snapshot(id))
+	if network.is_authority():
+		network.publish_game(self)
 
 func debug_action(args: Dictionary) -> void:
 	var operation: String = str(args.get("operation", ""))
@@ -400,7 +394,7 @@ func debug_action(args: Dictionary) -> void:
 			var roles: Array = []
 			for p in players.values():
 				roles.append(p.display_name + ": " + TextCatalog.text(PlayerState.ROLE_NAMES[p.role]))
-			fail(1, " | ".join(roles))
+			fail(network.host_player_id(), " | ".join(roles))
 		"Give Shoot":
 			if living(target):
 				players[target].hand.append(CardInstance.make(deck.next_id, "shoot", "SPADE", 7))
@@ -420,4 +414,5 @@ func debug_action(args: Dictionary) -> void:
 				advance_turn()
 		"Force Win Check":
 			check_win()
+
 

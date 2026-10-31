@@ -4,7 +4,7 @@ var picked: Array = []
 
 func configure(app: Node, cards: Array, count: int, submit: Callable) -> void:
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(660, 236)
+	scroll.custom_minimum_size = Vector2(minf(660, get_viewport().get_visible_rect().size.x - 112), 236)
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	add_child(scroll)
 	var row := HBoxContainer.new()

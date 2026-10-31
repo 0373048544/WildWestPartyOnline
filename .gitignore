@@ -3,4 +3,9 @@
 /android/
 tests/network-*.log
 tests/network-*.err
+tests/ux-*.log
+build/
+tests/web/*.log
+tests/web/*.err
+tests/web/browser-profile/
 tests/artifacts/

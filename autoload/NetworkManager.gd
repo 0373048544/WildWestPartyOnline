@@ -3,6 +3,7 @@ extends Node
 signal updated
 signal error_received(message: String)
 signal visual_event(actor: int, kind: String, target: int)
+signal table_event(event: Dictionary)
 var public_state: Dictionary = {}
 var private_state: Dictionary = {}
 var local_name: String = "Cao bồi"
@@ -10,6 +11,8 @@ var admission_timer: float = 0.0
 var pending: Dictionary = {}
 var session_port: int = 7000
 var connecting: bool = false
+var mode: String = "offline"
+var room_client: Node
 
 func _ready() -> void:
 	# Clients communicate only with the host; no peer relay or peer discovery needed.
@@ -19,18 +22,63 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(func(): register_player.rpc_id(1, local_name))
 	multiplayer.connection_failed.connect(func(): leave(); error_received.emit("Connection failed. Check IP, port and firewall."))
 	multiplayer.server_disconnected.connect(func(): leave(); error_received.emit("Host disconnected."))
+	room_client = load("res://scripts/network/RoomClient.gd").new()
+	room_client.manager = self
+	add_child(room_client)
+	room_client.restore()
+
+func is_authority() -> bool:
+	return mode in ["offline", "enet"] and multiplayer.is_server()
+
+func host_player_id() -> int:
+	return room_client.host_id if mode == "websocket" else 1
+
+func is_room_host(id: int) -> bool:
+	return id == host_player_id()
+
+func allow_two_players() -> bool:
+	return OS.is_debug_build()
+
+func local_player_id() -> int:
+	return room_client.player_id if mode == "websocket" else multiplayer.get_unique_id()
+
+func create_room(title: String) -> void:
+	room_client.request_room("CREATE_ROOM", title)
+
+func join_room(title: String, code: String) -> void:
+	room_client.request_room("JOIN_ROOM", title, code)
+
+func publish_game(game: Node) -> void:
+	if not is_authority():
+		return
+	var snapshot: Dictionary = game.public_snapshot()
+	receive_public(snapshot)
+	for id in game.players:
+		if not game.players[id].is_connected:
+			continue
+		if id == 1:
+			receive_private(game.private_snapshot(id))
+		elif can_send(id):
+			receive_public.rpc_id(id, snapshot)
+			receive_private.rpc_id(id, game.private_snapshot(id))
+
+func send_notice(id: int, message: String) -> void:
+	if id == 1:
+		notice(message)
+	elif can_send(id):
+		notice.rpc_id(id, message)
 
 func host_game(title: String, port: int) -> void:
 	leave()
+	mode = "enet"
 	if port < 1 or port > 65535:
 		error_received.emit("Invalid port. Use a port from 1 to 65535.")
 		return
 	session_port = port
 	local_name = clean_name(title)
-	var peer := ENetMultiplayerPeer.new()
-	var result := peer.create_server(port, 8)
-	if result != OK:
-		error_received.emit("Cannot host on that port: " + error_string(result))
+	var peer := ENetTransport.server(port)
+	if peer == null:
+		error_received.emit("Cannot host on that port: unavailable")
 		return
 	multiplayer.multiplayer_peer = peer
 	GameManager.add_player(1, local_name)
@@ -44,12 +92,12 @@ func join_game(title: String, address: String, port: int) -> void:
 		error_received.emit("Invalid port. Use a port from 1 to 65535.")
 		return
 	leave()
+	mode = "enet"
 	session_port = port
 	local_name = clean_name(title)
-	var peer := ENetMultiplayerPeer.new()
-	var result := peer.create_client(address, port)
-	if result != OK:
-		error_received.emit("Connection failed: " + error_string(result))
+	var peer := ENetTransport.client(address, port)
+	if peer == null:
+		error_received.emit("Connection failed: unavailable")
 		return
 	multiplayer.multiplayer_peer = peer
 	admission_timer = 12.0
@@ -57,6 +105,9 @@ func join_game(title: String, address: String, port: int) -> void:
 	updated.emit()
 
 func leave() -> void:
+	if room_client:
+		room_client.leave()
+	mode = "offline"
 	if multiplayer.multiplayer_peer:
 		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
@@ -120,6 +171,9 @@ func rejected(reason: String) -> void:
 	error_received.emit(reason)
 
 func send_intent(action: String, args: Dictionary = {}) -> void:
+	if mode == "websocket":
+		room_client.send_intent(action, args)
+		return
 	if multiplayer.is_server():
 		GameManager.handle_intent(1, action, args)
 	else:
@@ -136,6 +190,19 @@ func broadcast_animation(actor: int, kind: String, target: int = 0) -> void:
 	for id in multiplayer.get_peers():
 		if can_send(id):
 			animate.rpc_id(id, actor, kind, target)
+
+func broadcast_table_event(event: Dictionary) -> void:
+	# Cosmetic payloads only: counts, public player IDs and already-revealed cards.
+	if not multiplayer.is_server():
+		return
+	receive_table_event(event)
+	for id in multiplayer.get_peers():
+		if can_send(id):
+			receive_table_event.rpc_id(id, event)
+
+@rpc("authority", "call_remote", "reliable")
+func receive_table_event(event: Dictionary) -> void:
+	table_event.emit(event)
 
 @rpc("any_peer", "call_remote", "reliable")
 func request(action: String, args: Dictionary) -> void:

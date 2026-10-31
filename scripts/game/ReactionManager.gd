@@ -28,4 +28,7 @@ func private_prompt(id: int) -> Dictionary:
 	result.merge(result.payload, true)
 	result.erase("payload")
 	result["remaining"] = maxf(0.0, (active.deadline - Time.get_ticks_msec()) / 1000.0)
+	if active.reaction_type == "transfer":
+		# Public player identifier needed to pick visible zones; no hidden card identities.
+		result["zone_player_id"] = int(active.context.get("target", 0))
 	return result

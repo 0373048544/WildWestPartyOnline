@@ -52,7 +52,7 @@ func _ready() -> void:
 	light.rotation_degrees = Vector3(-52, -32, 0)
 	light.light_color = Color("#ffdcac")
 	light.light_energy = 0.95
-	light.shadow_enabled = true
+	light.shadow_enabled = not OS.has_feature("web")
 	light.directional_shadow_max_distance = 24
 	add_child(light)
 	for plank in range(24):

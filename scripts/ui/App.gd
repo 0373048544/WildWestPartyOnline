@@ -18,8 +18,18 @@ var debug_target: int = 1
 var name_field: LineEdit
 var ip_field: LineEdit
 var port_field: SpinBox
+var room_field: LineEdit
+var match_hud: Control
+var menu_open: bool = false
+var log_expanded: bool = false
+var sid_mode: bool = false
+var sid_cards: Array = []
+var noticed_turn: int = -1
+var turn_notice_until: int = 0
+var hud_match: int = -1
 
 func _ready() -> void:
+	add_child(load("res://scripts/ui/WebLayout.gd").new())
 	var theme := SaloonTheme.create()
 	canvas = CanvasLayer.new()
 	add_child(canvas)
@@ -33,7 +43,14 @@ func _ready() -> void:
 	NetworkManager.visual_event.connect(func(a, k, t):
 		if is_instance_valid(table):
 			table.animate(a, k, t))
+	NetworkManager.table_event.connect(func(event):
+		if is_instance_valid(table):
+			table.presentation(event))
 	refresh()
+	if OS.has_feature("web") and OS.is_debug_build() and bool(JavaScriptBridge.eval("new URLSearchParams(location.search).get('e2e') === '1'")):
+		var test_bridge: Node = load("res://scripts/network/BrowserTestBridge.gd").new()
+		test_bridge.app = self
+		add_child(test_bridge)
 
 func _process(_delta: float) -> void:
 	if is_instance_valid(reaction_label):
@@ -41,7 +58,12 @@ func _process(_delta: float) -> void:
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
-		selected = -1
+		if selected >= 0 or sid_mode:
+			selected = -1
+			sid_mode = false
+			sid_cards.clear()
+		elif not NetworkManager.public_state.is_empty() and NetworkManager.public_state.get("started", false):
+			menu_open = not menu_open
 		refresh()
 
 func label(text: String, size: int = 18, parent: Node = content) -> Label:
@@ -80,10 +102,20 @@ func refresh() -> void:
 		add_child(table)
 		table.targeting.target_chosen.connect(play_selected)
 		table.targeting.cancelled.connect(func(): selected = -1; refresh())
+		table.targeting.world_chosen.connect(func(token):
+			if is_instance_valid(match_hud):
+				match_hud.world_action(token))
 	elif not in_game and is_instance_valid(table):
 		table.free()
 		table = null
 	var backdrop: Control
+	if in_game and hud_match != int(state.match_id):
+		hud_match = state.match_id
+		selected = -1
+		sid_mode = false
+		sid_cards.clear()
+		menu_open = false
+		noticed_turn = -1
 	if in_game:
 		backdrop = ColorRect.new()
 		backdrop.color = Color(0.035, 0.055, 0.075, 0.08)
@@ -101,7 +133,7 @@ func refresh() -> void:
 		var inset: int = maxi(24, int((root.size.x - (880 if not state.is_empty() else 760)) / 2))
 		margin.add_theme_constant_override("margin_left", inset)
 		margin.add_theme_constant_override("margin_right", inset)
-		margin.add_theme_constant_override("margin_top", 48)
+		margin.add_theme_constant_override("margin_top", 18 if root.size.y < 800 else 48)
 	root.add_child(margin)
 	if not state.is_empty() and not in_game:
 		content = load("res://scenes/menu/Lobby.tscn").instantiate()
@@ -112,10 +144,15 @@ func refresh() -> void:
 	if in_game:
 		margin.add_child(content)
 	else:
+		var scroll := ScrollContainer.new()
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		margin.add_child(scroll)
 		var frame := PanelContainer.new()
+		frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		frame.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 		frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color(0.065, 0.12, 0.16, 0.96), SaloonTheme.GOLD, 28))
-		margin.add_child(frame)
+		scroll.add_child(frame)
 		frame.add_child(content)
 	if state.is_empty():
 		build_menu()
@@ -138,7 +175,7 @@ func build_menu() -> void:
 	var ornament := label("✦  SALOON NIGHTS  ✦", 16)
 	ornament.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ornament.add_theme_color_override("font_color", SaloonTheme.GOLD)
-	var title := label("WILD WEST\nPARTY ONLINE", 40)
+	var title := label("WILD WEST\nPARTY ONLINE", 30 if root.size.x < 900 else 40)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_color_override("font_color", SaloonTheme.GOLD)
 	title.add_theme_color_override("font_shadow_color", Color("#080f17"))
@@ -146,7 +183,7 @@ func build_menu() -> void:
 	var pulse := title.create_tween().set_loops()
 	pulse.tween_property(title, "modulate", Color("#f5c879"), 1.8).set_trans(Tween.TRANS_SINE)
 	pulse.tween_property(title, "modulate", Color.WHITE, 1.8).set_trans(Tween.TRANS_SINE)
-	var subtitle := label("A private saloon. A hidden allegiance. One last card.", 17)
+	var subtitle := label("A private saloon. A hidden allegiance. One last card.", 16)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(HSeparator.new())
 	if NetworkManager.connecting:
@@ -159,7 +196,8 @@ func build_menu() -> void:
 	if screen == "main":
 		button("HOST GAME", func(): screen = "host"; refresh())
 		button("JOIN GAME", func(): screen = "join"; refresh())
-		button("QUIT", func(): get_tree().quit())
+		if not OS.has_feature("web"):
+			button("QUIT", func(): get_tree().quit())
 		return
 	label("HOST A SALOON" if screen == "host" else "JOIN A SALOON", 26)
 	label("Player name")
@@ -168,31 +206,25 @@ func build_menu() -> void:
 	name_field.max_length = 24
 	content.add_child(name_field)
 	if screen == "join":
-		label("IP address")
-		ip_field = LineEdit.new()
-		ip_field.text = "127.0.0.1"
-		content.add_child(ip_field)
-	label("Port")
-	port_field = SpinBox.new()
-	port_field.min_value = 1024
-	port_field.max_value = 65535
-	port_field.value = 7000
-	content.add_child(port_field)
+		label("MÃ PHÒNG")
+		room_field = LineEdit.new()
+		room_field.name = "RoomCode"
+		room_field.placeholder_text = "AB7KQ2"
+		room_field.max_length = 6
+		content.add_child(room_field)
 	button("HOST" if screen == "host" else "JOIN", connect_game)
 	button("BACK", func(): screen = "main"; refresh())
 
 func connect_game() -> void:
 	error_text = ""
 	var title := name_field.text
-	var port := int(port_field.value)
 	if screen == "host":
-		NetworkManager.host_game(title, port)
+		NetworkManager.create_room(title)
 	else:
-		var ip := ip_field.text.strip_edges()
-		NetworkManager.join_game(title, ip, port)
+		NetworkManager.join_room(title, room_field.text)
 
 func local_id() -> int:
-	return multiplayer.get_unique_id()
+	return NetworkManager.local_player_id()
 
 func intent(action: String, args: Dictionary = {}) -> void:
 	NetworkManager.send_intent(action, args)
@@ -204,123 +236,30 @@ func leave() -> void:
 	screen = "main"
 	selected = -1
 	seen_role = -1
+	menu_open = false
+	sid_mode = false
+	sid_cards.clear()
 	NetworkManager.leave()
 
 func build_game(state: Dictionary) -> void:
 	var own: Dictionary = NetworkManager.private_state
 	if own.get("match_id", state.match_id) != state.match_id:
 		own = {}
-	if state.phase == "CHARACTER_SELECTION":
-		selected = -1
-		table.update_state(state, local_id(), [])
-		label("ĐANG CHỌN NHÂN VẬT • VAI TRÒ ĐƯỢC XÁO TRỘN MỖI VÁN", 24)
-		show_character_selection(own)
-		return
-	var owner := TextCatalog.text("Cowboy")
-	for p in state.players:
-		if p.player_id == state.current_player:
-			owner = p.display_name
-	var turn_title := TextCatalog.text("YOUR TURN") if state.current_player == local_id() else TextCatalog.text("PLAYER'S TURN") + " " + owner
-	var turn_banner := label(TextCatalog.text("%s  •  %s  •  Turn %d") % [turn_title, TextCatalog.text(state.phase), state.round], 21)
-	turn_banner.add_theme_color_override("font_color", SaloonTheme.GOLD)
-	turn_banner.add_theme_stylebox_override("normal", SaloonTheme.panel(Color("#172a36"), Color("#9d7c4c")))
-	label(TextCatalog.text("Your role: %s  |  Deck: %d  •  Discard: %d") % [TextCatalog.text(own.get("role", "…")), state.draw_count, state.discard_count], 17)
-	var panels := HBoxContainer.new()
-	content.add_child(panels)
-	var targets: Array = own.get("targets", {}).get(selected, [])
-	if selected >= 0 and targets.is_empty():
-		selected = -1
-	for p in state.players:
-		var equipment_names: Array = p.equipment_ids.map(func(id): return TextCatalog.card_name(id))
-		var text := TextCatalog.text("%s%s\nHP %d / %d  •  %d cards\n%s | %s\n%s") % [
-			p.display_name, TextCatalog.text(" [YOU]") if p.player_id == local_id() else "", p.current_hp, p.max_hp, p.hand_count,
-			TextCatalog.card_name(p.weapon_id) if not p.weapon_id.is_empty() else TextCatalog.text("Range 1"),
-			", ".join(equipment_names) if not equipment_names.is_empty() else TextCatalog.text("No equipment"),
-			(TextCatalog.text(p.public_role) if not p.public_role.is_empty() else TextCatalog.text("Hidden role")) if p.is_alive else TextCatalog.text("FALLEN • ") + TextCatalog.text(p.public_role)]
-		var id: int = p.player_id
-		var target_button := button(("◎ " if targets.has(id) else "") + text, func(): pass, panels, true)
-		target_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		target_button.custom_minimum_size.x = 0
-		target_button.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		target_button.add_theme_font_size_override("font_size", 13 if state.players.size() > 4 else 15)
-		var character: Dictionary = p.get("character", {})
-		target_button.tooltip_text = text + "\n" + str(character.get("display_name", "")) + "\n" + str(character.get("ability_description_vi", ""))
-		if not character.is_empty():
-			target_button.text += "\n" + str(character.display_name)
-		var seat_color: Color = SaloonTheme.SEATS[int(p.seat_index) % SaloonTheme.SEATS.size()]
-		var player_style := SaloonTheme.panel(Color("#182c39"), SaloonTheme.GOLD if targets.has(id) else seat_color)
-		player_style.set_border_width_all(3 if targets.has(id) else 1)
-		target_button.add_theme_stylebox_override("disabled", player_style)
-	table.update_state(state, local_id(), targets)
-	if selected >= 0:
-		table.targeting.begin_targeting(selected, local_id(), targets, own.get("target_info", {}))
-	else:
-		table.targeting.cancel_targeting(false)
-	if not state.winner.is_empty():
-		var trophy := label("✦  THE LAST HAT STANDING  ✦", 22)
-		trophy.add_theme_color_override("font_color", SaloonTheme.GOLD)
-		label("GAME_OVER", 25)
-		var winner_label := label(state.winner, 34)
-		winner_label.add_theme_color_override("font_color", SaloonTheme.GOLD)
-		label("All allegiances are now revealed.")
-		if local_id() == 1:
-			button("PLAY AGAIN", func(): selected = -1; intent("restart"))
-			button("RETURN TO LOBBY", func(): selected = -1; intent("lobby"))
-		else:
-			label("Waiting for the host to play again or return to lobby.")
-		button("LEAVE", leave)
-		return
-	if selected != -1:
-		label("CHỌN NHÂN VẬT 3D ĐƯỢC ĐÁNH DẤU • NHẤP / CHẠM ĐỂ DÙNG • ESC ĐỂ HỦY", 17)
-	var middle := HBoxContainer.new()
-	middle.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	middle.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	content.add_child(middle)
-	var log_box := VBoxContainer.new()
-	log_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	log_box.size_flags_stretch_ratio = 2.0
-	log_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	middle.add_child(log_box)
-	for line in state.log.slice(-5):
-		label(line, 15, log_box)
-	if not state.get("market", []).is_empty():
-		label("CỬA HÀNG: " + ", ".join(state.market.map(func(c): return CardData.data(c.card_data_id).name)), 15, log_box)
-	if local_id() == 1 and OS.is_debug_build() and state.debug:
-		build_debug(middle, state)
-	label("YOUR HAND • Click to play; during DISCARD PHASE click to discard", 17)
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size.y = 238
-	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content.add_child(scroll)
-	var hand := HBoxContainer.new()
-	hand.add_theme_constant_override("separation", 8)
-	var hand_padding := MarginContainer.new()
-	hand_padding.add_theme_constant_override("margin_top", 8)
-	scroll.add_child(hand_padding)
-	hand_padding.add_child(hand)
-	var active: bool = state.current_player == local_id() and state.phase == "ACTION_PHASE"
-	var discard: bool = state.current_player == local_id() and state.phase == "DISCARD_PHASE"
-	for card in own.get("hand", []):
-		var definition: Dictionary = CardData.definitions()[card.card_data_id]
-		var uid: int = card.instance_id
-		var allowed: Array = own.get("targets", {}).get(uid, [])
-		var card_button: Button = load("res://scenes/ui/CardUI.tscn").instantiate()
-		hand.add_child(card_button)
-		card_button.configure(card, definition, discard or (active and not allowed.is_empty()), selected == uid)
-		card_button.pressed.connect(func(): choose_card(uid))
-	var actions := HBoxContainer.new()
-	content.add_child(actions)
-	button("END TURN", func(): selected = -1; intent("end"), actions, not active)
-	button("CANCEL TARGET", func(): selected = -1; refresh(), actions, selected == -1)
-	button("LEAVE TABLE", leave, actions)
-	if own.get("ability_id", "") == "discard_heal":
-		button("HỒI MÁU • Bỏ 2 lá → +1 Máu", show_sid_picker, actions)
-	if own.has("role") and seen_role != int(state.match_id):
-		show_role(own.role, state.match_id)
-	elif not own.get("reaction", {}).is_empty():
-		show_reaction(own.reaction)
+	match_hud = load("res://scripts/ui/MatchHUD.gd").new()
+	root.add_child(match_hud)
+	match_hud.initialize(self, state, own)
+	if NetworkManager.mode == "websocket" and NetworkManager.room_client.reconnecting:
+		table.targeting.blocked = true
+		var box := modal()
+		label("ĐANG KẾT NỐI LẠI...", 26, box)
+		label("Ván chơi và vai trò được giữ trong thời gian chờ.", 18, box)
 
 func choose_card(uid: int) -> void:
+	if is_instance_valid(match_hud):
+		match_hud.handle_card(uid)
+
+
+func choose_card_action(uid: int) -> void:
 	var state: Dictionary = NetworkManager.public_state
 	if state.phase == "DISCARD_PHASE":
 		intent("discard", {"card": uid})
@@ -349,7 +288,7 @@ func modal() -> VBoxContainer:
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.add_child(center)
 	var box := VBoxContainer.new()
-	box.custom_minimum_size.x = minf(720, root.size.x - 48)
+	box.custom_minimum_size.x = minf(720, root.size.x - 112)
 	box.add_theme_constant_override("separation", 20)
 	var frame := PanelContainer.new()
 	frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#172b37"), SaloonTheme.GOLD, 28))
@@ -418,15 +357,12 @@ func show_character_selection(own: Dictionary) -> void:
 		var option := button("%s • %d Máu\n%s" % [data.display_name, data.max_hp, data.ability_description_vi],
 			func(): intent("character", {"character": key}), box)
 		option.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		option.custom_minimum_size = Vector2(660, 100)
+		option.custom_minimum_size = Vector2(minf(660, root.size.x - 112), 100)
 
 func show_sid_picker() -> void:
-	var box := modal()
-	label("SID KETCHUM • CHỌN ĐÚNG 2 LÁ ĐỂ BỎ", 25, box)
-	var choices: Node = load("res://scripts/ui/ChoicePanel.gd").new()
-	box.add_child(choices)
-	choices.configure(self, NetworkManager.private_state.get("hand", []), 2, func(ids): intent("ability", {"cards": ids}))
-	button("CANCEL", refresh, box)
+	sid_mode = true
+	sid_cards.clear()
+	refresh()
 
 func build_debug(parent: Node, state: Dictionary) -> void:
 	var box := VBoxContainer.new()

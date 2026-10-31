@@ -12,6 +12,13 @@ var targeting: TargetingController
 var player_names: Dictionary = {}
 var status_labels: Dictionary = {}
 var turn_marker: Label3D
+var objects: Node3D
+var player_rows: Dictionary = {}
+var local_player: int = 1
+var context_label: Label3D
+var context_player: int = 0
+var duel_focus := Vector3.ZERO
+var duel_until: int = 0
 
 func _ready() -> void:
 	var room: Node3D = load("res://scripts/game/SaloonRoom.gd").new()
@@ -25,6 +32,9 @@ func _ready() -> void:
 	add_child(camera)
 	camera.current = true
 	camera.fov = 57
+	objects = load("res://scripts/game/TableObjects.gd").new()
+	objects.table = self
+	add_child(objects)
 	targeting = TargetingController.new()
 	targeting.table = self
 	add_child(targeting)
@@ -35,6 +45,17 @@ func _ready() -> void:
 	turn_marker.pixel_size = 0.005
 	turn_marker.modulate = Color("#ffdc89")
 	add_child(turn_marker)
+	context_label = Label3D.new()
+	context_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	context_label.no_depth_test = true
+	context_label.font_size = 25
+	context_label.width = 560
+	context_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	context_label.pixel_size = 0.005
+	context_label.outline_size = 8
+	context_label.modulate = Color("#ffe7b7")
+	context_label.visible = false
+	add_child(context_label)
 
 func _process(delta: float) -> void:
 	if camera_goal == Vector3.ZERO:
@@ -42,7 +63,7 @@ func _process(delta: float) -> void:
 	camera_shake = maxf(0.0, camera_shake - delta * 0.25)
 	var offset := Vector3(sin(Time.get_ticks_msec() * 0.08), cos(Time.get_ticks_msec() * 0.1), 0) * camera_shake
 	camera.position = camera.position.lerp(camera_goal + offset, minf(1.0, delta * 12))
-	camera.look_at(Vector3(0, 1.0, 0))
+	camera.look_at(duel_focus if Time.get_ticks_msec() < duel_until else Vector3(0, 1.0, 0))
 	for ring in rings.values():
 		ring.rotation.y += delta * 0.5
 	if avatars.has(turns_player()):
@@ -52,6 +73,7 @@ func turns_player() -> int:
 	return int(NetworkManager.public_state.get("current_player", 0))
 
 func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
+	local_player = local_id
 	if built_match != int(state.match_id):
 		for avatar in avatars.values():
 			avatar.free()
@@ -64,6 +86,8 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 		for status_label in status_labels.values():
 			status_label.free()
 		status_labels.clear()
+		objects.clear()
+		hide_context()
 		targeting.cancel_targeting(false)
 		for effect in effects.get_children():
 			effect.queue_free()
@@ -72,6 +96,7 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 	var local_seat := 0
 	for p in state.players:
 		var id: int = p.player_id
+		player_rows[id] = p
 		player_names[id] = p.display_name
 		var angle: float = TAU * float(p.seat_index) / count
 		var at := Vector3(sin(angle) * 3.9, 0, cos(angle) * 3.9)
@@ -117,7 +142,16 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 			add_child(status_label)
 			status_label.position = at + Vector3(0, 2.95, 0)
 			status_labels[id] = status_label
-		status_labels[id].text = "%s • %d/%d máu\n%d lá • Tầm %d" % [p.display_name, p.current_hp, p.max_hp, p.hand_count, p.weapon_range]
+		var hearts: String = "♥".repeat(maxi(0, int(p.current_hp))) + "♡".repeat(maxi(0, int(p.max_hp) - maxi(0, int(p.current_hp))))
+		status_labels[id].text = "%s%s\n%s · %d lá\n⌖ %d%s" % [
+			"★ " if p.public_role == "SHERIFF" else "", p.display_name, hearts, p.hand_count,
+			p.weapon_range, " · " + equipment_symbols(p.equipment_ids) if not p.equipment_ids.is_empty() else ""]
+		if OS.has_feature("web"):
+			# Built-in Web font fallback lacks several decorative glyphs.
+			status_labels[id].text = "%s%s\n%d/%d máu · %d lá\nTầm %d" % [
+				"CS " if p.public_role == "SHERIFF" else "", p.display_name, p.current_hp, p.max_hp, p.hand_count, p.weapon_range]
+		if not p.is_alive:
+			status_labels[id].text = p.display_name + "\n" + TextCatalog.text(p.public_role)
 		status_labels[id].modulate = seat_color.lightened(0.35)
 		avatars[id].set_target_state(not targets.is_empty() and not targets.has(id) and id != local_id)
 		rings[id].visible = targets.has(id) or int(state.current_player) == id
@@ -134,6 +168,77 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 	if camera.position == Vector3.ZERO:
 		camera.position = camera_goal
 	camera.look_at(Vector3(0, 1.0, 0))
+	if context_player > 0:
+		show_context(context_player)
+
+func equipment_symbols(ids: Array) -> String:
+	var symbols := {"horse": "♞", "spyglass": "⌕", "barrel": "▣", "jail": "▥", "dynamite": "✹"}
+	return " ".join(ids.map(func(id): return symbols.get(id, "◆")))
+
+func show_context(id: int) -> void:
+	if not player_rows.has(id) or not avatars.has(id):
+		return
+	context_player = id
+	var p: Dictionary = player_rows[id]
+	var character: Dictionary = p.get("character", {})
+	var equipment: Array = p.equipment_ids.map(func(key): return CardData.data(key).name)
+	var info: Dictionary = NetworkManager.private_state.get("target_info", {}).get(id, {})
+	var visible_role: String = p.public_role
+	if id == local_player:
+		visible_role = str(NetworkManager.private_state.get("role", visible_role))
+	context_label.text = "%s · %s\n%d/%d máu · %d lá · Tầm %d\n%s\n%s\n%s%s" % [
+		p.display_name, character.get("display_name", ""), p.current_hp, p.max_hp, p.hand_count, p.weapon_range,
+		CardData.data(p.weapon_id).get("name", "Colt .45") + " · " + ", ".join(equipment),
+		character.get("ability_description_vi", ""),
+		TextCatalog.text(visible_role) if not visible_role.is_empty() else "Vai trò bí mật",
+		" · Khoảng cách %d" % info.distance if info.has("distance") else ""]
+	context_label.position = avatars[id].position + Vector3(0, 3.7, 0)
+	context_label.visible = true
+
+func hide_context() -> void:
+	context_player = 0
+	if is_instance_valid(context_label):
+		context_label.visible = false
+
+func presentation(event: Dictionary) -> void:
+	var id: int = int(event.get("player", 0))
+	var kind: String = str(event.get("kind", ""))
+	if not avatars.has(id):
+		return
+	var at: Vector3 = avatars[id].position
+	match kind:
+		"draw":
+			for index in range(mini(8, int(event.get("count", 1)))):
+				effects.flying_card(Vector3(-0.45, 1.7, 0), at + Vector3.UP * 1.4, {}, index * 0.06)
+		"judge":
+			effects.judgement(at + Vector3.UP * 2.7, event.get("card", {}))
+		"damage":
+			effects.floating(at + Vector3.UP * 2.7, "−%d MÁU" % event.get("amount", 1), Color("#ff967c"))
+			if int(event.get("amount", 1)) == 3:
+				camera_shake = 0.14
+				effects.floating(at + Vector3.UP * 3.4, "BOOM!", Color("#ffc269"))
+				effects.spark(at + Vector3.UP, Color("#d89a65"), 12, 1.2)
+		"transfer":
+			var destination: Vector3 = avatars.get(int(event.get("to", 0)), avatars[id]).position + Vector3.UP * 1.4
+			if not event.get("steal", true):
+				destination = Vector3(0.45, 1.7, 0)
+			effects.flying_card(at + Vector3.UP * 1.4, destination)
+		"discard":
+			effects.flying_card(at + Vector3.UP * 1.4, Vector3(0.45, 1.7, 0), event.get("card", {}))
+		"dynamite_pass":
+			if avatars.has(int(event.get("to", 0))):
+				effects.flying_card(at + Vector3.UP * 1.4, avatars[int(event.to)].position + Vector3.UP * 1.4, {"card_data_id": "dynamite", "suit": "", "rank": ""})
+		"jail_result":
+			effects.floating(at + Vector3.UP * 2.7, "THOÁT GIAM!" if event.get("escaped", false) else "BỊ GIAM", Color("#b5dbe2"))
+			effects.spark(at + Vector3.UP, Color("#b1babb"), 4)
+		"store_pick":
+			effects.flying_card(Vector3(0, 1.7, 0), at + Vector3.UP * 1.4, event.get("card", {}))
+		"duel":
+			var target: int = int(event.get("target", 0))
+			if avatars.has(target):
+				duel_focus = (at + avatars[target].position) / 2 + Vector3.UP
+				duel_until = Time.get_ticks_msec() + 800
+			effects.floating(at + Vector3.UP * 3, "ĐẤU SÚNG!", Color("#edc983"))
 
 func animate(actor: int, kind: String, target: int) -> void:
 	if not avatars.has(actor):
@@ -167,7 +272,6 @@ func animate(actor: int, kind: String, target: int) -> void:
 				if is_instance_valid(shooting_avatar):
 					effects.muzzle(shooting_avatar.arm.to_global(Vector3(0, -0.5, -0.37))))
 		"hit":
-			effects.floating(at, "−1", Color("#ff967c"))
 			effects.spark(at - Vector3(0, 1.1, 0), Color("#e9bd78"))
 			camera_shake = 0.055
 		"drink":

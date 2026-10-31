@@ -1,4 +1,4 @@
-class_name RulesFlow
+﻿class_name RulesFlow
 extends RefCounted
 
 # A bounded event pump. No network request, animation or player choice blocks a loop.
@@ -48,7 +48,7 @@ func attack(job: Dictionary) -> void:
 		return
 	var required: int = job.get("required", 1)
 	if required <= 0:
-		NetworkManager.broadcast_animation(target, "dodge", job.source)
+		game.network.broadcast_animation(target, "dodge", job.source)
 		game.record(game.players[target].display_name + " đã Né.")
 		return
 	var checks: int = job.get("checks", -1)
@@ -91,6 +91,7 @@ func judge(id: int, purpose: String, context: Dictionary) -> void:
 		if not card.is_empty():
 			cards.append(card)
 			game.record("%s lật phán định: %s." % [game.players[id].display_name, game.card_text(card)])
+			game.network.broadcast_table_event({"kind": "judge", "player": id, "card": card.duplicate()})
 	if cards.size() > 1:
 		prompt(id, "judge", {"source": id, "purpose": purpose, "continuation": context, "cards": cards},
 			{"cards": cards.duplicate(true), "pick_count": 1, "title": "LUCKY DUKE • CHỌN KẾT QUẢ PHÁN ĐỊNH"})
@@ -116,10 +117,12 @@ func judged(job: Dictionary) -> void:
 			game.players[id].equipment.erase("jail")
 			if card.get("suit", "") != "HEART":
 				game.record(game.players[id].display_name + " bị giam, mất lượt.")
+				game.network.broadcast_table_event({"kind": "jail_result", "player": id, "escaped": false})
 				jobs.clear()
 				game.advance_turn()
 			else:
 				game.record(game.players[id].display_name + " thoát khỏi Nhà giam.")
+				game.network.broadcast_table_event({"kind": "jail_result", "player": id, "escaped": true})
 		"dynamite":
 			var explosive: Dictionary = game.players[id].equipment.get("dynamite", {})
 			game.players[id].equipment.erase("dynamite")
@@ -133,6 +136,7 @@ func judged(job: Dictionary) -> void:
 					if not game.players[next].equipment.has("dynamite"):
 						game.players[next].equipment.dynamite = explosive
 						game.record("Thuốc nổ chuyển sang " + game.players[next].display_name + ".")
+						game.network.broadcast_table_event({"kind": "dynamite_pass", "player": id, "to": next})
 						passed = true
 						break
 				if not passed:
@@ -239,7 +243,7 @@ func resolve(args: Dictionary) -> bool:
 			if accept:
 				game.consume(id, card)
 				if kind == "duel":
-					NetworkManager.broadcast_animation(id, "shoot", context.source)
+					game.network.broadcast_animation(id, "shoot", context.source)
 					push({"kind": "duel", "target": context.source, "source": id}, true)
 			else:
 				push({"kind": "damage", "target": id, "source": context.source, "amount": 1}, true)
@@ -285,6 +289,7 @@ func resolve(args: Dictionary) -> bool:
 				if selected.has(offered.instance_id):
 					market.erase(offered)
 					game.players[id].hand.append(offered)
+					game.network.broadcast_table_event({"kind": "store_pick", "player": id, "card": offered.duplicate()})
 		"transfer":
 			complete_transfer(id, context, option)
 	run()
@@ -311,6 +316,7 @@ func complete_transfer(id: int, context: Dictionary, option: String) -> void:
 		else:
 			game.deck.discard(taken)
 		game.abilities.hand_changed(game, target)
+		game.network.broadcast_table_event({"kind": "transfer", "player": target, "to": id, "steal": context.steal})
 
 func cancel_for_disconnect(id: int) -> void:
 	if game.reactions.active.is_empty():
@@ -326,3 +332,4 @@ func cancel_for_disconnect(id: int) -> void:
 			game.reactions.active = {}
 	elif r.reaction_type == "duel" and r.context.get("source", 0) == id:
 		game.reactions.active = {}
+
