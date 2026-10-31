@@ -18,8 +18,8 @@ func configure(app: Node, state: Dictionary) -> void:
 		row.name = "Player%d" % player.player_id
 		row.add_theme_font_size_override("font_size", 20)
 		row.add_theme_color_override("font_color", Color("#a5d8b0") if player.ready else SaloonTheme.CREAM)
-		row.add_theme_stylebox_override("normal", SaloonTheme.panel(Color("#263b43"), SaloonTheme.SEATS[int(player.seat_index) % 4]))
-		row.custom_minimum_size.y = 54
+		row.add_theme_stylebox_override("normal", SaloonTheme.panel(Color("#263b43"), SaloonTheme.SEATS[int(player.seat_index) % SaloonTheme.SEATS.size()]))
+		row.custom_minimum_size.y = 38 if state.players.size() > 4 else 54
 		if player.player_id == app.local_id():
 			own_ready = player.ready
 	for _slot in range(maxi(0, 4 - state.players.size())):

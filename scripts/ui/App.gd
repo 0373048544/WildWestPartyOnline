@@ -247,7 +247,7 @@ func build_game(state: Dictionary) -> void:
 		target_button.tooltip_text = text + "\n" + str(character.get("display_name", "")) + "\n" + str(character.get("ability_description_vi", ""))
 		if not character.is_empty():
 			target_button.text += "\n" + str(character.display_name)
-		var seat_color: Color = SaloonTheme.SEATS[int(p.seat_index) % 4]
+		var seat_color: Color = SaloonTheme.SEATS[int(p.seat_index) % SaloonTheme.SEATS.size()]
 		var player_style := SaloonTheme.panel(Color("#182c39"), SaloonTheme.GOLD if targets.has(id) else seat_color)
 		player_style.set_border_width_all(3 if targets.has(id) else 1)
 		target_button.add_theme_stylebox_override("disabled", player_style)

@@ -75,7 +75,7 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 		player_names[id] = p.display_name
 		var angle: float = TAU * float(p.seat_index) / count
 		var at := Vector3(sin(angle) * 3.9, 0, cos(angle) * 3.9)
-		var seat_color: Color = SaloonTheme.SEATS[int(p.seat_index) % 4]
+		var seat_color: Color = SaloonTheme.SEATS[int(p.seat_index) % SaloonTheme.SEATS.size()]
 		if not avatars.has(id):
 			var marker := Marker3D.new()
 			seats.add_child(marker)
@@ -150,6 +150,12 @@ func animate(actor: int, kind: String, target: int) -> void:
 		kind = "shoot"
 	if kind == "shoot" and avatars.has(target):
 		avatars[actor].face_target(avatars[target].global_position)
+		var shot_arrow := TargetingArrow.new()
+		add_child(shot_arrow)
+		shot_arrow.aim(avatars[actor].position + Vector3.UP * 1.5, avatars[target].position + Vector3.UP * 1.5)
+		var lock := shot_arrow.create_tween()
+		lock.tween_interval(0.35)
+		lock.tween_callback(shot_arrow.queue_free)
 	avatars[actor].act(kind)
 	var at: Vector3 = avatars[actor].position + Vector3(0, 2.6, 0)
 	match kind:
