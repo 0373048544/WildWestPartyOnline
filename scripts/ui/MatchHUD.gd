@@ -52,6 +52,23 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 		app.table.targeting.blocked = true
 		app.show_role(own.role, state.match_id)
 	elif not request.is_empty() and not ["dodge", "survive", "duel", "indians", "transfer", "store", "draw_steal", "draw_discard"].has(request.reaction_type):
+	var reaction_type := str(request.get("reaction_type", ""))
+
+	# Những request chỉ mang tính thông báo thì không mở modal lớn.
+	if ["draw", "receive", "card_received", "notify", "notice"].has(reaction_type):
+		app.table.targeting.blocked = false
+
+		if is_instance_valid(app.personal_toasts):
+			app.personal_toasts.show_notice(
+				str(request.get("title", "Thông báo")),
+				str(request.get("detail", "")),
+				"positive",
+				"▣",
+				2.0
+			)
+	else:
+		# Chỉ những reaction thật sự cần người chơi lựa chọn
+		# mới dùng modal cũ.
 		app.table.targeting.blocked = true
 		app.show_reaction(request)
 
