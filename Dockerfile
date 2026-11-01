@@ -3,7 +3,7 @@
 ARG GODOT_RELEASE=4.7.2-stable
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    WWPO_BIND=0.0.0.0
+    WWPO_BIND=127.0.0.1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
