@@ -369,7 +369,7 @@ func show_character_selection(own: Dictionary) -> void:
 
 func show_character_info(player: Dictionary) -> void:
 	var old: Node = root.get_node_or_null("PlayerInfoCard")
-	var signature := JSON.stringify(player)
+	var signature := JSON.stringify(player) + str(root.size)
 	if old and old.get_meta("snapshot", "") == signature:
 		return
 	var saved_portrait: Control
@@ -388,17 +388,25 @@ func show_character_info(player: Dictionary) -> void:
 	frame.set_meta("character_id", player.character_id)
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(frame)
-	frame.position = Vector2(root.size.x - 310, 76)
-	frame.custom_minimum_size.x = 290
-	frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#27434b"), SaloonTheme.GOLD, 14))
+	var compact: bool = root.size.x < 1100
+	var card_width: float = 218 if compact else 270
+	frame.position = Vector2(12 if compact else root.size.x - card_width - 18, 102 if compact else 76)
+	frame.custom_minimum_size.x = card_width
+	frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#3c3028"), Color("#b99058"), 12))
 	var column := VBoxContainer.new()
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	frame.add_child(column)
 	var portrait: Control = saved_portrait if saved_portrait else load("res://scripts/ui/CharacterPortrait.gd").new()
 	column.add_child(portrait)
 	if not saved_portrait:
-		portrait.configure(player.character_id, 135)
-	label(player.character.display_name, 22, column)
+		portrait.configure(player.character_id, 88 if compact else 115)
+	else:
+		var portrait_height: int = 88 if compact else 115
+		if portrait.custom_minimum_size.y != portrait_height:
+			portrait.custom_minimum_size.y = portrait_height
+			portrait.viewport.size.y = portrait_height
+			portrait.viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	label(player.character.display_name, 19 if compact else 22, column)
 	label("%s · %d/%d máu · %d lá" % [player.display_name, player.current_hp, player.max_hp, player.hand_count], 15, column)
 	var equipment: Array = player.get("equipment_ids", []).map(func(key): return CardData.data(key).name)
 	label("%s · Tầm %d\n%s" % [CardData.data(player.get("weapon_id", "")).get("name", "Colt .45"), player.weapon_range, ", ".join(equipment)], 14, column)
@@ -407,7 +415,7 @@ func show_character_info(player: Dictionary) -> void:
 		role = str(NetworkManager.private_state.get("role", role))
 	label(TextCatalog.text(role) if not role.is_empty() else "Vai trò bí mật", 14, column)
 	var ability := label(CharacterData.ability_icon(player.character.ability_id) + " " + player.character.ability_description_vi, 15, column)
-	ability.custom_minimum_size.x = 260
+	ability.custom_minimum_size.x = card_width - 28
 	for child in column.get_children():
 		if child is Control:
 			child.mouse_filter = Control.MOUSE_FILTER_IGNORE

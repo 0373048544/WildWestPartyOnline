@@ -3,6 +3,16 @@ extends Node3D
 var geometry := ImmediateMesh.new()
 var material := StandardMaterial3D.new()
 var pulse: Tween
+var locked_style: String = ""
+var locked_valid: bool = false
+var locked_position := Vector3.INF
+var lock_age: float = 0
+
+func _process(delta: float) -> void:
+	if visible:
+		lock_age += delta
+		if not pulse or not pulse.is_running():
+			scale = Vector3.ONE * (1.0 + 0.025 * sin(lock_age * 4.5))
 
 func _ready() -> void:
 	var mark := MeshInstance3D.new()
@@ -31,16 +41,25 @@ func card(center: Vector2, extent: Vector2 = Vector2(0.19, 0.27)) -> void:
 		line(corners[index], corners[(index+1)%4])
 
 func lock(at: Vector3, style: String, valid: bool) -> void:
+	var changed: bool = not visible or not locked_position.is_equal_approx(at)
 	position = at
+	if style == locked_style and valid == locked_valid and not changed:
+		return
+	locked_position = at
+	locked_style = style
+	locked_valid = valid
+	lock_age = 0
 	geometry.clear_surfaces()
 	geometry.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	# Rounded-looking brass corners remain recognizable for every card context.
+	for x in [-1, 1]:
+		for y in [-1, 1]:
+			var corner := Vector2(x * 0.4, y * 0.34)
+			line(corner, corner - Vector2(x * 0.14, 0), 0.035)
+			line(corner, corner - Vector2(0, y * 0.14), 0.035)
 	match style:
 		"BANG":
-			for x in [-1, 1]:
-				for y in [-1, 1]:
-					var corner := Vector2(x * 0.36, y * 0.3)
-					line(corner, corner - Vector2(x * 0.14, 0))
-					line(corner, corner - Vector2(0, y * 0.14))
+			pass
 		"DUEL":
 			for x in [-1, 1]:
 				line(Vector2(x * -0.28, -0.24), Vector2(x * 0.28, 0.24), 0.045)
@@ -63,7 +82,8 @@ func lock(at: Vector3, style: String, valid: bool) -> void:
 			for index in range(4):
 				line(corners[index], corners[(index+1)%4])
 	geometry.surface_end()
-	material.albedo_color = Color("#f2c378") if valid else Color("#c17c73")
+	var palette := {"BANG": "#efc77c", "DUEL": "#dca56f", "STEAL": "#b7c88d", "DISCARD": "#dba08b", "JAIL": "#b6c5c3", "GENERIC": "#e6d7b2"}
+	material.albedo_color = Color(palette.get(style, "#e6d7b2")) if valid else Color("#bc7568")
 	visible = true
 	scale = Vector3.ONE * 0.86
 	if pulse:

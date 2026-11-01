@@ -1,6 +1,11 @@
 extends MeshInstance3D
 
+static var cached_mesh: ImmediateMesh
+
 func _ready() -> void:
+	if cached_mesh:
+		mesh = cached_mesh
+		return
 	var geometry := ImmediateMesh.new()
 	geometry.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
 	for index in range(32):
@@ -14,3 +19,4 @@ func _ready() -> void:
 			geometry.surface_add_vertex(vertex)
 	geometry.surface_end()
 	mesh = geometry
+	cached_mesh = geometry

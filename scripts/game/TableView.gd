@@ -85,17 +85,30 @@ func layout_nameplates() -> void:
 	var placements: Array = []
 	for id in nameplates:
 		placements.append({"plate": nameplates[id], "rect": nameplates[id].place(camera, avatars[id].global_position)})
-	placements.sort_custom(func(a, b): return a.rect.position.x < b.rect.position.x)
+	placements.sort_custom(func(a, b): return a.rect.position.y < b.rect.position.y if not is_equal_approx(a.rect.position.y,b.rect.position.y) else a.rect.position.x < b.rect.position.x)
 	var occupied: Array[Rect2] = []
 	var width: float = get_viewport().get_visible_rect().size.x
 	for item in placements:
 		var rect: Rect2 = item.rect
-		for previous in occupied:
-			if rect.intersects(previous):
-				rect.position.x = previous.end.x + 6
 		rect.position.x = clampf(rect.position.x, 8, maxf(8, width - rect.size.x - 8))
+		# Preserve font size and seat association: lift a colliding plate first.
+		for _attempt in range(8):
+			var collided := false
+			for previous in occupied:
+				if rect.grow(3).intersects(previous):
+					var above: float = previous.position.y - rect.size.y - 8
+					if above >= 62:
+						rect.position.y = above
+					else:
+						rect.position.x = clampf(previous.end.x + 8,8,maxf(8,width-rect.size.x-8))
+						if rect.intersects(previous):
+							rect.position.y = previous.end.y + 8
+					collided = true
+			if not collided:
+				break
 		var depth: float = -camera.to_local(item.plate.global_position).z
 		item.plate.global_position = camera.project_position(rect.get_center(), depth)
+		item.plate.screen_rect = rect
 		occupied.append(rect)
 
 func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
@@ -208,7 +221,8 @@ func show_context(id: int) -> void:
 		TextCatalog.text(visible_role) if not visible_role.is_empty() else "Vai trò bí mật",
 		" · Khoảng cách %d" % info.distance if info.has("distance") else ""]
 	context_label.position = avatars[id].position + Vector3(0, 3.7, 0)
-	context_label.visible = true
+	# Details live in the cached character card, never over the nameplate.
+	context_label.visible = false
 	character_info_requested.emit(p)
 
 func hide_context() -> void:
@@ -236,6 +250,8 @@ func presentation(event: Dictionary) -> void:
 		presentation_queue.append(visual)
 
 func present_event(event: Dictionary) -> void:
+	if event.get("kind", "") == "animation" and event.get("animation", "") in ["shoot","gatling"]:
+		targeting.quiet_for_shot(450 if event.animation == "gatling" else 230)
 	AudioManager.consume_event(event)
 	if event.get("kind", "") == "animation":
 		play_animation(int(event.actor), str(event.animation), int(event.target))
@@ -335,15 +351,16 @@ func play_animation(actor: int, kind: String, target: int) -> void:
 			camera_shake = maxf(camera_shake, 0.018)
 			var shooting_avatar: PlayerAvatar = avatars[actor]
 			var flash_timing := shooting_avatar.create_tween()
-			flash_timing.tween_interval(0.1)
+			flash_timing.tween_interval(0.095)
 			flash_timing.tween_callback(func():
 				if is_instance_valid(shooting_avatar):
 					var muzzle: Vector3 = shooting_avatar.arm.to_global(Vector3(0, -0.5, -0.37))
 					effects.muzzle(muzzle)
+					effects.gun_smoke(muzzle)
 					if avatars.has(target):
-						effects.bullet(muzzle, avatars[target].position + Vector3.UP * 1.5)
+						effects.bullet(muzzle, avatars[target].position + Vector3.UP * 1.5, 0.012)
 					for index in range(spread_targets.size()):
-						effects.bullet(muzzle, spread_targets[index], index * 0.045))
+						effects.bullet(muzzle, spread_targets[index], 0.012 + index * 0.045))
 		"hit":
 			effects.starburst(at - Vector3.UP * 0.7)
 			effects.spark(at - Vector3(0, 1.1, 0), Color("#e9bd78"))

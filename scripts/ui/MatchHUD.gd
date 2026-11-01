@@ -51,19 +51,6 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 	elif not request.is_empty() and not ["dodge", "survive", "duel", "indians", "transfer", "store", "draw_steal", "draw_discard"].has(request.reaction_type):
 		app.table.targeting.blocked = true
 		app.show_reaction(request)
-	# A short turn notice, independent of snapshots and server rules.
-	if state.current_player == app.local_id() and state.round != app.noticed_turn:
-		app.noticed_turn = state.round
-		app.turn_notice_until = Time.get_ticks_msec() + 1800
-	if Time.get_ticks_msec() < app.turn_notice_until and app.selected < 0:
-		var notice := text("LƯỢT CỦA BẠN", 26)
-		notice.position = Vector2(0, 68)
-		notice.size.x = size.x
-		notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		notice.add_theme_color_override("font_color", SaloonTheme.GOLD)
-		var fade := notice.create_tween()
-		fade.tween_interval(maxf(0, (app.turn_notice_until - Time.get_ticks_msec()) / 1000.0 - 0.4))
-		fade.tween_property(notice, "modulate:a", 0.0, 0.4)
 
 func text(value: String, font_size: int = 16, parent: Node = self) -> Label:
 	var item: Label = app.label(value, font_size, parent)
@@ -77,14 +64,11 @@ func action(value: String, callback: Callable, parent: Node, disabled: bool = fa
 	return item
 
 func build_top() -> void:
-	var bar := HBoxContainer.new()
+	var bar := Control.new()
 	bar.name = "TopBar"
 	add_child(bar)
 	bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	bar.offset_left = 18
-	bar.offset_right = -18
-	bar.offset_top = 12
-	bar.add_theme_constant_override("separation", 10)
+	bar.offset_bottom = 52
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var owner := ""
 	for player in state.players:
@@ -92,23 +76,30 @@ func build_top() -> void:
 			owner = player.display_name
 	var title := "LƯỢT CỦA BẠN" if state.current_player == app.local_id() else "LƯỢT CỦA " + owner
 	var phase: String = TextCatalog.text(state.phase)
-	var summary := text(title + " · " + phase, 16, bar)
-	summary.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	summary.add_theme_color_override("font_color", SaloonTheme.GOLD)
+	var strip: Control = load("res://scripts/ui/HUDMatchStrip.gd").new()
+	bar.add_child(strip)
+	var strip_width: float = minf(570,size.x-260)
+	strip.position = Vector2((size.x-strip_width)/2,8)
+	strip.custom_minimum_size = Vector2(strip_width,34)
+	strip.configure(title,phase,float(request.get("remaining",0)))
 	var menu := action("MENU", func(): app.menu_open = true; app.refresh(), bar)
+	menu.position = Vector2(size.x-86,8)
+	menu.size = Vector2(74,42)
 	menu.name = "PauseButton"
 	menu.tooltip_text = "Menu · Luật chơi · Rời trận"
 
 func build_log() -> void:
 	var holder := VBoxContainer.new()
 	add_child(holder)
-	holder.position = Vector2(18, 60)
-	holder.size.x = minf(350, size.x * 0.32)
+	holder.position = Vector2(12, 8)
+	holder.size.x = minf(320, size.x * 0.28) if app.log_expanded else 105
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var toggle := action("NHẬT KÝ  +" if not app.log_expanded else "NHẬT KÝ  −",
 		func(): app.log_expanded = not app.log_expanded; app.refresh(), holder)
 	toggle.custom_minimum_size.y = 30
 	toggle.add_theme_font_size_override("font_size", 12)
+	if not app.log_expanded:
+		return
 	var entries: Array = state.log.slice(-2)
 	if app.log_expanded:
 		entries = state.log
@@ -160,7 +151,6 @@ func build_hand() -> void:
 	prompt.tooltip_text = "%s · %s\n%s" % [character.get("display_name", ""), TextCatalog.text(own.get("role", "")), character.get("ability_description_vi", "")]
 	if not request.is_empty():
 		deadline = Time.get_ticks_msec() / 1000.0 + float(request.get("remaining", 0))
-		timer_label = text("", 14, footer)
 	if app.sid_mode:
 		action("HỒI 1 MÁU", func(): app.intent("ability", {"cards": app.sid_cards.duplicate()}); app.sid_mode = false; app.sid_cards.clear(); app.refresh(),
 			footer, app.sid_cards.size() != 2).name = "SidConfirm"

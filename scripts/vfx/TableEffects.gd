@@ -1,6 +1,38 @@
 class_name TableEffects
 extends Node3D
 
+static var gun_puff_mesh: QuadMesh
+static var gun_puff_material: StandardMaterial3D
+static var fleck_mesh: BoxMesh
+static var fleck_material: StandardMaterial3D
+
+func gun_smoke(at: Vector3) -> void:
+	if not gun_puff_mesh:
+		gun_puff_mesh = QuadMesh.new()
+		gun_puff_mesh.size = Vector2.ONE
+		var image := Image.create(32,32,false,Image.FORMAT_RGBA8)
+		for x in range(32):
+			for y in range(32):
+				var radius: float = Vector2(x/31.0-0.5,y/31.0-0.5).length()*2
+				image.set_pixel(x,y,Color(0.73,0.7,0.62, pow(maxf(0,1-radius),2)*0.4))
+		gun_puff_material = StandardMaterial3D.new()
+		gun_puff_material.albedo_texture = ImageTexture.create_from_image(image)
+		gun_puff_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		gun_puff_material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		gun_puff_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	for index in range(2):
+		var puff := MeshInstance3D.new()
+		puff.mesh = gun_puff_mesh
+		puff.material_override = gun_puff_material
+		add_child(puff)
+		puff.position = at
+		puff.scale = Vector3.ONE * 0.22
+		var tween := puff.create_tween().set_parallel()
+		tween.tween_property(puff,"position",at+Vector3(0.08*index,0.35+0.12*index,0),0.55)
+		tween.tween_property(puff,"scale",Vector3.ONE*0.65,0.55)
+		tween.tween_property(puff,"transparency",1.0,0.55)
+		tween.chain().tween_callback(puff.queue_free)
+
 var judgement_cards: Dictionary = {}
 
 func spark(at: Vector3, color: Color, count: int = 6, radius: float = 0.65) -> void:
@@ -104,13 +136,14 @@ func muzzle(at: Vector3) -> void:
 func bullet(origin: Vector3, target: Vector3, delay: float = 0) -> void:
 	# No collision, damage or authority. A short moving fleck, never a laser.
 	var node := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
-	mesh.size = Vector3(0.028, 0.028, 0.22)
-	node.mesh = mesh
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_color = Color("#ffeab0")
-	node.material_override = material
+	if not fleck_mesh:
+		fleck_mesh = BoxMesh.new()
+		fleck_mesh.size = Vector3(0.028, 0.028, 0.22)
+		fleck_material = StandardMaterial3D.new()
+		fleck_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		fleck_material.albedo_color = Color("#ffeab0")
+	node.mesh = fleck_mesh
+	node.material_override = fleck_material
 	add_child(node)
 	node.position = origin
 	if origin.distance_to(target) > 0.01:

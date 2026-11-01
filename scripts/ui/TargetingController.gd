@@ -18,8 +18,21 @@ var target_style: String = "BANG"
 var reticle: Node3D
 var info_hover: int = 0
 var hover_since: int = 0
+var shot_quiet_until: int = 0
+
+func quiet_for_shot(duration: int = 230) -> void:
+	shot_quiet_until = Time.get_ticks_msec() + duration
+	if targeting_arrow.guide_motion:
+		targeting_arrow.guide_motion.kill()
+	targeting_arrow.visible = false
+	reticle.visible = false
+	tooltip.visible = false
 
 func _process(_delta: float) -> void:
+	if shot_quiet_until > 0 and Time.get_ticks_msec() >= shot_quiet_until:
+		shot_quiet_until = 0
+		if selected_card >= 0 and hovered_target > 0:
+			update_hover_target(hovered_target)
 	if not blocked and selected_card < 0 and info_hover > 0 and hover_since > 0 and Time.get_ticks_msec() - hover_since > 450:
 		hover_since = 0
 		table.show_context(info_hover)
@@ -80,6 +93,9 @@ func cancel_targeting(emit_event: bool = true) -> void:
 		cancelled.emit()
 
 func update_hover_target(id: int) -> void:
+	if Time.get_ticks_msec() < shot_quiet_until:
+		hovered_target = id if table.avatars.has(id) and id != local_player else 0
+		return
 	if selected_card < 0 or not table.avatars.has(id) or id == local_player:
 		if targeting_arrow.guide_motion:
 			targeting_arrow.guide_motion.kill()
@@ -96,9 +112,24 @@ func update_hover_target(id: int) -> void:
 		table.nameplates[player_id].hovered = player_id == id
 		table.avatars[player_id].set_hover_state(player_id == id)
 	var valid: bool = valid_target_ids.has(id)
-	var from: Vector3 = table.avatars[local_player].global_position + Vector3(0, 1.45, 0)
+	var from: Vector3 = table.avatars[local_player].global_position + Vector3(0, 1.85, 0)
 	var to: Vector3 = table.avatars[id].global_position + Vector3(0, 1.5, 0)
 	targeting_arrow.double_ended = target_style == "DUEL"
+	# Compare two gentle side bows only when the hovered player changes.
+	if not targeting_arrow.requested_end.is_equal_approx(to):
+		targeting_arrow.bend_offset = Vector3.ZERO
+		for direction in [0, -1, 1]:
+			var bend: Vector3 = table.camera.global_basis.x * direction * 0.8
+			var clear := true
+			for step in range(1, 16):
+				var t: float = step / 16.0
+				var projected: Vector2 = table.camera.unproject_position(from.lerp(to,t)+(Vector3.UP*0.65+bend)*4*t*(1-t))
+				for plate in table.nameplates.values():
+					if plate.screen_rect.grow(8).has_point(projected):
+						clear = false
+			if clear:
+				targeting_arrow.bend_offset = bend
+				break
 	targeting_arrow.aim_smooth(from, to, valid)
 	reticle.lock(to, target_style, valid)
 	Input.set_default_cursor_shape(Input.CURSOR_CROSS if valid else Input.CURSOR_FORBIDDEN)
@@ -147,6 +178,25 @@ func pick_object(screen_position: Vector2) -> Dictionary:
 	var result: Dictionary = table.get_world_3d().direct_space_state.intersect_ray(ray)
 	return result.collider.get_meta("table_token", {}) if not result.is_empty() else {}
 
+func pick_touch_object(at: Vector2) -> Dictionary:
+	var exact := pick_object(at)
+	if table.objects.token_allowed(exact):
+		return exact
+	# Presentation hit slop only: authority still validates the same physical ID.
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	var pixels: Vector2 = Vector2(get_window().size)
+	var radius: float = 22 * maxf(viewport_size.x/maxf(1,pixels.x),viewport_size.y/maxf(1,pixels.y))
+	var nearest: Dictionary = {}
+	for item in table.objects.objects.values():
+		if not table.objects.token_allowed(item.token):
+			continue
+		var center: Vector2 = table.camera.unproject_position(item.global_position+Vector3.UP*0.12)
+		var distance: float = center.distance_to(at)
+		if distance < radius:
+			radius = distance
+			nearest = item.token
+	return nearest
+
 func _input(event: InputEvent) -> void:
 	if blocked:
 		return
@@ -190,13 +240,13 @@ func _unhandled_input(event: InputEvent) -> void:
 				if valid_target_ids.has(id):
 					tooltip.text += "\nChạm lần nữa để xác nhận"
 		else:
-			interact(event.position)
+			interact(event.position, true)
 
-func interact(at: Vector2) -> void:
+func interact(at: Vector2, touch: bool = false) -> void:
 	if selected_card >= 0:
 		select_target(pick_at(at))
 		return
-	var token := pick_object(at)
+	var token := pick_touch_object(at) if touch else pick_object(at)
 	if table.objects.token_allowed(token):
 		world_chosen.emit(token)
 		return

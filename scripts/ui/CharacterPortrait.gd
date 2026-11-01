@@ -21,6 +21,8 @@ func configure(id: String, height: float = 160) -> void:
 	viewport.add_child(avatar)
 	avatar.build(SaloonTheme.GOLD)
 	avatar.apply_character(id, false)
+	# A cached portrait keeps an open-eyed pose and consumes no idle animation work.
+	avatar.set_process(false)
 	var camera := Camera3D.new()
 	viewport.add_child(camera)
 	camera.position = Vector3(0, 1.9, -4.2)
@@ -42,8 +44,9 @@ func configure(id: String, height: float = 160) -> void:
 	light.light_energy = 1.2
 
 func react(kind: String = "drink") -> void:
+	avatar.set_process(true)
 	avatar.act(kind)
 	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	var animation := create_tween()
 	animation.tween_interval(0.9)
-	animation.tween_callback(func(): viewport.render_target_update_mode = SubViewport.UPDATE_ONCE)
+	animation.tween_callback(func(): avatar.set_process(false); viewport.render_target_update_mode = SubViewport.UPDATE_ONCE)

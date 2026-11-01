@@ -7,6 +7,8 @@ var sheriff_badge: MeshInstance3D
 var hearts: Array = []
 var hovered: bool = false
 var base_height: float = 3.2
+var screen_rect := Rect2()
+static var heart_mesh: ImmediateMesh
 
 static func make_star() -> MeshInstance3D:
 	var star := MeshInstance3D.new()
@@ -47,7 +49,7 @@ func _ready() -> void:
 	label = Label3D.new()
 	label.font_size = 38
 	label.pixel_size = 0.0042
-	label.position = Vector3(0, 0.13, 0.02)
+	label.position = Vector3(0, 0.15, 0.02)
 	label.modulate = SaloonTheme.CREAM
 	label.outline_size = 3
 	label.no_depth_test = true
@@ -62,27 +64,29 @@ func _ready() -> void:
 	stats.render_priority = 10
 	add_child(stats)
 	sheriff_badge = make_star()
-	sheriff_badge.position = Vector3(-0.81, 0.13, 0.04)
+	sheriff_badge.position = Vector3(-0.79, -0.14, 0.04)
 	sheriff_badge.scale = Vector3.ONE * 0.6
 	add_child(sheriff_badge)
 	for index in range(5):
 		var heart := MeshInstance3D.new()
-		var shape := ImmediateMesh.new()
-		shape.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
-		var points: Array[Vector3] = []
-		for step in range(20):
-			var t: float = TAU * step / 20
-			points.append(Vector3(16 * pow(sin(t), 3), 13 * cos(t) - 5 * cos(2*t) - 2 * cos(3*t) - cos(4*t), 0) * 0.005)
-		for step in range(20):
-			for vertex in [Vector3.ZERO, points[step], points[(step+1)%20]]:
-				shape.surface_add_vertex(vertex)
-		shape.surface_end()
-		heart.mesh = shape
+		if not heart_mesh:
+			var shape := ImmediateMesh.new()
+			shape.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+			var points: Array[Vector3] = []
+			for step in range(20):
+				var t: float = TAU * step / 20
+				points.append(Vector3(16 * pow(sin(t), 3), 13 * cos(t) - 5 * cos(2*t) - 2 * cos(3*t) - cos(4*t), 0) * 0.005)
+			for step in range(20):
+				for vertex in [Vector3.ZERO, points[step], points[(step+1)%20]]:
+					shape.surface_add_vertex(vertex)
+			shape.surface_end()
+			heart_mesh = shape
+		heart.mesh = heart_mesh
 		var material := StandardMaterial3D.new()
 		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		material.cull_mode = BaseMaterial3D.CULL_DISABLED
 		heart.material_override = material
-		heart.position = Vector3(-0.65 + index * 0.2, -0.14, 0.03)
+		heart.position = Vector3(-0.55 + index * 0.175, -0.14, 0.03)
 		add_child(heart)
 		hearts.append(heart)
 	var card := MeshInstance3D.new()
@@ -120,7 +124,7 @@ func place(camera: Camera3D, anchor: Vector3) -> Rect2:
 	var center: Vector2 = camera.unproject_position(global_position)
 	var edge: Vector2 = camera.unproject_position(global_position + camera.global_basis.x * 1.82)
 	var projected_width: float = maxf(1, center.distance_to(edge))
-	var size_factor: float = clampf(140 / projected_width, 1, 3.4)
+	var size_factor: float = clampf(148 / projected_width, 1, 3.4)
 	scale = Vector3.ONE * size_factor
 	global_position.y += 0.325 * (size_factor - 1) + (0.12 if hovered else 0)
 	center = camera.unproject_position(global_position)

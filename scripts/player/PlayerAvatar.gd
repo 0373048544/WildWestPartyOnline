@@ -2,6 +2,7 @@
 extends Node3D
 
 var arm: Node3D
+var left_arm: Node3D
 var bottle: MeshInstance3D
 var motion: Tween
 var dead: bool = false
@@ -17,11 +18,14 @@ var visual_preset: Dictionary = {}
 var eyes: Array = []
 var brows: Array = []
 var mouth: Node3D
+var head: Node3D
+var hands: Array = []
 var expression: String = "idle"
 var expression_until: int = 0
 var hat_rest_y: float = 2.08
 var target_dimmed: bool = false
 var idle_phase: float = 0
+var weapon_visual_id: String = ""
 static var mesh_cache: Dictionary = {}
 
 func apply_character(id: String, celebrate: bool = true) -> void:
@@ -37,11 +41,13 @@ func apply_character(id: String, celebrate: bool = true) -> void:
 	materials.clear()
 	eyes.clear()
 	brows.clear()
+	hands.clear()
 	character_id = id
 	visual_preset = preset
 	idle_phase = float(absi(hash(id)) % 1000) / 100.0 + position.x
 	dead = false
 	load("res://scripts/characters/CharacterParts.gd").new().build(self, preset)
+	apply_weapon_visual(weapon_visual_id,true)
 	if is_instance_valid(picking_area):
 		var collision: CollisionShape3D = picking_area.get_child(0)
 		collision.shape = collision.shape.duplicate()
@@ -61,8 +67,87 @@ func set_expression(value: String, duration: int = 600) -> void:
 	for index in range(brows.size()):
 		brows[index].rotation.z = (-1 if index == 0 else 1) * (0.4 if value == "shoot" else (-0.3 if value in ["dodge", "targeted"] else 0.14))
 	if is_instance_valid(mouth):
-		mouth.scale = Vector3(1.3, 2.8, 1) if value in ["panic", "dodge"] else (Vector3(1.4, 0.7, 1) if value == "drink" else Vector3.ONE)
+		mouth.scale = Vector3(0.8, 4.0, 1) if value in ["panic", "dodge", "targeted"] else (Vector3(1.4, 0.7, 1) if value in ["drink","shoot"] else Vector3.ONE)
 		mouth.rotation.z = 0.24 if value == "death" else 0.0
+	for hand in hands:
+		hand.scale = Vector3(1.18,0.85,1.05) if value in ["shoot","panic"] else Vector3.ONE
+	if is_instance_valid(head):
+		head.rotation = Vector3(-0.07,0,-0.10) if value == "targeted" else Vector3.ZERO
+
+func apply_weapon_visual(key: String, force: bool = false) -> void:
+	if not is_instance_valid(gun) or (weapon_visual_id == key and not force):
+		return
+	weapon_visual_id = key
+	gun.mesh = load("res://scripts/player/WeaponVisuals.gd").mesh_for(key)
+	gun.material_override = null
+	gun.rotation.x = -PI/2
+
+func muzzle_position() -> Vector3:
+	var profile: Dictionary = load("res://scripts/player/WeaponVisuals.gd").profile(weapon_visual_id)
+	return gun.to_global(Vector3(0,0.035,-float(profile.length)))
+
+func tailored_mesh(width: float, height: float, style: String, crown: bool = false) -> ArrayMesh:
+	var key := "tailored:%s:%s:%s:%s" % [width,height,style,crown]
+	if mesh_cache.has(key):
+		return mesh_cache[key]
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rings: Array = []
+	for level in range(3):
+		var ring: Array[Vector3] = []
+		for index in range(13):
+			var angle: float = index * TAU / 12
+			var radius: float = [0.36,0.44,0.35][level] * width
+			var y: float = [-0.5,0.1,0.5][level] * height
+			var depth: float = 0.72
+			if crown:
+				radius = [0.43,0.39,0.33][level]
+				y = level * height / 2
+				depth = 0.95
+				if style in ["gambler","porkpie","flat"]:
+					radius = [0.43,0.44,0.42][level]
+				elif style in ["pinch","creased","scout","tall"]:
+					radius *= 1.0 - level * 0.09 * absf(cos(angle))
+				elif style == "sombrero":
+					radius *= 1.0 - level * 0.16
+				if style in ["battered","slouch","turned"]:
+					y += level * sin(angle+0.8) * 0.035
+				ring.append(Vector3(cos(angle)*radius,y,sin(angle)*radius*depth))
+			else:
+				ring.append(Vector3(cos(angle)*radius,y,sin(angle)*radius*depth))
+		rings.append(ring)
+	for level in range(2):
+		for index in range(12):
+			for vertex in [rings[level][index],rings[level+1][index],rings[level+1][index+1],rings[level][index],rings[level+1][index+1],rings[level][index+1]]:
+				surface.add_vertex(vertex)
+	for index in range(12):
+		var center := Vector3(0,height if crown else height/2,0)
+		if crown and style in ["pinch","creased","scout"]:
+			center.y -= 0.065
+		for vertex in [center,rings[2][index+1],rings[2][index]]:
+			surface.add_vertex(vertex)
+	surface.generate_normals()
+	var mesh := surface.commit()
+	mesh_cache[key] = mesh
+	return mesh
+
+func flower_mesh() -> ArrayMesh:
+	if mesh_cache.has("flower"):
+		return mesh_cache.flower
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for petal in range(6):
+		var angle: float = petal * TAU / 6
+		var center := Vector3(cos(angle),sin(angle),0)*0.09
+		for index in range(8):
+			var a: Vector3 = center+Vector3(cos(index*TAU/8),sin(index*TAU/8),0)*0.065
+			var b: Vector3 = center+Vector3(cos((index+1)*TAU/8),sin((index+1)*TAU/8),0)*0.065
+			for at in [center,a,b,center,b,a]:
+				surface.add_vertex(at)
+	surface.generate_normals()
+	var mesh := surface.commit()
+	mesh_cache.flower = mesh
+	return mesh
 
 func part(mesh: Mesh, at: Vector3, color: Color, parent: Node3D = null) -> MeshInstance3D:
 	var node := MeshInstance3D.new()
@@ -211,6 +296,12 @@ func _process(_delta: float) -> void:
 		rig.rotation.x = 0.08 if visual_preset.get("idle", "") == "lean" else 0.0
 		if visual_preset.get("idle", "") in ["quick", "lively"]:
 			arm.rotation.z = sin(time * 1.5) * 0.07
+		if is_instance_valid(head) and expression == "idle":
+			head.rotation.y = sin(time * 0.65) * 0.07
+			head.rotation.z = sin(time * 0.9) * 0.025
+			var blink: bool = fmod(time + idle_phase, 5.3) < 0.09
+			for eye in eyes:
+				eye.scale.y = 0.12 if blink else 1.0
 
 func face_target(at: Vector3) -> void:
 	var local := to_local(at)
@@ -225,11 +316,15 @@ func act(kind: String) -> void:
 	rig.rotation = Vector3.ZERO
 	rig.scale = Vector3.ONE
 	arm.rotation = Vector3.ZERO
+	if is_instance_valid(left_arm):
+		left_arm.rotation = Vector3.ZERO
 	hat.rotation = Vector3.ZERO
 	bottle.visible = kind == "drink"
 	gun.visible = kind != "drink"
 	set_expression(kind)
 	motion = create_tween()
+	if load("res://scripts/player/AvatarGestures.gd").new().play(self,kind):
+		return
 	match kind:
 		"death":
 			dead = true
@@ -242,12 +337,23 @@ func act(kind: String) -> void:
 		"shoot":
 			rig.rotation.y = aim_yaw
 			motion.tween_property(arm, "rotation:x", 1.7, 0.07 if visual_preset.get("idle", "") == "quick" else 0.09)
+			motion.tween_interval(0.01)
+			motion.tween_property(arm, "rotation:x", 1.92, 0.045)
+			motion.parallel().tween_property(rig, "position:z", 0.07, 0.045)
 			motion.tween_property(rig, "rotation:x", -0.25 if visual_preset.get("idle", "") == "heavy" else -0.16, 0.08)
 			motion.parallel().tween_property(hat, "rotation:z", 0.18, 0.08)
 			motion.tween_interval(0.12)
 			motion.tween_property(arm, "rotation:x", 0.0, 0.22)
 			motion.parallel().tween_property(rig, "rotation", Vector3.ZERO, 0.22)
 			motion.parallel().tween_property(hat, "rotation:z", 0.0, 0.22)
+			motion.parallel().tween_property(rig, "position:z", 0.0, 0.22)
+		"panic", "targeted":
+			motion.tween_property(rig,"rotation:z",-0.08,0.08)
+			motion.parallel().tween_property(arm,"rotation:z",-0.25,0.08)
+			motion.tween_property(rig,"rotation:z",0.09,0.12)
+			motion.parallel().tween_property(hat,"rotation:z",0.22,0.12)
+			motion.tween_property(rig,"rotation:z",0.0,0.16)
+			motion.parallel().tween_property(arm,"rotation:z",0.0,0.16)
 		"drink":
 			motion.tween_property(arm, "rotation:x", 2.5, 0.2)
 			motion.parallel().tween_property(rig, "rotation:x", -0.15, 0.2)
