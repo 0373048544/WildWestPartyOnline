@@ -10,6 +10,12 @@ func check(value: bool, message: String) -> void:
 		get_tree().quit(1)
 		assert(value, message)
 
+func wait_for_presentation() -> void:
+	var deadline := Time.get_ticks_msec() + 8000
+	while (not app.table.presentation_queue.is_empty() or app.table.presentation_wait > 0 or app.table.effects.get_child_count() > 0) and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	check(app.table.presentation_queue.is_empty() and app.table.effects.get_child_count() == 0, "queued turn presentation drains")
+
 func capture(file_name: String) -> void:
 	if not OS.get_cmdline_user_args().has("--capture"):
 		return
@@ -44,6 +50,7 @@ func _ready() -> void:
 	GameManager.players[turn_before].hand.clear()
 	GameManager.handle_intent(turn_before, "end", {})
 	check(GameManager.turns.current_player != turn_before, "complete playable turn preserved")
+	await wait_for_presentation()
 	for kind in ["shoot", "dodge", "hit", "drink", "death"]:
 		app.table.animate(2, kind, 3)
 		await get_tree().create_timer(0.65 if kind == "death" else 0.12).timeout

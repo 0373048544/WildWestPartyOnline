@@ -31,7 +31,7 @@ static func decode(kind: String, payload: Dictionary) -> Dictionary:
 		args["target"] = args.target_player_id
 		args.erase("target_player_id")
 	# JSON numbers arrive as float; cast only integral, bounded numbers at the boundary.
-	for key in ["card", "target", "request"]:
+	for key in ["card", "target", "request", "match_id"]:
 		if args.has(key):
 			if not integral(args[key]):
 				return {}
@@ -53,7 +53,7 @@ static func integral(value: Variant) -> bool:
 static func normalize_private(snapshot: Dictionary) -> Dictionary:
 	var result := snapshot.duplicate(true)
 	# Dictionary keys are strings in JSON. Internal UI expects numeric instance/player keys.
-	for key in ["targets", "target_info"]:
+	for key in ["targets", "target_info", "disabled_reasons"]:
 		var normalized: Dictionary = {}
 		for item in result.get(key, {}):
 			if str(item).is_valid_int():

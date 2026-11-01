@@ -1,0 +1,28 @@
+{
+  "source": "https://bang.dvgiochi.com/cardslist.php?id=1&lang=en",
+  "expected_count": 80,
+  "cards": {
+    "barrel": ["Q:SPADE", "K:SPADE"],
+    "dynamite": ["2:HEART"],
+    "jail": ["J:SPADE", "4:HEART", "10:SPADE"],
+    "horse": ["8:HEART", "9:HEART"],
+    "remington": ["K:CLUB"],
+    "carabine": ["A:CLUB"],
+    "schofield": ["J:CLUB", "Q:CLUB", "K:SPADE"],
+    "spyglass": ["A:SPADE"],
+    "volcanic": ["10:SPADE", "10:CLUB"],
+    "winchester": ["8:SPADE"],
+    "shoot": ["A:SPADE", "2:DIAMOND", "3:DIAMOND", "4:DIAMOND", "5:DIAMOND", "6:DIAMOND", "7:DIAMOND", "8:DIAMOND", "9:DIAMOND", "10:DIAMOND", "J:DIAMOND", "Q:DIAMOND", "K:DIAMOND", "A:DIAMOND", "2:CLUB", "3:CLUB", "4:CLUB", "5:CLUB", "6:CLUB", "7:CLUB", "8:CLUB", "9:CLUB", "Q:HEART", "K:HEART", "A:HEART"],
+    "drink": ["6:HEART", "7:HEART", "8:HEART", "9:HEART", "10:HEART", "J:HEART"],
+    "cat_balou": ["K:HEART", "9:DIAMOND", "10:DIAMOND", "J:DIAMOND"],
+    "showdown": ["Q:DIAMOND", "J:SPADE", "8:CLUB"],
+    "gatling": ["10:HEART"],
+    "general_store": ["9:CLUB", "Q:SPADE"],
+    "indians": ["K:DIAMOND", "A:DIAMOND"],
+    "dodge": ["10:CLUB", "J:CLUB", "Q:CLUB", "K:CLUB", "A:CLUB", "2:SPADE", "3:SPADE", "4:SPADE", "5:SPADE", "6:SPADE", "7:SPADE", "8:SPADE"],
+    "panic": ["J:HEART", "Q:HEART", "A:HEART", "8:DIAMOND"],
+    "saloon": ["5:HEART"],
+    "supply": ["9:SPADE", "9:SPADE"],
+    "wells_fargo": ["3:HEART"]
+  }
+}

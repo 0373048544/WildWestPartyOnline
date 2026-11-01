@@ -4,6 +4,13 @@ var server: Node
 var room: Dictionary
 var session_port: int = 7000
 var revision: int = 0
+var audio_sequence: int = 0
+
+func stamp_audio(event: Dictionary) -> Dictionary:
+	audio_sequence += 1
+	var result := event.duplicate(true)
+	result["audio_event_id"] = "%s:%d" % [room.room_code, audio_sequence]
+	return result
 
 func is_authority() -> bool:
 	return true
@@ -35,7 +42,7 @@ func publish_game(game: Node) -> void:
 		server.send_player(id, "STATE", {"public": public, "private": game.private_snapshot(id)})
 
 func broadcast_animation(actor: int, kind: String, target: int = 0) -> void:
-	server.broadcast(room, "VISUAL_EVENT", {"actor": actor, "kind": kind, "target": target})
+	server.broadcast(room, "TABLE_EVENT", stamp_audio({"kind": "animation", "actor": actor, "animation": kind, "target": target}))
 
 func broadcast_table_event(event: Dictionary) -> void:
-	server.broadcast(room, "TABLE_EVENT", event)
+	server.broadcast(room, "TABLE_EVENT", stamp_audio(event))

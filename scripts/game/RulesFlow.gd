@@ -47,6 +47,7 @@ func attack(job: Dictionary) -> void:
 	if not game.living(target):
 		return
 	var required: int = job.get("required", 1)
+	job["total_required"] = int(job.get("total_required", required))
 	if required <= 0:
 		game.network.broadcast_animation(target, "dodge", job.source)
 		game.record(game.players[target].display_name + " đã Né.")
@@ -62,7 +63,7 @@ func attack(job: Dictionary) -> void:
 	if cards.is_empty():
 		push({"kind": "damage", "target": target, "source": job.source, "amount": 1}, true)
 		return
-	prompt(target, "dodge", job, {"title": "BẠN ĐANG BỊ BẮN • CẦN %d LẦN NÉ" % required,
+	prompt(target, "dodge", job, {"title": "BẠN ĐANG BỊ BẮN! • NÉ %d/%d" % [int(job.total_required) - required, int(job.total_required)],
 		"allowed_cards": cards.map(func(c): return c.instance_id), "allowed_actions": ["card", "pass"]})
 
 func duel(job: Dictionary) -> void:
@@ -91,7 +92,7 @@ func judge(id: int, purpose: String, context: Dictionary) -> void:
 		if not card.is_empty():
 			cards.append(card)
 			game.record("%s lật phán định: %s." % [game.players[id].display_name, game.card_text(card)])
-			game.network.broadcast_table_event({"kind": "judge", "player": id, "card": card.duplicate()})
+			game.emit_event("JUDGEMENT_REVEALED", id, {"kind": "judge", "card": card.duplicate(), "purpose": purpose})
 	if cards.size() > 1:
 		prompt(id, "judge", {"source": id, "purpose": purpose, "continuation": context, "cards": cards},
 			{"cards": cards.duplicate(true), "pick_count": 1, "title": "LUCKY DUKE • CHỌN KẾT QUẢ PHÁN ĐỊNH"})
@@ -111,9 +112,13 @@ func judged(job: Dictionary) -> void:
 			attack_context.checks -= 1
 			if card.get("suit", "") == "HEART":
 				attack_context.required -= 1
+			var success: bool = card.get("suit", "") == "HEART"
+			game.record("%s: %s" % ["THÙNG / JOURDONNAIS", "NÉ THÀNH CÔNG" if success else "PHÁN ĐỊNH THẤT BẠI"])
+			game.emit_event("JUDGEMENT_RESOLVED", id, {"kind": "barrel_result", "success": success, "resolved": int(attack_context.total_required) - int(attack_context.required), "required": attack_context.total_required})
 			push(attack_context, true)
 		"jail":
 			game.deck.discard(game.players[id].equipment.get("jail", {}))
+			game.emit_event("CARD_DISCARDED", id, {"kind": "discard", "card": game.players[id].equipment.get("jail", {}).duplicate(), "from_zone": "equipment"})
 			game.players[id].equipment.erase("jail")
 			if card.get("suit", "") != "HEART":
 				game.record(game.players[id].display_name + " bị giam, mất lượt.")
@@ -128,6 +133,7 @@ func judged(job: Dictionary) -> void:
 			game.players[id].equipment.erase("dynamite")
 			if card.get("suit", "") == "SPADE" and int(card.get("rank", 0)) >= 2 and int(card.get("rank", 0)) <= 9:
 				game.deck.discard(explosive)
+				game.emit_event("CARD_DISCARDED", id, {"kind": "discard", "card": explosive.duplicate(), "from_zone": "equipment"})
 				game.record("Thuốc nổ phát nổ! Mất 3 máu.")
 				game.damage(id, 0, 3)
 			else:
@@ -136,7 +142,7 @@ func judged(job: Dictionary) -> void:
 					if not game.players[next].equipment.has("dynamite"):
 						game.players[next].equipment.dynamite = explosive
 						game.record("Thuốc nổ chuyển sang " + game.players[next].display_name + ".")
-						game.network.broadcast_table_event({"kind": "dynamite_pass", "player": id, "to": next})
+						game.emit_event("CARD_MOVED", id, {"kind": "dynamite_pass", "to": next, "card": explosive.duplicate()})
 						passed = true
 						break
 				if not passed:
@@ -184,9 +190,9 @@ func transfer(job: Dictionary) -> void:
 	if not victim.hand.is_empty():
 		choices.append({"id": "hand", "label": "Một lá ngẫu nhiên trên tay"})
 	if not victim.weapon.is_empty():
-		choices.append({"id": "weapon", "label": CardData.data(victim.weapon.card_data_id).name})
+		choices.append({"id": "weapon", "instance_id": victim.weapon.instance_id, "label": CardData.data(victim.weapon.card_data_id).name})
 	for key in victim.equipment:
-		choices.append({"id": key, "label": CardData.data(key).name})
+		choices.append({"id": key, "instance_id": victim.equipment[key].instance_id, "label": CardData.data(key).name})
 	if choices.is_empty():
 		return
 	prompt(job.source, "transfer", job, {"choices": choices, "title": "CHỌN LÁ BÀI CỦA " + victim.display_name})
@@ -216,6 +222,20 @@ func resolve(args: Dictionary) -> bool:
 			option = str(choices[0].id)
 		if not choices.any(func(c): return str(c.id) == option):
 			return false
+		if kind == "transfer":
+			if not game.living(id) or not game.living(int(context.target)):
+				return false
+			var victim: PlayerState = game.players[context.target]
+			if option == "hand":
+				# Never accept a hand instance from the actor; authority chooses randomly.
+				if victim.hand.is_empty() or int(args.get("card", 0)) != 0:
+					return false
+			else:
+				var offered: Dictionary = choices.filter(func(c): return str(c.id) == option)[0]
+				var physical: Dictionary = victim.weapon if option == "weapon" else victim.equipment.get(option, {})
+				var expected: int = int(offered.get("instance_id", -1))
+				if physical.is_empty() or physical.get("instance_id", -1) != expected or int(args.get("card", expected)) != expected:
+					return false
 	if payload.has("cards"):
 		var cards: Array = payload.cards
 		var count: int = int(payload.get("pick_count", 1))
@@ -234,6 +254,7 @@ func resolve(args: Dictionary) -> bool:
 		"dodge":
 			if accept:
 				game.consume(id, card)
+				game.emit_event("MISSED_USED", id, {"kind": "missed", "resolved": int(context.total_required) - int(context.required) + 1, "required": context.total_required})
 				context.required -= 1
 				context["resolved"] = int(context.get("resolved", 0)) + 1
 				push(context, true)
@@ -261,13 +282,16 @@ func resolve(args: Dictionary) -> bool:
 				var stolen: Dictionary = game.players[victim].hand.pick_random()
 				game.players[victim].hand.erase(stolen)
 				game.players[id].hand.append(stolen)
+				game.emit_event("CARD_STOLEN", victim, {"kind": "transfer", "to": id, "steal": true, "hidden": true, "from_zone": "hand"})
 				game.abilities.hand_changed(game, victim)
 			else:
 				game.draw_cards(id, 1)
 			game.draw_cards(id, 1)
 		"draw_discard":
 			if option == "discard" and not game.deck.discard_pile.is_empty():
-				game.players[id].hand.append(game.deck.discard_pile.pop_back())
+				var reclaimed: Dictionary = game.deck.discard_pile.pop_back()
+				game.players[id].hand.append(reclaimed)
+				game.emit_event("CARD_DRAWN", id, {"kind": "reclaim", "card": reclaimed.duplicate(), "from_zone": "discard", "to_zone": "hand"})
 			else:
 				game.draw_cards(id, 1)
 			game.draw_cards(id, 1)
@@ -277,6 +301,7 @@ func resolve(args: Dictionary) -> bool:
 					game.players[id].hand.append(reserved)
 				else:
 					game.deck.draw_pile.append(reserved)
+			game.emit_event("CARD_DRAWN", id, {"kind": "draw", "count": selected.size(), "from_zone": "deck", "to_zone": "hand"})
 		"judge":
 			var result: Dictionary = {}
 			for judged_card in context.cards:
@@ -316,7 +341,12 @@ func complete_transfer(id: int, context: Dictionary, option: String) -> void:
 		else:
 			game.deck.discard(taken)
 		game.abilities.hand_changed(game, target)
-		game.network.broadcast_table_event({"kind": "transfer", "player": target, "to": id, "steal": context.steal})
+		var event := {"kind": "transfer", "to": id, "steal": context.steal, "hidden": option == "hand", "from_zone": option, "to_zone": "hand" if context.steal else "discard"}
+		# A stolen hand card stays private. A discarded card becomes public at destination.
+		if option != "hand" or not context.steal:
+			event["card"] = taken.duplicate()
+		game.emit_event("CARD_STOLEN" if context.steal else "CARD_DISCARDED", target, event)
+		game.record("%s %s 1 lá %s %s." % [game.players[id].display_name, "lấy" if context.steal else "bỏ", "từ tay" if option == "hand" else "đang đặt trước", victim.display_name])
 
 func cancel_for_disconnect(id: int) -> void:
 	if game.reactions.active.is_empty():

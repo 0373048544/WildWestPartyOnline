@@ -13,10 +13,10 @@ var block_activation: bool = false
 var holding: bool = false
 var hold_time: float = 0.0
 
-func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: bool) -> void:
+func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: bool, reason: String = "") -> void:
 	custom_minimum_size = Vector2(210, 214)
 	disabled = not usable
-	tooltip_text = definition.name + "\n" + definition.description
+	tooltip_text = definition.name + " · " + CardInstance.corner(card) + "\n" + definition.description + ("\n" + reason if not reason.is_empty() else "")
 	accent = [Color("#bc6449"), Color("#6a9b9f"), Color("#a38748"), Color("#7b719d")][int(definition.type)]
 	effect = definition.effect
 	# The Button owns input; its child carries the hover lift outside container layout.
@@ -31,6 +31,8 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var face := SaloonTheme.panel(Color("#ecdbb7") if usable else Color("#a8a28f"), SaloonTheme.GOLD if chosen else accent, 10)
 	face.set_border_width_all(3 if chosen else 2)
+	if usable and not chosen:
+		face.border_color = accent.lightened(0.28)
 	panel.add_theme_stylebox_override("panel", face)
 	visual.add_child(panel)
 	var band := ColorRect.new()
@@ -40,9 +42,14 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visual.add_child(band)
 	add_text(definition.name, Rect2(10, 8, 190, 25), 17, SaloonTheme.CREAM)
-	add_text(TextCatalog.text(card.suit) + "  " + str({1: "A", 11: "J", 12: "Q", 13: "K"}.get(int(card.rank), card.rank)), Rect2(12, 40, 186, 20), 13, accent.darkened(0.25))
+	var corner := add_text(CardInstance.corner(card), Rect2(10, 39, 62, 32), 22, CardInstance.suit_color(card.suit))
+	corner.name = "RankSuitCorner"
+	corner.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	add_text(TextCatalog.text(CardData.CardType.keys()[definition.type]), Rect2(10, 98, 190, 18), 11, accent.darkened(0.3))
-	add_text(definition.description, Rect2(12, 115, 186, 94), 13, Color("#29333a"))
+	add_text(definition.description, Rect2(12, 115, 186, 72), 13, Color("#29333a"))
+	var lower := add_text(CardInstance.corner(card), Rect2(145, 190, 54, 20), 14, CardInstance.suit_color(card.suit))
+	lower.name = "RankSuitLower"
+	lower.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	var icon := Control.new()
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon.draw.connect(func(): draw_symbol(icon))
@@ -53,7 +60,7 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	button_up.connect(func(): holding = false)
 	visual.modulate = Color("#fff0bd") if chosen else Color.WHITE
 
-func add_text(value: String, bounds: Rect2, font_size: int, color: Color) -> void:
+func add_text(value: String, bounds: Rect2, font_size: int, color: Color) -> Label:
 	var text_label := Label.new()
 	text_label.text = value
 	text_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -65,6 +72,15 @@ func add_text(value: String, bounds: Rect2, font_size: int, color: Color) -> voi
 	# Apply bounds after wrap/font changes so Label minimum-size updates cannot widen it.
 	text_label.position = bounds.position
 	text_label.size = bounds.size
+	return text_label
+
+func _gui_input(event: InputEvent) -> void:
+	# Disabled cards remain inspectable by touch/long press.
+	if event is InputEventScreenTouch or (event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT):
+		holding = event.pressed
+		if event.pressed:
+			hold_time = 0
+			block_activation = false
 
 func hover(raised: bool) -> void:
 	if lift:
@@ -73,11 +89,13 @@ func hover(raised: bool) -> void:
 	lift.tween_property(visual, "position:y", minf(selected_lift, -22.0 if raised and compact_mode else (-6.0 if raised else 0.0)), 0.16)
 	z_index = 100 if raised else get_index()
 	if raised:
+		AudioManager.play_ui("hover")
 		preview_requested.emit()
 	else:
 		preview_closed.emit()
 
 func compact(chosen: bool, reaction: bool) -> void:
+	set_meta("chosen_card", chosen)
 	compact_mode = true
 	custom_minimum_size = Vector2(158, 162)
 	size = custom_minimum_size

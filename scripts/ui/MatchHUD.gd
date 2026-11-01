@@ -191,7 +191,7 @@ func build_hand() -> void:
 	hand.offset_right = -18
 	hand.offset_top = -182
 	hand.offset_bottom = -4
-	hand.configure(own.get("hand", []), usable, selected_ids, reacting)
+	hand.configure(own.get("hand", []), usable, selected_ids, reacting, own.get("disabled_reasons", {}))
 	hand.card_clicked.connect(handle_card)
 	hand.preview_requested.connect(show_preview)
 	hand.preview_closed.connect(close_preview)
@@ -205,6 +205,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		close_preview()
 
 func handle_card(uid: int) -> void:
+	AudioManager.play_card("select")
 	if app.menu_open:
 		return
 	if app.sid_mode:
@@ -224,6 +225,7 @@ func handle_card(uid: int) -> void:
 	app.choose_card_action(uid)
 
 func cancel_selection() -> void:
+	AudioManager.play_card("release")
 	app.selected = -1
 	app.sid_mode = false
 	app.sid_cards.clear()
@@ -237,6 +239,8 @@ func world_action(token: Dictionary) -> void:
 		"market": args["cards"] = [token.card]
 		"zone":
 			args["option"] = str(token.player) if request.reaction_type == "draw_steal" else str(token.zone)
+			if request.reaction_type == "transfer" and str(token.zone) != "hand":
+				args["card"] = int(token.get("card", 0))
 		"deck": args["option"] = "deck"
 		"discard": args["option"] = "discard"
 		_: return
@@ -253,8 +257,12 @@ func show_preview(card: Dictionary) -> void:
 	preview.add_child(column)
 	var data: Dictionary = CardData.data(card.card_data_id)
 	text(data.name, 19, column).add_theme_color_override("font_color", SaloonTheme.GOLD)
+	text(CardInstance.corner(card), 22, column).add_theme_color_override("font_color", SaloonTheme.CREAM)
 	var description := text(data.description, 16, column)
 	description.custom_minimum_size.x = 260
+	var reason: String = str(own.get("disabled_reasons", {}).get(card.instance_id, ""))
+	if not reason.is_empty():
+		text(reason, 15, column).add_theme_color_override("font_color", Color("#ffb995"))
 	preview.position = Vector2(clampf(get_viewport().get_mouse_position().x - 130, 12, size.x - 304), size.y - 370)
 	preview.size.x = 290
 
@@ -270,6 +278,8 @@ func build_pause() -> void:
 	text("Trận online và đồng hồ phản ứng vẫn tiếp tục.", 16, box)
 	action("TIẾP TỤC", func(): app.menu_open = false; app.refresh(), box)
 	action("LUẬT CHƠI", func(): show_rules(), box)
+	action("ÂM THANH", app.show_audio_settings, box)
+	action("HÌNH ẢNH", app.show_visual_settings, box)
 	action("RỜI TRẬN", app.leave, box)
 	if app.local_id() == state.get("host_player_id", 1) and OS.is_debug_build() and state.debug and NetworkManager.mode != "websocket":
 		var fold := VBoxContainer.new()

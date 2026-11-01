@@ -31,12 +31,12 @@ func aim(origin: Vector3, destination: Vector3, valid: bool = true) -> void:
 		points.append(origin.lerp(destination, t) + Vector3.UP * sin(t * PI) * 0.75)
 	for i in range(16):
 		var direction: Vector3 = (points[i + 1] - points[i]).normalized()
-		var side: Vector3 = direction.cross(Vector3.UP).normalized() * 0.065
+		var side: Vector3 = direction.cross(Vector3.UP).normalized() * 0.095
 		for vertex in [points[i] - side, points[i] + side, points[i + 1] + side,
 			points[i] - side, points[i + 1] + side, points[i + 1] - side]:
 			geometry.surface_add_vertex(vertex)
 	var forward: Vector3 = (destination - points[15]).normalized()
-	var width: Vector3 = forward.cross(Vector3.UP).normalized() * 0.25
+	var width: Vector3 = forward.cross(Vector3.UP).normalized() * 0.33
 	for vertex in [destination + forward * 0.25, destination - forward * 0.35 + width, destination - forward * 0.35 - width]:
 		geometry.surface_add_vertex(vertex)
 	geometry.surface_end()

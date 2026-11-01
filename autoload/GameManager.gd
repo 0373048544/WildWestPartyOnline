@@ -53,6 +53,8 @@ func role_distribution(count: int) -> Array:
 	return RoleData.pool(count)
 
 func start_match(force: bool = false) -> void:
+	if not network.is_authority():
+		return
 	var connected: Array = players.values().filter(func(p): return p.is_connected)
 	var valid_count: bool = connected.size() >= 4 and connected.size() <= 7
 	if network.allow_two_players() and connected.size() == 2:
@@ -62,12 +64,14 @@ func start_match(force: bool = false) -> void:
 		return
 	if started and winner.is_empty():
 		return
+	if not deck.reset():
+		fail(network.host_player_id(), "Dữ liệu bộ bài không hợp lệ. Không thể bắt đầu ván.")
+		return
 	var fresh: Dictionary = {}
 	for p in connected:
 		fresh[p.player_id] = PlayerState.new(p.player_id, p.display_name, fresh.size())
 	players = fresh
 	RoleData.assign(players)
-	deck.reset()
 	match_id += 1
 	# IDs do not get reused across rematches; late card intentions cannot hit new cards.
 	for card in deck.draw_pile:
@@ -83,7 +87,9 @@ func start_match(force: bool = false) -> void:
 	if OS.is_debug_build() and log_role_assignments:
 		for p in players.values():
 			print("Match role assignment: Peer %d -> %s" % [p.player_id, PlayerState.ROLE_NAMES[p.role]])
-	selection.begin(self)
+	if not selection.begin(self):
+		started = false
+		fail(network.host_player_id(), "Không thể chia nhân vật: cần đủ bộ 16 nhân vật gốc.")
 
 func living(id: int) -> bool:
 	return players.has(id) and players[id].is_alive and players[id].is_connected
@@ -112,7 +118,7 @@ func draw_cards(id: int, amount: int) -> Array:
 			players[id].hand.append(card)
 			drawn.append(card)
 	if not drawn.is_empty():
-		network.broadcast_table_event({"kind": "draw", "player": id, "count": drawn.size()})
+		emit_event("CARD_DRAWN", id, {"kind": "draw", "count": drawn.size(), "from_zone": "deck", "to_zone": "hand"})
 	return drawn
 
 func begin_turn(id: int) -> void:
@@ -163,7 +169,8 @@ func handle_intent(sender: int, action: String, args: Dictionary) -> void:
 			else:
 				players[id].ready = false
 	elif action == "character" and started and winner.is_empty():
-		selection.choose(self, sender, str(args.get("character", "")))
+		if args.get("match_id", -1) == match_id:
+			selection.choose(self, sender, str(args.get("character", "")))
 	elif action == "debug" and network.is_room_host(sender) and OS.is_debug_build():
 		debug_action(args)
 	elif started and winner.is_empty() and players[sender].is_alive and turns.phase != "CHARACTER_SELECTION":
@@ -197,7 +204,16 @@ func handle_intent(sender: int, action: String, args: Dictionary) -> void:
 							reactions.active = {}
 							offer_survival(sender, survival_source)
 	flow.run()
+	if started and winner.is_empty() and turns.phase == "DISCARD_PHASE" and reactions.active.is_empty() and players.has(turns.current_player) and players[turns.current_player].hand.size() <= players[turns.current_player].current_hp:
+		advance_turn()
 	publish()
+
+func emit_event(event_type: String, id: int, details: Dictionary = {}) -> void:
+	var event: Dictionary = details.duplicate(true)
+	event["event_type"] = event_type
+	event["player"] = id
+	event["match_id"] = match_id
+	network.broadcast_table_event(event)
 
 func find_card(id: int, uid: int) -> Dictionary:
 	if players.has(id):
@@ -216,7 +232,7 @@ func find_kind(id: int, kind: String) -> Dictionary:
 func consume(id: int, card: Dictionary) -> void:
 	players[id].hand.erase(card)
 	deck.discard(card)
-	network.broadcast_table_event({"kind": "discard", "player": id, "card": card.duplicate()})
+	emit_event("CARD_DISCARDED", id, {"kind": "discard", "card": card.duplicate(), "from_zone": "hand", "to_zone": "discard"})
 	abilities.hand_changed(self, id)
 
 func beer_enabled() -> bool:
@@ -241,7 +257,7 @@ func damage(target: int, source: int, amount: int = 1) -> void:
 	if not living(target) or amount <= 0:
 		return
 	players[target].current_hp -= amount
-	network.broadcast_table_event({"kind": "damage", "player": target, "amount": amount})
+	emit_event("DAMAGE", target, {"kind": "damage", "amount": amount, "source": source})
 	network.broadcast_animation(target, "hit", source)
 	record("%s mất %d máu." % [players[target].display_name, amount])
 	abilities.on_damage(self, target, source, amount)
@@ -252,16 +268,21 @@ func heal(id: int, amount: int) -> void:
 	var before: int = players[id].current_hp
 	players[id].current_hp = mini(players[id].max_hp, before + amount)
 	if players[id].current_hp > before:
+		emit_event("HEAL", id, {"kind": "heal", "amount": players[id].current_hp - before})
 		network.broadcast_animation(id, "drink", id)
 
 func discard_all(p: PlayerState) -> void:
 	for card in p.hand:
 		deck.discard(card)
+		emit_event("CARD_DISCARDED", p.player_id, {"kind": "discard", "card": card.duplicate(), "from_zone": "hand", "to_zone": "discard"})
 	p.hand.clear()
 	deck.discard(p.weapon)
+	if not p.weapon.is_empty():
+		emit_event("CARD_DISCARDED", p.player_id, {"kind": "discard", "card": p.weapon.duplicate(), "from_zone": "weapon", "to_zone": "discard"})
 	p.weapon = {}
 	for card in p.equipment.values():
 		deck.discard(card)
+		emit_event("CARD_DISCARDED", p.player_id, {"kind": "discard", "card": card.duplicate(), "from_zone": "equipment", "to_zone": "discard"})
 	p.equipment.clear()
 	abilities.hand_changed(self, p.player_id)
 
@@ -271,15 +292,19 @@ func kill_player(id: int, source: int) -> void:
 	var p: PlayerState = players[id]
 	p.is_alive = false
 	p.current_hp = 0
+	emit_event("PLAYER_DIED", id, {"kind": "death", "source": source})
+	emit_event("ROLE_REVEALED", id, {"kind": "role", "role": PlayerState.ROLE_NAMES[p.role]})
 	abilities.on_death(self, p)
 	discard_all(p)
 	record(TextCatalog.text("%s fell: %s") % [p.display_name, TextCatalog.text(PlayerState.ROLE_NAMES[p.role])])
 	network.broadcast_animation(id, "death", source)
 	if players.has(source) and players[source].is_alive and source != id:
 		if p.role == PlayerState.Role.OUTLAW:
+			emit_event("REWARD", source, {"kind": "reward"})
 			draw_cards(source, 3)
 			record(players[source].display_name + " được thưởng 3 lá vì hạ Tội phạm.")
 		elif p.role == PlayerState.Role.DEPUTY and players[source].role == PlayerState.Role.SHERIFF:
+			emit_event("PENALTY", source, {"kind": "penalty"})
 			discard_all(players[source])
 			record("Cảnh sát trưởng hạ Phó cảnh sát: bỏ toàn bộ bài và trang bị.")
 	check_win()
@@ -332,10 +357,10 @@ func disconnect_player(id: int) -> void:
 	publish()
 
 func card_text(card: Dictionary) -> String:
-	return "%s (%s %s)" % [CardData.data(card.card_data_id).name, TextCatalog.text(card.suit), rank_text(int(card.rank))]
+	return "%s (%s)" % [CardData.data(card.card_data_id).name, CardInstance.corner(card)]
 
-func rank_text(rank: int) -> String:
-	return {1: "A", 11: "J", 12: "Q", 13: "K"}.get(rank, str(rank))
+func rank_text(rank: Variant) -> String:
+	return CardInstance.rank_label(rank)
 
 func record(message: String) -> void:
 	log_lines.append(message)
@@ -348,7 +373,7 @@ func fail(id: int, message: String) -> void:
 func public_snapshot() -> Dictionary:
 	var rows: Array = []
 	for p in players.values():
-		rows.append(p.public_snapshot(not winner.is_empty(), turns.phase != "CHARACTER_SELECTION"))
+		rows.append(p.public_snapshot(not winner.is_empty(), not p.character_id.is_empty()))
 	return {"players": rows, "started": started, "match_id": match_id, "winner": winner,
 		"server_port": network.session_port, "host_player_id": network.host_player_id(), "minimum_players": 2 if network.allow_two_players() else 4, "max_players": 7,
 		"current_player": turns.current_player, "phase": turns.phase, "round": turns.round_number,
@@ -363,18 +388,22 @@ func private_snapshot(id: int) -> Dictionary:
 	result["character_options"] = selection.private_options(id)
 	result["character_remaining"] = maxf(0, (selection.deadline - Time.get_ticks_msec()) / 1000.0)
 	result["character_chosen"] = selection.chosen.has(id)
+	result["selected_character"] = CharacterData.get_data(str(selection.chosen.get(id, ""))).duplicate(true)
 	result["reaction"] = reactions.private_prompt(id)
 	result["ability_id"] = players[id].ability_id
 	var targets: Dictionary = {}
 	var target_info: Dictionary = {}
+	var disabled_reasons: Dictionary = {}
 	if started and winner.is_empty() and living(id):
 		for card in players[id].hand:
 			targets[card.instance_id] = resolver.valid_targets(self, id, card)
+			disabled_reasons[card.instance_id] = resolver.disabled_reason(self, id, card)
 		for other in players:
 			if other != id and living(other):
 				target_info[other] = {"distance": DistanceManager.distance(players, id, other), "range": DistanceManager.weapon_range(players[id])}
 	result["targets"] = targets
 	result["target_info"] = target_info
+	result["disabled_reasons"] = disabled_reasons
 	return result
 
 func publish() -> void:
@@ -414,5 +443,27 @@ func debug_action(args: Dictionary) -> void:
 				advance_turn()
 		"Force Win Check":
 			check_win()
+
+func debug_card_zones() -> Array:
+	# Never serialize this into public/private player snapshots.
+	if not OS.is_debug_build() or not network.is_authority():
+		return []
+	var result: Array = []
+	var zones: Array = [{"zone": "deck", "owner": 0, "cards": deck.draw_pile},
+		{"zone": "discard", "owner": 0, "cards": deck.discard_pile},
+		{"zone": "market", "owner": 0, "cards": flow.market}]
+	for p in players.values():
+		zones.append({"zone": "hand", "owner": p.player_id, "cards": p.hand})
+		zones.append({"zone": "weapon", "owner": p.player_id, "cards": [] if p.weapon.is_empty() else [p.weapon]})
+		zones.append({"zone": "equipment", "owner": p.player_id, "cards": p.equipment.values()})
+	if not reactions.active.is_empty():
+		zones.append({"zone": "reserved", "owner": reactions.active.target_player_id, "cards": reactions.active.context.get("cards", [])})
+	for zone in zones:
+		for card in zone.cards:
+			var entry: Dictionary = card.duplicate(true)
+			entry["zone"] = zone.zone
+			entry["owner"] = zone.owner
+			result.append(entry)
+	return result
 
 

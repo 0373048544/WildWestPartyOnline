@@ -2,7 +2,7 @@ const assert=require('node:assert/strict');
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const clients=[];
 async function connect(){
-  const c={messages:[],state:null,session:null,ws:new WebSocket('ws://127.0.0.1:7000')};
+  const c={messages:[],state:null,session:null,ws:new WebSocket(process.env.WWPO_TEST_URL || 'ws://127.0.0.1:7000')};
   c.send=(type,payload={})=>c.ws.send(JSON.stringify({type,payload,version:1}));
   c.ws.addEventListener('message',e=>{
     const m=JSON.parse(e.data);c.messages.push(m);
@@ -40,7 +40,7 @@ async function wait(fn,label){
   const options=seven.flatMap(c=>c.state.private.character_options.map(x=>x.character_id));
   assert.equal(new Set(options).size,14);
   assert(seven.every(c=>c.state.public.players.every(p=>!p.character_id&&!p.character_options)));
-  for(const c of seven){c.send('SELECT_CHARACTER',{character:c.state.private.character_options[0].character_id});await delay(100);}
+  for(const c of seven){c.send('SELECT_CHARACTER',{character:c.state.private.character_options[0].character_id,match_id:c.state.public.match_id});await delay(100);}
   await wait(()=>seven.every(c=>c.state.public.players.every(p=>p.character_id)),'all characters public');
   const roles=seven.map(c=>c.state.private.role);
   assert.equal(roles.filter(x=>x==='SHERIFF').length,1);

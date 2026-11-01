@@ -88,7 +88,7 @@ func _process(delta: float) -> void:
 	if not own.has("role"):
 		return
 	if state.phase == "CHARACTER_SELECTION":
-		require(state.players.all(func(p): return p.character_id.is_empty()), "characters private until all chosen")
+		require(state.players.all(func(p): return not p.has("character_options")), "private character pairs never public")
 		if own.get("character_options", []).size() == 2:
 			NetworkManager.send_intent("character", {"character": own.character_options[0].character_id})
 		return

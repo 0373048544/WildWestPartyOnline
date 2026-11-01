@@ -19,6 +19,8 @@ config/icon="res://icon.svg"
 
 GameManager="*res://autoload/GameManager.gd"
 NetworkManager="*res://autoload/NetworkManager.gd"
+AudioManager="*res://autoload/AudioManager.gd"
+VisualSettings="*res://autoload/VisualSettings.gd"
 
 [display]
 

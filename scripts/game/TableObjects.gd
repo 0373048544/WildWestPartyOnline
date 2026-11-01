@@ -23,9 +23,10 @@ func sync(snapshot: Dictionary, owner: int, request: Dictionary) -> void:
 		if p.hand_count > 0:
 			zones.append({"zone": "hand", "kind": "hand", "name": "TAY KÍN · %d" % p.hand_count})
 		if not p.weapon_id.is_empty():
-			zones.append({"zone": "weapon", "kind": "weapon", "name": CardData.data(p.weapon_id).name})
+			zones.append({"zone": "weapon", "kind": "weapon", "name": CardData.data(p.weapon_id).name, "card": p.get("weapon_card", {})})
 		for key in p.equipment_ids:
-			zones.append({"zone": key, "kind": key, "name": CardData.data(key).name})
+			var physical: Array = p.get("equipment_cards", []).filter(func(c): return c.card_data_id == key)
+			zones.append({"zone": key, "kind": key, "name": CardData.data(key).name, "card": physical[0] if not physical.is_empty() else {}})
 		var radial: Vector3 = table.avatars[p.player_id].position.normalized()
 		var tangent := Vector3(radial.z, 0, -radial.x)
 		for index in range(zones.size()):
@@ -41,7 +42,11 @@ func sync(snapshot: Dictionary, owner: int, request: Dictionary) -> void:
 				item.scale = Vector3.ONE * 0.82
 				objects[key] = item
 			objects[key].title.text = zone.name
-			var selectable: bool = choice.get("reaction_type", "") == "transfer" and int(choice.get("zone_player_id", 0)) == int(p.player_id) and choice.get("choices", []).any(func(c): return str(c.id) == str(zone.zone))
+			objects[key].token["card"] = int(zone.get("card", {}).get("instance_id", 0))
+			if not zone.get("card", {}).is_empty():
+				objects[key].title.text += "\n" + CardInstance.corner(zone.card)
+				objects[key].set_face(zone.card)
+			var selectable: bool = choice.get("reaction_type", "") == "transfer" and int(choice.get("zone_player_id", 0)) == int(p.player_id) and choice.get("choices", []).any(func(c): return str(c.id) == str(zone.zone) and (zone.zone == "hand" or int(c.get("instance_id", -1)) == int(zone.get("card", {}).get("instance_id", 0))))
 			if choice.get("reaction_type", "") == "draw_steal":
 				selectable = zone.zone == "hand" and choice.get("choices", []).any(func(c): return str(c.id) == str(p.player_id))
 			objects[key].highlight(selectable)
@@ -77,13 +82,19 @@ func sync(snapshot: Dictionary, owner: int, request: Dictionary) -> void:
 			objects[pile] = zone
 		var allowed: bool = choice.get("reaction_type", "") in ["draw_steal", "draw_discard"] and choice.get("choices", []).any(func(c): return c.id == pile)
 		objects[pile].highlight(allowed)
+		if pile == "discard":
+			var top: Dictionary = state.get("discard_top", {})
+			objects[pile].title.text = "CHỒNG BỎ" if top.is_empty() else "%s\n%s" % [CardData.data(top.card_data_id).name, CardInstance.corner(top)]
+			objects[pile].set_face(top)
+		else:
+			objects[pile].title.text = "CHỒNG RÚT\n%d lá" % state.get("draw_count", 0)
 
 func token_allowed(token: Dictionary) -> bool:
 	if token.get("kind", "") == "market":
 		return choice.get("reaction_type", "") == "store" and state.get("market", []).any(func(c): return c.instance_id == token.card)
 	if token.get("kind", "") == "zone":
 		var key: String = "%d:%s" % [token.player, token.zone]
-		return objects.has(key) and objects[key].enabled
+		return objects.has(key) and objects[key].enabled and int(objects[key].token.get("card", 0)) == int(token.get("card", 0))
 	if token.get("kind", "") in ["deck", "discard"]:
 		return objects.has(token.kind) and objects[token.kind].enabled
 	return false

@@ -12,3 +12,9 @@ static func definitions() -> Dictionary:
 
 static func get_data(id: String) -> Dictionary:
 	return definitions().get(id, {})
+
+static func ability_icon(id: String) -> String:
+	return str({"damage_draw": "+", "draw_reveal": "?", "convert": "↔", "damage_steal": "←",
+		"draw_steal": "←", "innate_barrel": "○", "draw_choose": "3→2", "judge_choose": "2→1",
+		"distance_defense": "+1", "draw_discard": "↑", "distance_sight": "−1", "discard_heal": "+",
+		"double_dodge": "2", "empty_draw": "0→1", "death_collect": "←", "unlimited_shoot": "∞"}.get(id, "◆"))

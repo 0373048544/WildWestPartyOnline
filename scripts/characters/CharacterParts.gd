@@ -1,0 +1,115 @@
+extends RefCounted
+
+# Cosmetic assembly only. All characters share the existing animation/picking rig.
+func build(a: PlayerAvatar, d: Dictionary) -> void:
+	var shirt := Color(d.shirt)
+	var coat := Color(d.coat)
+	var accent := Color(d.accent)
+	var skin := Color(d.skin)
+	var hair := Color(d.hair)
+	var w: float = d.width
+	var h: float = d.height
+	a.rig = Node3D.new()
+	a.rig.name = "CharacterRig"
+	a.add_child(a.rig)
+	a.part(a.sphere(0.43 * w, 0.73 * h), Vector3(0, 0.99 * h, 0), shirt)
+	if d.outfit in ["coat", "ragged", "jacket", "vest", "patched", "shoulders"]:
+		for side in [-1, 1]:
+			var panel := a.part(a.box(Vector3(0.24 * w, (0.9 if d.outfit in ["coat", "ragged"] else 0.57) * h, 0.46)), Vector3(side * 0.24 * w, 1.0 * h, 0.015), coat)
+			panel.rotation.z = side * 0.06
+			var lapel := a.part(a.box(Vector3(0.09, 0.34, 0.045)), Vector3(side * 0.16 * w, 1.16 * h, -0.26), accent)
+			lapel.rotation.z = side * -0.2
+	if d.outfit == "poncho":
+		var poncho := a.part(a.cylinder(0.32, 0.72, 0.65), Vector3(0, 1.17 * h, 0), coat)
+		poncho.scale.z = 0.6
+		for y in [0.92, 1.06]:
+			a.part(a.box(Vector3(1.13, 0.06, 0.04)), Vector3(0, y * h, -0.39), accent)
+	if d.outfit == "suspenders":
+		for x in [-0.24, 0.24]:
+			a.part(a.box(Vector3(0.07, 0.6, 0.04)), Vector3(x, 1.03 * h, -0.32), coat.darkened(0.2))
+	if d.outfit == "shoulders":
+		for side in [-1, 1]:
+			a.part(a.sphere(0.26, 0.24), Vector3(side * 0.43, 1.29 * h, 0), coat)
+	if d.outfit == "patched":
+		a.part(a.box(Vector3(0.16, 0.16, 0.025)), Vector3(-0.27, 0.97, -0.235), accent)
+	a.part(a.box(Vector3(0.76 * w, 0.13, 0.48)), Vector3(0, 0.71 * h, 0), Color("#604330"))
+	a.part(a.box(Vector3(0.18, 0.14, 0.05)), Vector3(0, 0.71 * h, -0.27), accent)
+	for side in [-1, 1]:
+		a.part(a.box(Vector3(0.25 * w, 0.34 * h, 0.29)), Vector3(side * 0.21 * w, 0.46 * h, 0), coat.darkened(0.2))
+		a.part(a.box(Vector3(0.32 * w, 0.25, 0.49)), Vector3(side * 0.21 * w, 0.19, -0.08), Color("#59402f"))
+		a.part(a.box(Vector3(0.34 * w, 0.04, 0.5)), Vector3(side * 0.21 * w, 0.08, -0.08), Color("#382f2d"))
+	var head_y: float = 1.7 * h
+	a.part(a.sphere(0.49, 0.82), Vector3(0, head_y, -0.035), skin)
+	# Hair cap and modular long shapes give readable head silhouettes.
+	a.part(a.sphere(0.47, 0.28), Vector3(0, head_y + 0.25, 0.035), hair)
+	if d.hair_style in ["long", "braids", "ponytail", "messy"]:
+		for side in [-1, 1]:
+			var strand := a.part(a.sphere(0.13 if d.hair_style != "messy" else 0.18, 0.7 if d.hair_style != "messy" else 0.32), Vector3(side * 0.37, head_y - 0.15, 0.0), hair)
+			strand.rotation.z = side * 0.18
+		if d.hair_style == "ponytail":
+			a.part(a.sphere(0.18, 0.56), Vector3(0.28, head_y, 0.32), hair)
+	for side in [-1, 1]:
+		a.part(a.sphere(0.11, 0.17), Vector3(side * 0.17, head_y + 0.09, -0.443), Color("#fff3d8"))
+		var pupil := a.part(a.sphere(0.045, 0.1), Vector3(side * 0.17, head_y + 0.09, -0.526), Color("#263741"))
+		a.eyes.append(pupil)
+		var brow := a.part(a.box(Vector3(0.2, 0.055, 0.05)), Vector3(side * 0.18, head_y + 0.24, -0.45), hair)
+		brow.rotation.z = -side * 0.14
+		a.brows.append(brow)
+		if d.hair_style in ["stubble", "beard", "goatee", "handlebar", "large_mustache", "curled", "chin_beard"]:
+			var size := Vector3(0.28 if d.hair_style in ["large_mustache", "handlebar"] else 0.17, 0.13 if d.hair_style == "large_mustache" else 0.075, 0.08)
+			var mustache := a.part(a.box(size), Vector3(side * 0.13, head_y - 0.13, -0.48), hair)
+			mustache.rotation.z = side * (0.38 if d.hair_style in ["curled", "handlebar"] else -0.15)
+	if d.hair_style in ["beard", "goatee", "chin_beard"]:
+		a.part(a.cylinder(0.19, 0.07, 0.34 if d.hair_style == "chin_beard" else 0.22), Vector3(0, head_y - 0.29, -0.25), hair)
+	a.part(a.sphere(0.11, 0.16), Vector3(0, head_y - 0.01, -0.54), skin.darkened(0.08))
+	a.part(a.box(Vector3(0.16, 0.035, 0.025)), Vector3(0, head_y - 0.24, -0.45), Color("#813e36"))
+	a.part(a.box(Vector3(0.42, 0.13, 0.45)), Vector3(0, 1.37 * h, -0.03), accent)
+	var scarf := a.part(a.box(Vector3(0.17, 0.29, 0.05)), Vector3(0.09, 1.23 * h, -0.29), accent)
+	scarf.rotation.z = 0.35
+	a.hat = Node3D.new()
+	a.rig.add_child(a.hat)
+	a.hat.position.y = head_y + 0.36
+	a.hat_rest_y = a.hat.position.y
+	a.hat.rotation.z = d.tilt
+	a.part(a.cylinder(d.brim, float(d.brim) * 1.04, 0.11), Vector3.ZERO, Color(d.hat), a.hat)
+	a.part(a.cylinder(0.34, 0.43, d.crown), Vector3(0, float(d.crown) / 2, 0), Color(d.hat).lightened(0.08), a.hat)
+	a.part(a.cylinder(0.42, 0.44, 0.095), Vector3(0, 0.07, 0), accent, a.hat)
+	a.part(a.box(Vector3(0.12, 0.1, 0.04)), Vector3(0, 0.07, -0.44), Color("#f1cd69"), a.hat)
+	prop(a, d, head_y)
+	var arm_x: float = 0.44 * w
+	a.part(a.box(Vector3(0.24, 0.46, 0.25)), Vector3(-arm_x, 1.06 * h, 0), shirt)
+	a.part(a.sphere(0.15, 0.24), Vector3(-arm_x, 0.79 * h, -0.02), skin)
+	a.arm = Node3D.new()
+	a.rig.add_child(a.arm)
+	a.arm.position = Vector3(arm_x, 1.28 * h, 0)
+	a.part(a.box(Vector3(0.24, 0.46, 0.25)), Vector3(0, -0.22, 0), shirt, a.arm)
+	a.part(a.sphere(0.15, 0.24), Vector3(0, -0.49, 0), skin, a.arm)
+	a.gun = a.part(a.box(Vector3(0.13, 0.18, 0.38)), Vector3(0, -0.5, -0.18), Color("#6a7f89"), a.arm)
+	a.bottle = a.part(a.cylinder(0.065, 0.11, 0.34), Vector3(0, -0.55, -0.12), Color("#5aaf88"), a.arm)
+	a.bottle.visible = false
+
+func prop(a: PlayerAvatar, d: Dictionary, head_y: float) -> void:
+	var accent := Color(d.accent)
+	match d.prop:
+		"feather", "flower", "coin":
+			var charm := a.part(a.sphere(0.09 if d.prop == "feather" else 0.13, 0.5 if d.prop == "feather" else 0.22), Vector3(0.43, 0.25, 0), accent, a.hat)
+			charm.rotation.z = -0.4
+		"barrel":
+			var buckle := a.part(a.cylinder(0.14, 0.14, 0.23), Vector3(0.0, 0.73, -0.34), Color("#b48447"))
+			buckle.rotation.x = PI / 2
+		"bottle":
+			a.part(a.cylinder(0.07, 0.11, 0.38), Vector3(-0.5, 0.83, -0.2), Color("#59ac7c"))
+		"bone":
+			for side in [-1, 1]:
+				var bone := a.part(a.box(Vector3(0.37, 0.07, 0.06)), Vector3(0, 1.17, -0.31), accent)
+				bone.rotation.z = side * 0.5
+		"scar":
+			var scar := a.part(a.box(Vector3(0.04, 0.18, 0.02)), Vector3(-0.29, head_y, -0.44), Color("#a55c47"))
+			scar.rotation.z = -0.3
+		"card":
+			a.part(a.box(Vector3(0.16, 0.24, 0.025)), Vector3(-0.27, 1.19, -0.29), Color("#fff0cb"))
+		"satchel", "pouch":
+			a.part(a.box(Vector3(0.31, 0.32, 0.2)), Vector3(-0.4, 0.78, 0.02), accent.darkened(0.2))
+		"belt":
+			for x in [-0.3, -0.15, 0.15, 0.3]:
+				a.part(a.cylinder(0.025, 0.025, 0.13), Vector3(x, 0.77, -0.28), accent)

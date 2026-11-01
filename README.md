@@ -1,4 +1,4 @@
-﻿# Miền Tây Đại Chiến
+# Miền Tây Đại Chiến
 
 Project Godot 4.7.2, client Web + server Godot headless có thẩm quyền, giao diện tiếng Việt và saloon 3D tạo bằng primitive. Không dùng artwork bên ngoài. ENet được giữ cho kiểm thử desktop; giao diện người chơi mặc định dùng WebSocket và mã phòng.
 
@@ -37,15 +37,37 @@ Chi tiết kiến trúc phòng, giao thức, riêng tư và khôi phục: [serve
 
 ## Chơi thử
 
-Mở project.godot và nhấn F5 cũng chạy được client desktop kết nối cùng dedicated server. Tạo/tham gia bằng mã phòng giống bản Web.
+Mở project.godot và nhấn F5. Khi bấm TẠO PHÒNG, client desktop kết nối máy chủ đã chạy; nếu chưa có máy chủ ở địa chỉ mặc định ws://127.0.0.1:7000, game tự khởi động dịch vụ phòng cục bộ rồi vào PHÒNG CHỜ. Client desktop khác và browser có thể tham gia bằng mã phòng trên cùng máy. Dịch vụ cục bộ dừng khi đóng tiến trình game đã khởi động nó. Địa chỉ máy chủ tùy chỉnh và bản Web vẫn cần chạy dedicated server riêng.
 
 HOST luôn vào PHÒNG CHỜ trước. Tất cả bấm sẵn sàng, chủ phòng bấm BẮT ĐẦU. Bình thường hỗ trợ 4–7 người; debug cho phép đúng 2 người. Không hỗ trợ 3 người. Host chỉ có quyền quản lý phòng, không được ưu tiên vai trò, máu hoặc lượt.
 
-Mỗi ván server xáo vai trò và chia riêng hai lựa chọn nhân vật cho từng người. Chỉ khi mọi người chọn xong (hoặc hết 25 giây) nhân vật được công khai. Cảnh sát trưởng được chọn ngẫu nhiên mở lượt đầu. Chơi lại làm mới vai trò, lựa chọn nhân vật, bộ bài, tay bài và lượt.
+Mỗi ván server xáo đủ 16 nhân vật, chia mỗi người đúng hai lựa chọn riêng không trùng giữa các người chơi. Giao diện hiện hai thẻ cạnh nhau: chọn tạm rồi xác nhận. Chỉ nhân vật đã xác nhận được công khai ngay; lựa chọn bỏ lại luôn kín. Hết 25 giây, server chọn ngẫu nhiên một trong đúng hai lựa chọn của người đó. Chơi lại xáo lại toàn bộ. Host không được ưu tiên. Cảnh sát trưởng ngẫu nhiên mở lượt sau khi mọi người chọn xong.
 
 Trong Godot, có thể dùng Debug > Customize Run Instances và chạy 4 client kết nối server chung. API host_game/join_game ENet vẫn còn cho test desktop cũ; UI chính không gọi API này. Người chơi browser không cần UDP, VPN hoặc port forwarding.
 
-## Điều khiển trên bàn
+## Âm thanh
+
+Trong lượt chơi **không có nhạc nền**. AudioManager dùng music_allowed để fade Music bus về im lặng trong 0,4 giây và dừng nguồn phát piano ở mọi phase đang chơi, kể cả reconnect, phản ứng, Đấu súng, Cửa hàng và phán định. Chỉ menu/lobby/chọn nhân vật/kết thúc cho phép nhạc trở lại; cài đặt âm lượng người dùng được giữ nguyên.
+
+Nền trận là gió/phòng thưa, thêm tiếng gỗ hoặc ly rất nhỏ cách nhau 11–24 giây. Đấu súng và phán định Thuốc nổ giảm nền mạnh; an toàn/nổ dừng dây cháy. Weapons và Cards là bus riêng. Colt, Schofield, Remington, Carabine, Winchester, Volcanic có mẫu tiếng riêng; cò súng đi trước phát bắn, Né dùng whoosh/ricochet thay cho va chạm. AudioReworkTest kiểm tra chính sách nhạc và chuyển trạng thái. Không có thay đổi luật gameplay.
+
+Menu chính và menu trong trận có **ÂM THANH**: âm lượng tổng, nhạc, hiệu ứng, môi trường, giao diện và tắt âm; lưu cục bộ trong user://audio_settings.cfg. Web mở âm thanh sau lần chạm/nhấp đầu tiên. Debug có bảng thử âm thanh thu gọn.
+
+AudioManager dùng 16 kênh 2D, 8 kênh 3D và hai lớp nền; giới hạn đồng thời, cooldown, pitch nhẹ, giảm nền tạm thời khi có tiếng quan trọng. Âm gameplay theo sự kiện server có ID, phát cùng hàng đợi trình diễn; refresh state không phát lại hành động. Âm bài kín không phụ thuộc tên/chất/số lá bài. Máy chủ headless không phát âm. 63 tín hiệu tổng hợp gốc ở assets/audio, tái tạo bằng node tools/generate-audio.cjs; xem assets/audio/LICENSE.md. Không dùng âm từ game thương mại. AudioTest kiểm tra asset, bus, trùng sự kiện, giới hạn node, lưu cài đặt và mở khóa touch. Chất lượng phối âm chủ quan cần nghe thử trên thiết bị thật.
+
+## Mỹ thuật nhân vật
+
+16 nhân vật có preset riêng tại resources/characters/visuals/base_visuals.json. CharacterParts lắp thân, mũ, tóc/râu, áo khoác, mặt và phụ kiện theo cùng rig PlayerAvatar; mesh primitive được cache dùng chung. Avatar chỉ đổi theo character_id công khai, giữ nguyên Area3D, metadata người chơi, ghế và các hook shoot/dodge/hit/drink/death. Bản cập nhật mỹ thuật không thay đổi vai trò, kỹ năng hoặc luật.
+
+Chọn nhân vật dùng hai thẻ có chân dung render từ model thật; nhấp cao bồi trên bàn mở thẻ thông tin cùng chân dung. Mỗi portrait dùng SubViewport nhỏ, chỉ render một lần và cập nhật ngắn khi có phản ứng. Không tải artwork thương mại. Nhân vật chưa xác nhận vẫn dùng ngoại hình chung để không lộ hai lựa chọn kín.
+
+Nút dùng WesternButton với phóng nhẹ khi rê chuột và nén nhẹ khi nhấn; thẻ nhân vật bật nổi khi chọn. Bài bay xoay nhẹ rồi hạ phẳng ở đích. Biển hiệu saloon đung đưa cùng bảng tên và có móng ngựa low-poly cạnh tường; các đạo cụ không có collider nhắm mục tiêu. Nhãn thông tin tại cao bồi giữ hai dòng, phần chi tiết chuyển vào thẻ chân dung để không che bàn.
+
+HÌNH ẢNH trong menu chính/menu trong trận có THẤP / VỪA / CAO. Mức THẤP giảm hạt và tắt bóng; VỪA là mặc định Web/mobile; CAO bật bóng desktop. Cả ba mức giữ đầy đủ bài, nhân vật, nhãn và mục tiêu. Lưu tại user://visual_settings.cfg. Chưa đo FPS hoặc xác nhận chất lượng trên điện thoại thật.
+
+CharacterVisualTest kiểm tra 16 preset, tối đa 65 mesh/avatar, hoạt ảnh, giữ collider, chân dung khớp và đồng bộ ngoại hình 7 người. Thêm --capture khi chạy có renderer để xuất tests/artifacts/character-gallery.png và character-table-seven.png. Đây là các ảnh kiểm tra cục bộ, không đưa vào bản phát hành.
+
+## Thao tác trên bàn
 
 - Tay bài là thành phần 2D chính. Bài xếp chồng nhẹ; rê chuột hoặc nhấn giữ khoảng 0,45 giây để xem mô tả đầy đủ. Nhấn giữ rồi thả không tự dùng bài.
 - Chạm/nhấp lá Bắn, Hoảng loạn, Cat Balou, Đấu súng hoặc Nhà giam → các cao bồi hợp lệ sáng lên → chạm/nhấp trực tiếp cao bồi. Mũi tên cong xem trước và thông tin khoảng cách/tầm súng chỉ dùng dữ liệu công khai.
@@ -53,6 +75,7 @@ Trong Godot, có thể dùng Debug > Customize Run Instances và chạy 4 client
 - Khi bị Bắn, Đấu súng, Thổ dân hoặc hấp hối: các lá đáp trả hợp lệ trên chính tay bài sáng lên. Chạm lá để trả lời hoặc chọn CHỊU ĐÒN/KHÔNG CỨU. Janet dùng cùng lá bài vật lý để đổi Bắn/Né theo ngữ cảnh.
 - Sid khi thiếu máu có biểu tượng ✚ nhỏ cạnh tay bài. Chạm để chọn/bỏ chọn đúng hai lá, rồi chọn HỒI 1 MÁU. Không có nút kỹ năng lớn thường trực.
 - Hoảng loạn/Cat Balou: sau khi chọn cao bồi, chạm vùng TAY KÍN (server chọn ngẫu nhiên, không lộ tên bài), vũ khí hoặc trang bị đang sáng trước ghế.
+- Cat Balou có thể bỏ cả Ngựa, Ống nhòm, Thùng, Nhà giam, Thuốc nổ và vũ khí dù tay đối thủ trống. Mỗi lựa chọn trên bàn khóa vào instance_id cụ thể; server từ chối lá đã bị thay thế và không bỏ nhầm bản sao mới. Hiệu lực trang bị mất ngay, kỹ năng bẩm sinh của nhân vật vẫn giữ. DiscardZonesTest kiểm tra riêng các trường hợp này.
 - Cửa hàng: bài ngửa xuất hiện giữa bàn; người đang có quyền chọn chạm lá muốn lấy. Những người khác chỉ xem.
 - Jesse/Pedro chọn chồng rút/chồng bỏ trực tiếp trên bàn. Jesse cũng có thể chạm vùng tay kín của đối thủ. Rút đầu lượt bình thường hoàn toàn tự động.
 - Bỏ bài cuối lượt: hiện BỎ X LÁ; chạm từng lá để bỏ. Server tự chuyển lượt khi đủ giới hạn theo máu.
@@ -70,7 +93,7 @@ CharacterData nạp 16 nhân vật từ resources/characters/characters.json, g�
 
 Bộ bài 80 lá có định nghĩa và số lượng trong resources/cards/definitions.json và base_deck.json. Có Bắn, Né, Rượu, Hoảng loạn, Cat Balou, Đấu súng, Nhà giam, năm vũ khí, Thùng, Ngựa, Ống nhòm, Tiếp tế, Cửa hàng, Thổ dân, Thuốc nổ, Súng liên thanh, Quán rượu và Wells Fargo.
 
-**Chất/số hiện là cấu hình prototype cố định, chưa đối chiếu chính xác từng lá của bản in gốc.** Không random chất/số mỗi ván. File base_deck.json ghi rõ trạng thái này; muốn khớp chính xác bộ gốc cần thay các entry và giữ kiểm tra tổng 80 lá. tools/generate_base_data.py có thể tái tạo dữ liệu prototype nếu máy có Python.
+Chất/số của cả 80 lá khớp [danh sách chính thức](https://bang.dvgiochi.com/cardslist.php?id=1&lang=en), lưu trong base_manifest.json và base_deck.json. Rank là chuỗi 2–10/J/Q/K/A; hai Tiếp tế 9♠ có ID riêng. Server kiểm tra mọi tổ hợp tên/chất/số và số lượng trước khi bắt đầu; lỗi dữ liệu sẽ chặn ván trong cả bản release. tools/generate_base_data.py đọc manifest này, không tạo chất/số prototype. BaseCorrectionTest có oracle riêng đối chiếu đủ 80 lá, thử dữ liệu hỏng và chơi hết 16 ván tự động, kiểm tra bảo toàn bài sau mỗi hành động.
 
 Tay đầu bằng máu tối đa của nhân vật, gồm thưởng Cảnh sát trưởng. Rút hai mỗi lượt trừ kỹ năng. Bình thường chỉ một lá Bắn trong giai đoạn hành động; dùng sai mục tiêu không tiêu giới hạn. Volcanic/Willy cho bắn nhiều; đáp trả Đấu súng/Thổ dân không tiêu giới hạn. Bắn chuyển đổi của Janet có tiêu giới hạn khi tấn công.
 

@@ -26,6 +26,7 @@ func hand_changed(game: Node, id: int) -> void:
 func on_damage(game: Node, target: int, source: int, amount: int) -> void:
 	var ability: String = game.players[target].ability_id
 	if damage_handlers.has(ability):
+		game.emit_event("ABILITY_TRIGGERED", target, {"kind": "ability", "ability_id": ability})
 		damage_handlers[ability].call(game, target, source, amount)
 
 func damage_draw(game: Node, target: int, _source: int, amount: int) -> void:
@@ -40,6 +41,7 @@ func damage_steal(game: Node, target: int, source: int, amount: int) -> void:
 		var card: Dictionary = game.players[source].hand.pick_random()
 		game.players[source].hand.erase(card)
 		game.players[target].hand.append(card)
+		game.emit_event("CARD_STOLEN", source, {"kind": "transfer", "to": target, "steal": true, "from_zone": "hand", "hidden": true})
 		hand_changed(game, source)
 
 func heal_with_discards(game: Node, id: int, ids: Array) -> bool:
@@ -62,10 +64,16 @@ func heal_with_discards(game: Node, id: int, ids: Array) -> bool:
 func on_death(game: Node, victim: PlayerState) -> bool:
 	for p in game.players.values():
 		if p.player_id != victim.player_id and p.is_alive and p.ability_id == "death_collect":
+			var hidden_count: int = victim.hand.size()
+			if hidden_count > 0:
+				game.emit_event("CARD_STOLEN", victim.player_id, {"kind": "transfer", "to": p.player_id, "steal": true, "count": hidden_count, "hidden": true})
 			p.hand.append_array(victim.hand)
 			victim.hand.clear()
 			if not victim.weapon.is_empty():
 				p.hand.append(victim.weapon)
+				game.emit_event("CARD_STOLEN", victim.player_id, {"kind": "transfer", "to": p.player_id, "steal": true, "card": victim.weapon.duplicate(), "hidden": false})
+			for card in victim.equipment.values():
+				game.emit_event("CARD_STOLEN", victim.player_id, {"kind": "transfer", "to": p.player_id, "steal": true, "card": card.duplicate(), "hidden": false})
 			p.hand.append_array(victim.equipment.values())
 			victim.weapon = {}
 			victim.equipment.clear()

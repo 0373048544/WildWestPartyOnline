@@ -82,7 +82,7 @@ async function react(c) {
   assert(a.state.public.players.every(p=>!p.character_id));
   for(const c of [a,b]) {
     const pick=c.state.private.character_options.find(x=>!['draw_choose','draw_steal','draw_discard'].includes(x.ability_id)) || c.state.private.character_options[0];
-    await c.intent('SELECT_CHARACTER',{character:pick.character_id});
+    await c.intent('SELECT_CHARACTER',{character:pick.character_id,match_id:c.state.public.match_id});
   }
   for(let i=0;i<20;i++) {
     await react(a); await react(b);

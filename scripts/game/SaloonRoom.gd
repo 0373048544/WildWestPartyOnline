@@ -1,6 +1,11 @@
 extends Node3D
 
 var materials: Dictionary = {}
+var key_light: DirectionalLight3D
+
+func apply_quality() -> void:
+	if key_light:
+		key_light.shadow_enabled = VisualSettings.level == "HIGH" and not OS.has_feature("web")
 
 func material(color: Color, glow: bool = false) -> StandardMaterial3D:
 	var key := str(color) + str(glow)
@@ -41,20 +46,27 @@ func _ready() -> void:
 	var environment := WorldEnvironment.new()
 	var settings := Environment.new()
 	settings.background_mode = Environment.BG_COLOR
-	settings.background_color = Color("#172b3a")
+	settings.background_color = Color("#42626c")
 	settings.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	settings.ambient_light_color = Color("#c1d0cf")
-	settings.ambient_light_energy = 0.4
+	settings.ambient_light_energy = 0.65
 	settings.tonemap_mode = Environment.TONE_MAPPER_LINEAR
 	environment.environment = settings
 	add_child(environment)
 	var light := DirectionalLight3D.new()
+	key_light = light
 	light.rotation_degrees = Vector3(-52, -32, 0)
 	light.light_color = Color("#ffdcac")
-	light.light_energy = 0.95
-	light.shadow_enabled = not OS.has_feature("web")
+	light.light_energy = 1.05
+	apply_quality()
+	VisualSettings.changed.connect(apply_quality)
 	light.directional_shadow_max_distance = 24
 	add_child(light)
+	var rim_light := DirectionalLight3D.new()
+	rim_light.rotation_degrees = Vector3(-24, 145, 0)
+	rim_light.light_color = Color("#9bc8d7")
+	rim_light.light_energy = 0.28
+	add_child(rim_light)
 	for plank in range(24):
 		var color: Color = [Color("#765039"), Color("#80593e"), Color("#694633")][plank % 3]
 		block(Vector3(0.65, 0.12, 16), Vector3(-7.8 + plank * 0.67, -0.1, 0), color)
@@ -91,6 +103,33 @@ func _ready() -> void:
 		cylinder(0.12, 0.4 + (i % 3) * 0.07, Vector3(-1.4 + i * 0.46, 2.4, -7.1), [Color("#689877"), Color("#b57a4c"), Color("#6b9fa4")][i % 3])
 	signboard(Vector3(0, 3.35, -7.45), 0.0)
 	signboard(Vector3(0, 3.35, 7.45), PI)
+	build_decor()
+
+func build_decor() -> void:
+	# All props remain behind the playing ring; none creates a picking collider.
+	for side in [-1, 1]:
+		var x: float = side * 5.7
+		block(Vector3(1.5, 1.8, 0.12), Vector3(x, 2.6, -7.52), Color("#ddaf6e"))
+		block(Vector3(1.27, 1.55, 0.14), Vector3(x, 2.6, -7.43), Color("#8cc6cc"))
+		block(Vector3(0.09, 1.6, 0.19), Vector3(x, 2.6, -7.32), Color("#b67a4b"))
+		block(Vector3(1.4, 0.1, 0.19), Vector3(x, 2.6, -7.3), Color("#b67a4b"))
+		cylinder(0.08, 0.55, Vector3(x + 0.4, 2.2, -7.24), Color("#54926d"), 6)
+		block(Vector3(0.3, 0.08, 0.08), Vector3(x + 0.32, 2.3, -7.23), Color("#54926d"))
+		block(Vector3(0.8, 1.1, 0.04), Vector3(side * 2.8, 2.8, -7.36), Color("#edd4a1"))
+		var wanted := Label3D.new()
+		wanted.text = "TRUY NÃ\n★\n$ 500"
+		wanted.font_size = 34
+		wanted.pixel_size = 0.004
+		wanted.modulate = Color("#653c32")
+		wanted.outline_size = 0
+		add_child(wanted)
+		wanted.position = Vector3(side * 2.8, 2.8, -7.29)
+	for index in range(7):
+		var angle: float = TAU * index / 7.0
+		var at := Vector3(sin(angle) * 5.15, 0, cos(angle) * 5.15)
+		cylinder(0.4, 0.15, at + Vector3.UP * 0.6, Color("#ba7d4b"), 10)
+		for dx in [-0.23, 0.23]:
+			block(Vector3(0.09, 0.55, 0.1), at + Vector3(dx, 0.28, 0), Color("#714a35"))
 
 func lantern(parent: Node3D, at: Vector3) -> void:
 	var lantern_node: Node3D = load("res://scenes/props/SaloonLantern.tscn").instantiate()
@@ -104,16 +143,29 @@ func barrel(at: Vector3) -> void:
 	cylinder(0.46, 0.05, at + Vector3(0, 1.27, 0), Color("#bd915c"), 10)
 
 func signboard(at: Vector3, yaw: float) -> void:
-	block(Vector3(3.6, 0.9, 0.16), at, Color("#a57644"))
+	var sign := Node3D.new()
+	sign.name = "SwingingSign"
+	add_child(sign)
+	sign.position = at + Vector3.UP * 0.45
+	sign.rotation.y = yaw
+	var board := block(Vector3(3.6, 0.9, 0.16), Vector3(0, -0.45, 0), Color("#a57644"))
+	board.reparent(sign, false)
 	var text := Label3D.new()
 	text.text = "MIỀN TÂY\nĐẠI CHIẾN"
 	text.font_size = 48
 	text.pixel_size = 0.007
 	text.modulate = Color("#ffe5ab")
 	text.outline_size = 3
-	add_child(text)
-	text.position = at + Vector3(0, 0, 0.12 * cos(yaw))
-	text.rotation.y = yaw
+	sign.add_child(text)
+	text.position = Vector3(0, -0.45, 0.12)
+	var swing := sign.create_tween().set_loops().set_trans(Tween.TRANS_SINE)
+	swing.tween_property(sign, "rotation:z", 0.025, 2.8)
+	swing.tween_property(sign, "rotation:z", -0.025, 2.8)
+	# A low-poly horseshoe assembled from nine small metal segments.
+	for index in range(9):
+		var angle: float = PI + PI * index / 8.0
+		var piece := block(Vector3(0.12, 0.18, 0.08), at + Vector3(2.35 + cos(angle) * 0.3, sin(angle) * 0.3, 0.08 * cos(yaw)), Color("#819695"))
+		piece.rotation.z = angle - PI / 2
 
 func build_table() -> void:
 	cylinder(0.65, 1.1, Vector3(0, 0.5, 0), Color("#49382c"))
@@ -123,6 +175,11 @@ func build_table() -> void:
 	cylinder(3.18, 0.06, Vector3(0, 1.29, 0), Color("#d3a05c"), 48)
 	cylinder(2.98, 0.055, Vector3(0, 1.33, 0), Color("#946a43"), 48)
 	cylinder(2.72, 0.025, Vector3(0, 1.37, 0), Color("#235859"), 48)
+	for index in range(6):
+		var angle: float = TAU * index / 6.0
+		var at := Vector3(sin(angle) * 2.2, 1.41, cos(angle) * 2.2)
+		for chip in range(2):
+			cylinder(0.085, 0.035, at + Vector3.UP * chip * 0.035, Color("#dfad60") if index % 2 == 0 else Color("#cf7565"), 8)
 	var rim := TorusMesh.new()
 	rim.inner_radius = 2.59
 	rim.outer_radius = 2.62

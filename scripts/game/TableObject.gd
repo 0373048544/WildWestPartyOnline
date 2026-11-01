@@ -6,6 +6,19 @@ var frame_material: StandardMaterial3D
 var title: Label3D
 var token: Dictionary = {}
 var enabled: bool = false
+var corner_label: Label3D
+
+func set_face(card: Dictionary) -> void:
+	if not is_instance_valid(corner_label):
+		corner_label = Label3D.new()
+		corner_label.rotation.x = -PI / 2
+		corner_label.position = Vector3(-0.13, 0.13, -0.28)
+		corner_label.font_size = 28
+		corner_label.pixel_size = 0.0034
+		corner_label.outline_size = 0
+		add_child(corner_label)
+	corner_label.text = CardInstance.corner(card)
+	corner_label.modulate = CardInstance.suit_color(str(card.get("suit", "")))
 
 func mesh(mesh_data: Mesh, at: Vector3, color: Color) -> MeshInstance3D:
 	var item := MeshInstance3D.new()
@@ -49,6 +62,7 @@ func configure(kind: String, data: Dictionary, metadata: Dictionary) -> void:
 		"card":
 			title.text += "\n%s %s" % [TextCatalog.text(data.get("suit", "")), str(data.get("rank_label", ""))]
 			title.font_size = 24
+			set_face({"rank": data.get("rank_label", ""), "suit": data.get("suit", "")})
 		"hand":
 			for index in range(3):
 				var back := box(Vector3(0.26, 0.04, 0.4), Vector3(-0.16 + index * 0.16, 0.09 + index * 0.025, -0.12), Color("#844e46"))

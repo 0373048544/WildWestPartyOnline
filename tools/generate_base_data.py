@@ -1,4 +1,4 @@
-"""Build editable data files. Suits/ranks are fixed prototype values, NOT verified print data."""
+"""Rebuild base data using the reviewed official 80-card rank/suit manifest."""
 import json
 from pathlib import Path
 
@@ -28,13 +28,15 @@ cards = [
 ("wells_fargo","WELLS FARGO","Rút 3 lá bài.",0,0,3,3,1,"none"),
 ]
 definitions = {}
+manifest = json.loads((ROOT / "resources/cards/base_manifest.json").read_text(encoding="utf-8"))
 deck = []
 for key,name,desc,typ,target,effect,amount,count,rng in cards:
     definitions[key] = dict(id=key,name=name,description=desc,type=typ,target=target,
         effect=effect,amount=amount,count=count,range_rule=rng,weapon_range=amount if typ==1 else 1)
-    for i in range(count):
-        index = len(deck)
-        deck.append(dict(card_data_id=key,suit=["HEART","DIAMOND","CLUB","SPADE"][index%4],rank=index%13+1))
+    assert len(manifest["cards"][key]) == count, key
+    for pair in manifest["cards"][key]:
+        rank, suit = pair.split(":")
+        deck.append(dict(card_data_id=key,suit=suit,rank=rank))
 assert len(deck) == 80
 characters = [
 ("bart_cassidy","Bart Cassidy",4,"damage_draw","Mỗi máu mất đi: rút 1 lá, kể cả do Thuốc nổ."),
@@ -60,5 +62,5 @@ def save(path,data):
     dest.write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
 save("resources/cards/definitions.json",definitions)
 save("resources/cards/base_deck.json",dict(expected_count=80,
-    suit_rank_status="provisional_fixed_not_verified_against_printed_base_deck",cards=deck))
+    suit_rank_status="canonical_official_base",source=manifest["source"],cards=deck))
 save("resources/characters/characters.json",[dict(character_id=i,display_name=n,max_hp=h,ability_id=a,ability_description_vi=d) for i,n,h,a,d in characters])

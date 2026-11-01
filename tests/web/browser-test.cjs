@@ -66,15 +66,19 @@ async function newPage(width=1440,height=900) {
   const page=session.sessionId;
   await command('Runtime.enable',{},page);
   await command('Page.enable',{},page);
+  if(process.env.WWPO_TEST_URL) {
+    await command('Page.addScriptToEvaluateOnNewDocument',{source:'Object.defineProperty(window,"WWPO_CONFIG",{get:()=>({serverUrl:'+JSON.stringify(process.env.WWPO_TEST_URL)+'}),set:()=>{}});'},page);
+  }
   await command('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<900},page);
   if(mobile){touchPages.add(page);await command('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:1},page);}
-  await command('Page.navigate',{url:'http://127.0.0.1:8080/?e2e=1'},page);
+  await command('Page.navigate',{url:(process.env.WWPO_TEST_HTTP || 'http://127.0.0.1:8080/')+'?e2e=1'},page);
   await wait(async()=>{const s=await snapshot(page);return s?.controls.length;},'Godot loaded',90000);
   return page;
 }
 async function choose(page) {
   await wait(async()=>{const s=await snapshot(page);return s?.private.character_options?.length===2;},'private characters');
-  await click(page,c=>c.kind==='button'&&c.text.includes('Máu\n'));
+  await click(page,c=>c.name==='CharacterOption0');
+  await click(page,c=>c.name==='ConfirmCharacter'&&!c.disabled);
 }
 async function handleChoice(page) {
   const s=await snapshot(page), r=s?.private.reaction;

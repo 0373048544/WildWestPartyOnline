@@ -13,24 +13,34 @@ var next_player: int = 100
 var port: int = 7000
 var development: bool = false
 var last_cleanup: int = 0
+var embedded: bool = false
+var startup_error: Error = OK
 
 func _ready() -> void:
-	NetworkManager.mode = "dedicated"
-	GameManager.set_process(false)
+	if not embedded:
+		NetworkManager.mode = "dedicated"
+		GameManager.set_process(false)
 	for arg in OS.get_cmdline_user_args():
 		if arg == "--development":
 			development = true
 		elif arg.begins_with("--port="):
 			port = int(arg.trim_prefix("--port="))
-	var address := OS.get_environment("WWPO_BIND")
+	var address := "127.0.0.1" if embedded else OS.get_environment("WWPO_BIND")
 	if address.is_empty():
 		address = "127.0.0.1"
-	var error := listener.listen(port, address)
-	if error != OK:
-		push_error("Cannot listen on game server port: " + str(error))
-		get_tree().quit(1)
+	startup_error = listener.listen(port, address)
+	if startup_error != OK:
+		if not embedded:
+			push_error("Cannot listen on game server port: " + str(startup_error))
+			get_tree().quit(1)
+		set_process(false)
 		return
 	print("ROOM SERVER READY ws://%s:%d development=%s" % [address, port, development])
+
+func _exit_tree() -> void:
+	listener.stop()
+	for connection in connections.values():
+		connection.peer.close(1001, "server stopped")
 
 func _process(_delta: float) -> void:
 	var now := Time.get_ticks_msec()

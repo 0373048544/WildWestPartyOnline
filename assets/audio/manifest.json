@@ -1,0 +1,224 @@
+{
+  "hover": [
+    "res://assets/audio/ui/hover_1.wav"
+  ],
+  "button": [
+    "res://assets/audio/ui/button_1.wav"
+  ],
+  "confirm": [
+    "res://assets/audio/ui/confirm_1.wav"
+  ],
+  "join": [
+    "res://assets/audio/ui/join_1.wav"
+  ],
+  "error": [
+    "res://assets/audio/ui/error_1.wav"
+  ],
+  "ready": [
+    "res://assets/audio/ui/ready_1.wav"
+  ],
+  "unready": [
+    "res://assets/audio/ui/unready_1.wav"
+  ],
+  "turn": [
+    "res://assets/audio/ui/turn_1.wav"
+  ],
+  "reaction": [
+    "res://assets/audio/ui/reaction_1.wav"
+  ],
+  "survive": [
+    "res://assets/audio/ui/survive_1.wav"
+  ],
+  "tick": [
+    "res://assets/audio/ui/tick_1.wav"
+  ],
+  "duel_alert": [
+    "res://assets/audio/ui/duel_alert_1.wav"
+  ],
+  "draw": [
+    "res://assets/audio/cards/draw_1.wav",
+    "res://assets/audio/cards/draw_2.wav",
+    "res://assets/audio/cards/draw_3.wav",
+    "res://assets/audio/cards/draw_4.wav"
+  ],
+  "play": [
+    "res://assets/audio/cards/play_1.wav",
+    "res://assets/audio/cards/play_2.wav",
+    "res://assets/audio/cards/play_3.wav"
+  ],
+  "discard": [
+    "res://assets/audio/cards/discard_1.wav",
+    "res://assets/audio/cards/discard_2.wav",
+    "res://assets/audio/cards/discard_3.wav"
+  ],
+  "place": [
+    "res://assets/audio/cards/place_1.wav",
+    "res://assets/audio/cards/place_2.wav",
+    "res://assets/audio/cards/place_3.wav"
+  ],
+  "select": [
+    "res://assets/audio/cards/select_1.wav"
+  ],
+  "release": [
+    "res://assets/audio/cards/release_1.wav"
+  ],
+  "fan": [
+    "res://assets/audio/cards/fan_1.wav"
+  ],
+  "snatch": [
+    "res://assets/audio/cards/snatch_1.wav"
+  ],
+  "flip": [
+    "res://assets/audio/cards/flip_1.wav"
+  ],
+  "dump": [
+    "res://assets/audio/cards/dump_1.wav"
+  ],
+  "bang": [
+    "res://assets/audio/weapons/bang_1.wav",
+    "res://assets/audio/weapons/bang_2.wav",
+    "res://assets/audio/weapons/bang_3.wav",
+    "res://assets/audio/weapons/bang_4.wav"
+  ],
+  "volcanic": [
+    "res://assets/audio/weapons/volcanic_1.wav",
+    "res://assets/audio/weapons/volcanic_2.wav",
+    "res://assets/audio/weapons/volcanic_3.wav"
+  ],
+  "gatling": [
+    "res://assets/audio/weapons/gatling_1.wav"
+  ],
+  "cock": [
+    "res://assets/audio/weapons/cock_1.wav"
+  ],
+  "schofield": [
+    "res://assets/audio/weapons/schofield_1.wav",
+    "res://assets/audio/weapons/schofield_2.wav",
+    "res://assets/audio/weapons/schofield_3.wav"
+  ],
+  "remington": [
+    "res://assets/audio/weapons/remington_1.wav",
+    "res://assets/audio/weapons/remington_2.wav",
+    "res://assets/audio/weapons/remington_3.wav"
+  ],
+  "carabine": [
+    "res://assets/audio/weapons/carabine_1.wav",
+    "res://assets/audio/weapons/carabine_2.wav",
+    "res://assets/audio/weapons/carabine_3.wav"
+  ],
+  "winchester": [
+    "res://assets/audio/weapons/winchester_1.wav",
+    "res://assets/audio/weapons/winchester_2.wav",
+    "res://assets/audio/weapons/winchester_3.wav"
+  ],
+  "ricochet": [
+    "res://assets/audio/weapons/ricochet_1.wav",
+    "res://assets/audio/weapons/ricochet_2.wav",
+    "res://assets/audio/weapons/ricochet_3.wav",
+    "res://assets/audio/weapons/ricochet_4.wav"
+  ],
+  "hit": [
+    "res://assets/audio/characters/hit_1.wav",
+    "res://assets/audio/characters/hit_2.wav",
+    "res://assets/audio/characters/hit_3.wav"
+  ],
+  "dodge": [
+    "res://assets/audio/characters/dodge_1.wav",
+    "res://assets/audio/characters/dodge_2.wav"
+  ],
+  "death": [
+    "res://assets/audio/characters/death_1.wav"
+  ],
+  "heal": [
+    "res://assets/audio/characters/heal_1.wav"
+  ],
+  "beer": [
+    "res://assets/audio/characters/beer_1.wav"
+  ],
+  "barrel": [
+    "res://assets/audio/equipment/barrel_1.wav"
+  ],
+  "lucky": [
+    "res://assets/audio/equipment/lucky_1.wav"
+  ],
+  "fail": [
+    "res://assets/audio/equipment/fail_1.wav"
+  ],
+  "weapon": [
+    "res://assets/audio/equipment/weapon_1.wav"
+  ],
+  "horse": [
+    "res://assets/audio/equipment/horse_1.wav"
+  ],
+  "scope": [
+    "res://assets/audio/equipment/scope_1.wav"
+  ],
+  "jail": [
+    "res://assets/audio/equipment/jail_1.wav",
+    "res://assets/audio/equipment/jail_2.wav"
+  ],
+  "unlock": [
+    "res://assets/audio/equipment/unlock_1.wav"
+  ],
+  "fuse": [
+    "res://assets/audio/equipment/fuse_1.wav"
+  ],
+  "explosion": [
+    "res://assets/audio/equipment/explosion_1.wav",
+    "res://assets/audio/equipment/explosion_2.wav"
+  ],
+  "pass": [
+    "res://assets/audio/equipment/pass_1.wav"
+  ],
+  "wagon": [
+    "res://assets/audio/equipment/wagon_1.wav"
+  ],
+  "coins": [
+    "res://assets/audio/equipment/coins_1.wav"
+  ],
+  "glass": [
+    "res://assets/audio/equipment/glass_1.wav"
+  ],
+  "door_open": [
+    "res://assets/audio/equipment/door_open_1.wav"
+  ],
+  "door_close": [
+    "res://assets/audio/equipment/door_close_1.wav"
+  ],
+  "start": [
+    "res://assets/audio/stingers/start_1.wav"
+  ],
+  "role": [
+    "res://assets/audio/stingers/role_1.wav"
+  ],
+  "duel": [
+    "res://assets/audio/stingers/duel_1.wav"
+  ],
+  "danger": [
+    "res://assets/audio/stingers/danger_1.wav"
+  ],
+  "reward": [
+    "res://assets/audio/stingers/reward_1.wav"
+  ],
+  "sheriff_win": [
+    "res://assets/audio/stingers/sheriff_win_1.wav"
+  ],
+  "outlaw_win": [
+    "res://assets/audio/stingers/outlaw_win_1.wav"
+  ],
+  "renegade_win": [
+    "res://assets/audio/stingers/renegade_win_1.wav"
+  ],
+  "saloon": [
+    "res://assets/audio/ambience/saloon_1.wav"
+  ],
+  "wood_creak": [
+    "res://assets/audio/ambience/wood_creak_1.wav",
+    "res://assets/audio/ambience/wood_creak_2.wav",
+    "res://assets/audio/ambience/wood_creak_3.wav",
+    "res://assets/audio/ambience/wood_creak_4.wav"
+  ],
+  "piano": [
+    "res://assets/audio/music/piano_1.wav"
+  ]
+}

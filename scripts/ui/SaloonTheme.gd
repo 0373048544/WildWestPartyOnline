@@ -10,8 +10,8 @@ static func panel(color: Color = INK, border: Color = GOLD, padding: float = 14.
 	var style := StyleBoxFlat.new()
 	style.bg_color = color
 	style.border_color = border
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(9)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(12)
 	style.content_margin_left = padding
 	style.content_margin_right = padding
 	style.content_margin_top = 10

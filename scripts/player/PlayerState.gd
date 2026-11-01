@@ -28,6 +28,7 @@ func public_snapshot(reveal: bool = false, show_character: bool = true) -> Dicti
 	return {"player_id": player_id, "display_name": display_name, "seat_index": seat_index,
 		"current_hp": current_hp, "max_hp": max_hp, "hand_count": hand.size(),
 		"weapon_id": weapon.get("card_data_id", ""), "equipment_ids": equipment.keys(),
+		"weapon_card": weapon.duplicate(true), "equipment_cards": equipment.values().duplicate(true),
 		"is_alive": is_alive, "is_connected": is_connected, "ready": ready,
 		"character_id": character_id if show_character else "",
 		"weapon_range": DistanceManager.weapon_range(self),

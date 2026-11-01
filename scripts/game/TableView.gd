@@ -1,6 +1,7 @@
 ﻿extends Node3D
 
 var avatars: Dictionary = {}
+signal character_info_requested(player: Dictionary)
 var rings: Dictionary = {}
 var camera: Camera3D
 var seats: Node3D
@@ -19,8 +20,11 @@ var context_label: Label3D
 var context_player: int = 0
 var duel_focus := Vector3.ZERO
 var duel_until: int = 0
+var presentation_queue: Array = []
+var presentation_wait: float = 0
 
 func _ready() -> void:
+	AudioManager.table = self
 	var room: Node3D = load("res://scripts/game/SaloonRoom.gd").new()
 	add_child(room)
 	effects = TableEffects.new()
@@ -58,6 +62,12 @@ func _ready() -> void:
 	add_child(context_label)
 
 func _process(delta: float) -> void:
+	presentation_wait = maxf(0, presentation_wait - delta)
+	if presentation_wait <= 0 and not presentation_queue.is_empty():
+		var event: Dictionary = presentation_queue.pop_front()
+		present_event(event)
+		var kind: String = event.get("kind", "")
+		presentation_wait = 1.4 if kind in ["judge", "reveal"] else (0.45 + 0.22 * (mini(8, int(event.get("count", 1))) - 1) if kind in ["draw", "transfer"] else 0.42)
 	if camera_goal == Vector3.ZERO:
 		return
 	camera_shake = maxf(0.0, camera_shake - delta * 0.25)
@@ -87,6 +97,8 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 			status_label.free()
 		status_labels.clear()
 		objects.clear()
+		presentation_queue.clear()
+		presentation_wait = 0
 		hide_context()
 		targeting.cancel_targeting(false)
 		for effect in effects.get_children():
@@ -136,13 +148,14 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 			marker_mesh.position.y = 0.04
 			var status_label := Label3D.new()
 			status_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-			status_label.font_size = 24
-			status_label.pixel_size = 0.0045
+			status_label.font_size = 26
+			status_label.pixel_size = 0.005
 			status_label.outline_size = 6
 			add_child(status_label)
-			status_label.position = at + Vector3(0, 2.95, 0)
+			status_label.position = at + Vector3(0, 3.25, 0)
 			status_labels[id] = status_label
 		var hearts: String = "♥".repeat(maxi(0, int(p.current_hp))) + "♡".repeat(maxi(0, int(p.max_hp) - maxi(0, int(p.current_hp))))
+		avatars[id].apply_character(str(p.get("character_id", "")))
 		status_labels[id].text = "%s%s\n%s · %d lá\n⌖ %d%s" % [
 			"★ " if p.public_role == "SHERIFF" else "", p.display_name, hearts, p.hand_count,
 			p.weapon_range, " · " + equipment_symbols(p.equipment_ids) if not p.equipment_ids.is_empty() else ""]
@@ -152,8 +165,12 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 				"CS " if p.public_role == "SHERIFF" else "", p.display_name, p.current_hp, p.max_hp, p.hand_count, p.weapon_range]
 		if not p.is_alive:
 			status_labels[id].text = p.display_name + "\n" + TextCatalog.text(p.public_role)
+		elif not str(p.get("character_id", "")).is_empty():
+			status_labels[id].text = p.display_name + "\n" + str(p.character.display_name) + " · " + CharacterData.ability_icon(p.character.ability_id) + "\n" + status_labels[id].text.get_slice("\n", 1) + " · Tầm %d" % p.weapon_range
 		status_labels[id].modulate = seat_color.lightened(0.35)
 		avatars[id].set_target_state(not targets.is_empty() and not targets.has(id) and id != local_id)
+		if targets.has(id):
+			avatars[id].set_expression("targeted", 1000)
 		rings[id].visible = targets.has(id) or int(state.current_player) == id
 		rings[id].material_override.albedo_color = Color("#ffda7b") if targets.has(id) else seat_color
 		rings[id].material_override.emission_enabled = targets.has(id)
@@ -181,26 +198,40 @@ func show_context(id: int) -> void:
 	context_player = id
 	var p: Dictionary = player_rows[id]
 	var character: Dictionary = p.get("character", {})
-	var equipment: Array = p.equipment_ids.map(func(key): return CardData.data(key).name)
 	var info: Dictionary = NetworkManager.private_state.get("target_info", {}).get(id, {})
 	var visible_role: String = p.public_role
 	if id == local_player:
 		visible_role = str(NetworkManager.private_state.get("role", visible_role))
-	context_label.text = "%s · %s\n%d/%d máu · %d lá · Tầm %d\n%s\n%s\n%s%s" % [
-		p.display_name, character.get("display_name", ""), p.current_hp, p.max_hp, p.hand_count, p.weapon_range,
-		CardData.data(p.weapon_id).get("name", "Colt .45") + " · " + ", ".join(equipment),
-		character.get("ability_description_vi", ""),
+	context_label.text = "%s · %s\n%s%s" % [
+		p.display_name, character.get("display_name", ""),
 		TextCatalog.text(visible_role) if not visible_role.is_empty() else "Vai trò bí mật",
 		" · Khoảng cách %d" % info.distance if info.has("distance") else ""]
 	context_label.position = avatars[id].position + Vector3(0, 3.7, 0)
 	context_label.visible = true
+	character_info_requested.emit(p)
 
 func hide_context() -> void:
 	context_player = 0
+	character_info_requested.emit({})
 	if is_instance_valid(context_label):
 		context_label.visible = false
 
 func presentation(event: Dictionary) -> void:
+	if event.has("match_id") and int(event.match_id) != built_match:
+		return
+	if presentation_queue.size() < 256:
+		var visual: Dictionary = event.duplicate(true)
+		if event.get("kind", "") == "transfer" and not event.get("hidden", true):
+			var key: String = "%d:%s" % [int(event.get("player", 0)), str(event.get("from_zone", ""))]
+			if objects.objects.has(key):
+				visual["visual_origin"] = objects.objects[key].position
+		presentation_queue.append(visual)
+
+func present_event(event: Dictionary) -> void:
+	AudioManager.consume_event(event)
+	if event.get("kind", "") == "animation":
+		play_animation(int(event.actor), str(event.animation), int(event.target))
+		return
 	var id: int = int(event.get("player", 0))
 	var kind: String = str(event.get("kind", ""))
 	if not avatars.has(id):
@@ -209,25 +240,47 @@ func presentation(event: Dictionary) -> void:
 	match kind:
 		"draw":
 			for index in range(mini(8, int(event.get("count", 1)))):
-				effects.flying_card(Vector3(-0.45, 1.7, 0), at + Vector3.UP * 1.4, {}, index * 0.06)
-		"judge":
+				effects.flying_card(Vector3(-0.45, 1.7, 0), at + Vector3.UP * 1.4, {}, index * 0.22)
+		"judge", "reveal":
 			effects.judgement(at + Vector3.UP * 2.7, event.get("card", {}))
+		"barrel_result":
+			effects.floating(at + Vector3.UP * 2.7, ("THÙNG: NÉ" if event.success else "THÙNG: TRƯỢT") + " %d/%d" % [event.resolved, event.required], Color("#b5dbe2"))
+		"missed":
+			effects.floating(at + Vector3.UP * 2.7, "NÉ %d/%d" % [event.resolved, event.required], Color("#b5dbe2"))
+		"ability":
+			effects.floating(at + Vector3.UP * 2.7, player_rows[id].get("character", {}).get("display_name", "KỸ NĂNG"), Color("#e7cf91"))
+		"role":
+			effects.floating(at + Vector3.UP * 2.7, TextCatalog.text(event.role), Color("#e7cf91"))
 		"damage":
 			effects.floating(at + Vector3.UP * 2.7, "−%d MÁU" % event.get("amount", 1), Color("#ff967c"))
 			if int(event.get("amount", 1)) == 3:
+				effects.starburst(at + Vector3.UP * 1.9, 1.0)
+				effects.smoke(at + Vector3.UP * 1.3)
+				avatars[id].set_expression("panic", 1000)
 				camera_shake = 0.14
 				effects.floating(at + Vector3.UP * 3.4, "BOOM!", Color("#ffc269"))
 				effects.spark(at + Vector3.UP, Color("#d89a65"), 12, 1.2)
 		"transfer":
 			var destination: Vector3 = avatars.get(int(event.get("to", 0)), avatars[id]).position + Vector3.UP * 1.4
+			var origin: Vector3 = at + Vector3.UP * 1.4
+			if not event.get("hidden", true):
+				# Start visible-card removal at its actual table slot, including after
+				# the next authoritative snapshot has already removed that object.
+				origin = event.get("visual_origin", at.normalized() * 2.55 + Vector3.UP * 1.5)
 			if not event.get("steal", true):
 				destination = Vector3(0.45, 1.7, 0)
-			effects.flying_card(at + Vector3.UP * 1.4, destination)
+			for index in range(mini(8, int(event.get("count", 1)))):
+				effects.flying_card(origin, destination, event.get("card", {}), index * 0.22, bool(event.get("hidden", true)))
 		"discard":
 			effects.flying_card(at + Vector3.UP * 1.4, Vector3(0.45, 1.7, 0), event.get("card", {}))
+		"equip":
+			var from: Vector3 = avatars.get(int(event.get("from_player", id)), avatars[id]).position
+			effects.flying_card(from + Vector3.UP * 1.6, at.normalized() * 2.55 + Vector3.UP * 1.5, event.get("card", {}))
+		"reclaim":
+			effects.flying_card(Vector3(0.45, 1.7, 0), at + Vector3.UP * 1.4, event.get("card", {}))
 		"dynamite_pass":
 			if avatars.has(int(event.get("to", 0))):
-				effects.flying_card(at + Vector3.UP * 1.4, avatars[int(event.to)].position + Vector3.UP * 1.4, {"card_data_id": "dynamite", "suit": "", "rank": ""})
+				effects.flying_card(at + Vector3.UP * 1.4, avatars[int(event.to)].position + Vector3.UP * 1.4, event.get("card", {}))
 		"jail_result":
 			effects.floating(at + Vector3.UP * 2.7, "THOÁT GIAM!" if event.get("escaped", false) else "BỊ GIAM", Color("#b5dbe2"))
 			effects.spark(at + Vector3.UP, Color("#b1babb"), 4)
@@ -241,6 +294,9 @@ func presentation(event: Dictionary) -> void:
 			effects.floating(at + Vector3.UP * 3, "ĐẤU SÚNG!", Color("#edc983"))
 
 func animate(actor: int, kind: String, target: int) -> void:
+	presentation({"kind": "animation", "actor": actor, "animation": kind, "target": target})
+
+func play_animation(actor: int, kind: String, target: int) -> void:
 	if not avatars.has(actor):
 		return
 	if kind == "gatling":
@@ -272,6 +328,7 @@ func animate(actor: int, kind: String, target: int) -> void:
 				if is_instance_valid(shooting_avatar):
 					effects.muzzle(shooting_avatar.arm.to_global(Vector3(0, -0.5, -0.37))))
 		"hit":
+			effects.starburst(at - Vector3.UP * 0.7)
 			effects.spark(at - Vector3(0, 1.1, 0), Color("#e9bd78"))
 			camera_shake = 0.055
 		"drink":

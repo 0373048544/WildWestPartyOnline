@@ -12,6 +12,7 @@ var retry_at: int = 0
 var retries: int = 0
 var response_deadline: int = 0
 var leaving: bool = false
+var local_start_attempted: bool = false
 
 func restore() -> void:
 	if not OS.has_feature("web"):
@@ -54,6 +55,15 @@ func socket_open() -> void:
 func socket_lost() -> void:
 	if leaving or manager.mode != "websocket":
 		return
+	if retry_at > 0:
+		return
+	if session_token.is_empty() and pending.get("type", "") == "CREATE_ROOM" and not local_start_attempted:
+		local_start_attempted = true
+		if manager.start_local_room_server():
+			# Retry after the old transport callback has finished polling.
+			response_deadline = 0
+			retry_at = Time.get_ticks_msec() + 1
+			return
 	if not session_token.is_empty() and retries < 8:
 		reconnecting = true
 		manager.connecting = true
@@ -62,7 +72,7 @@ func socket_lost() -> void:
 		response_deadline = 0
 	else:
 		manager.leave()
-		manager.error_received.emit("Mất kết nối máy chủ. Hãy thử lại.")
+		manager.error_received.emit("Không kết nối được máy chủ tại %s. Hãy kiểm tra máy chủ và cổng kết nối." % NetworkConfig.server_url())
 	manager.updated.emit()
 
 func _process(_delta: float) -> void:
@@ -100,6 +110,7 @@ func leave() -> void:
 	retries = 0
 	response_deadline = 0
 	pending = {}
+	local_start_attempted = false
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval("sessionStorage.removeItem('wwpo_session')")
 	leaving = false

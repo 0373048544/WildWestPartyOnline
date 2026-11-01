@@ -316,6 +316,16 @@ func test_characters() -> void:
 	check(not GameManager.abilities.heal_with_discards(GameManager, 1, [a.instance_id, a.instance_id]), "Sid must choose two distinct owned cards")
 	check(GameManager.abilities.heal_with_discards(GameManager, 1, [a.instance_id, b.instance_id]) and GameManager.players[1].current_hp == 3, "Sid heals by discarding exactly two")
 	setup()
+	GameManager.players[1].ability_id = "discard_heal"
+	GameManager.players[1].current_hp = 2
+	for _i in range(4):
+		give(1, "dodge")
+	GameManager.handle_intent(1, "end", {})
+	GameManager.rate_limits.clear()
+	var sid_ids: Array = GameManager.players[1].hand.slice(0, 2).map(func(c): return c.instance_id)
+	GameManager.handle_intent(1, "ability", {"cards": sid_ids})
+	check(GameManager.turns.current_player == 2, "Sid healing/discard in Discard Phase cannot strand a zero-excess turn")
+	setup()
 	GameManager.players[2].ability_id = "empty_draw"
 	a = give(2, "dodge")
 	GameManager.consume(2, a)

@@ -27,6 +27,7 @@ var sid_cards: Array = []
 var noticed_turn: int = -1
 var turn_notice_until: int = 0
 var hud_match: int = -1
+var character_draft: String = ""
 
 func _ready() -> void:
 	add_child(load("res://scripts/ui/WebLayout.gd").new())
@@ -54,7 +55,8 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	if is_instance_valid(reaction_label):
-		reaction_label.text = TextCatalog.text("Respond in %.1f seconds") % maxf(0, reaction_until - Time.get_ticks_msec() / 1000.0)
+		var remaining: float = maxf(0, reaction_until - Time.get_ticks_msec() / 1000.0)
+		reaction_label.text = "Còn %.1f giây để chọn nhân vật" % remaining if NetworkManager.public_state.get("phase", "") == "CHARACTER_SELECTION" else TextCatalog.text("Respond in %.1f seconds") % remaining
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
@@ -75,14 +77,15 @@ func label(text: String, size: int = 18, parent: Node = content) -> Label:
 	return node
 
 func button(text: String, callback: Callable, parent: Node = content, disabled: bool = false) -> Button:
-	var node := Button.new()
+	var node: Button = load("res://scripts/ui/WesternButton.gd").new()
 	node.text = TextCatalog.text(text)
 	node.tooltip_text = node.text
 	node.disabled = disabled
 	node.pressed.connect(callback)
-	node.pressed.connect(func(): presentation_feedback.emit("button"))
+	node.pressed.connect(func(): presentation_feedback.emit("button"); AudioManager.play_ui("button"))
 	node.mouse_entered.connect(func():
 		if not node.disabled:
+			AudioManager.play_ui("hover")
 			node.create_tween().tween_property(node, "modulate", Color("#ffe4af"), 0.12))
 	node.mouse_exited.connect(func(): node.create_tween().tween_property(node, "modulate", Color.WHITE, 0.16))
 	parent.add_child(node)
@@ -102,6 +105,7 @@ func refresh() -> void:
 		add_child(table)
 		table.targeting.target_chosen.connect(play_selected)
 		table.targeting.cancelled.connect(func(): selected = -1; refresh())
+		table.character_info_requested.connect(show_character_info)
 		table.targeting.world_chosen.connect(func(token):
 			if is_instance_valid(match_hud):
 				match_hud.world_action(token))
@@ -116,6 +120,7 @@ func refresh() -> void:
 		sid_cards.clear()
 		menu_open = false
 		noticed_turn = -1
+		character_draft = ""
 	if in_game:
 		backdrop = ColorRect.new()
 		backdrop.color = Color(0.035, 0.055, 0.075, 0.08)
@@ -187,7 +192,7 @@ func build_menu() -> void:
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(HSeparator.new())
 	if NetworkManager.connecting:
-		label("Connecting to the host…", 24)
+		label("Đang kết nối đến máy chủ phòng...", 24)
 		button("CANCEL", leave)
 		return
 	var space := Control.new()
@@ -196,6 +201,8 @@ func build_menu() -> void:
 	if screen == "main":
 		button("HOST GAME", func(): screen = "host"; refresh())
 		button("JOIN GAME", func(): screen = "join"; refresh())
+		button("ÂM THANH", show_audio_settings)
+		button("HÌNH ẢNH", show_visual_settings)
 		if not OS.has_feature("web"):
 			button("QUIT", func(): get_tree().quit())
 		return
@@ -300,6 +307,7 @@ func modal() -> VBoxContainer:
 	return box
 
 func show_role(role: String, match_number: int) -> void:
+	AudioManager.play_once("role:%d" % match_number, "role")
 	var box := modal()
 	label("YOUR ROLE", 24, box)
 	var badge := label("✦  " + TextCatalog.text(role) + "  ✦", 40, box)
@@ -345,19 +353,51 @@ func show_reaction(request: Dictionary) -> void:
 
 func show_character_selection(own: Dictionary) -> void:
 	var box := modal()
-	label("CHỌN NHÂN VẬT", 32, box)
-	label("Chỉ bạn thấy hai lựa chọn này. Hết giờ: máy chủ chọn ngẫu nhiên.", 17, box)
+	label("CHỌN NHÂN VẬT", 26, box)
+	label("Hai lựa chọn riêng của bạn. Chọn một thẻ rồi xác nhận. Hết giờ: máy chủ chọn một trong hai.", 15, box)
 	reaction_label = label("", 18, box)
 	reaction_until = Time.get_ticks_msec() / 1000.0 + float(own.get("character_remaining", 25))
-	var options: Array = own.get("character_options", [])
 	if own.get("character_chosen", false):
-		label("ĐÃ CHỌN • Đang chờ những người chơi còn lại...", 22, box)
-	for data in options:
-		var key: String = data.character_id
-		var option := button("%s • %d Máu\n%s" % [data.display_name, data.max_hp, data.ability_description_vi],
-			func(): intent("character", {"character": key}), box)
-		option.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		option.custom_minimum_size = Vector2(minf(660, root.size.x - 112), 100)
+		label("Bạn đã chọn %s" % own.get("selected_character", {}).get("display_name", ""), 24, box)
+		label("Đang chờ những người chơi còn lại...", 18, box)
+		return
+	var panel: Control = load("res://scripts/ui/CharacterChoicePanel.gd").new()
+	box.add_child(panel)
+	panel.configure(self, own.get("character_options", []))
+
+func show_character_info(player: Dictionary) -> void:
+	var old: Node = root.get_node_or_null("PlayerInfoCard")
+	if old:
+		root.remove_child(old)
+		old.queue_free()
+	if player.is_empty() or str(player.get("character_id", "")).is_empty():
+		return
+	var frame := PanelContainer.new()
+	frame.name = "PlayerInfoCard"
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(frame)
+	frame.position = Vector2(root.size.x - 310, 76)
+	frame.custom_minimum_size.x = 290
+	frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#27434b"), SaloonTheme.GOLD, 14))
+	var column := VBoxContainer.new()
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_child(column)
+	var portrait: Control = load("res://scripts/ui/CharacterPortrait.gd").new()
+	column.add_child(portrait)
+	portrait.configure(player.character_id, 135)
+	label(player.character.display_name, 22, column)
+	label("%s · %d/%d máu · %d lá" % [player.display_name, player.current_hp, player.max_hp, player.hand_count], 15, column)
+	var equipment: Array = player.get("equipment_ids", []).map(func(key): return CardData.data(key).name)
+	label("%s · Tầm %d\n%s" % [CardData.data(player.get("weapon_id", "")).get("name", "Colt .45"), player.weapon_range, ", ".join(equipment)], 14, column)
+	var role: String = str(player.get("public_role", ""))
+	if int(player.player_id) == local_id():
+		role = str(NetworkManager.private_state.get("role", role))
+	label(TextCatalog.text(role) if not role.is_empty() else "Vai trò bí mật", 14, column)
+	var ability := label(CharacterData.ability_icon(player.character.ability_id) + " " + player.character.ability_description_vi, 15, column)
+	ability.custom_minimum_size.x = 260
+	for child in column.get_children():
+		if child is Control:
+			child.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func show_sid_picker() -> void:
 	sid_mode = true
@@ -380,3 +420,62 @@ func build_debug(parent: Node, state: Dictionary) -> void:
 	for operation in ["Reveal Roles", "Give Shoot", "Draw Card", "Damage Player", "Heal Player", "Next Turn", "Force Win Check"]:
 		var debug_button := button(operation, func(): intent("debug", {"operation": operation, "target": debug_target}), grid)
 		debug_button.add_theme_font_size_override("font_size", 15)
+	if OS.is_debug_build() and NetworkManager.is_authority():
+		button("KIỂM TRA BỘ BÀI", show_deck_inspector, box)
+
+func show_deck_inspector() -> void:
+	if not OS.is_debug_build() or not NetworkManager.is_authority():
+		return
+	var box := modal()
+	label("DEBUG • BỘ BÀI / VÙNG / CHỦ SỞ HỮU", 20, box)
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size.y = minf(420, root.size.y - 200)
+	box.add_child(scroll)
+	var rows := VBoxContainer.new()
+	rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(rows)
+	for card in GameManager.debug_card_zones():
+		label("#%d · %s · %s · %s · người %d" % [card.instance_id, card.card_data_id, CardInstance.corner(card), card.zone, card.owner], 14, rows)
+	button("ĐÓNG", refresh, box)
+
+func show_audio_settings() -> void:
+	var box := modal()
+	label("ÂM THANH", 26, box)
+	var labels := {"Master": "Âm lượng tổng", "Music": "Âm nhạc", "SFX": "Hiệu ứng", "Ambient": "Môi trường", "UI": "Giao diện"}
+	for bus in labels:
+		var row := HBoxContainer.new()
+		box.add_child(row)
+		var title := label(labels[bus], 17, row)
+		title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var slider := HSlider.new()
+		slider.name = "Volume" + bus
+		slider.custom_minimum_size.x = 220
+		slider.max_value = 1
+		slider.step = 0.01
+		slider.value = AudioManager.volumes[bus]
+		row.add_child(slider)
+		slider.value_changed.connect(func(value): AudioManager.set_volume(bus, value))
+	var mute := CheckButton.new()
+	mute.text = "Tắt âm"
+	mute.button_pressed = AudioManager.muted
+	box.add_child(mute)
+	mute.toggled.connect(AudioManager.set_muted)
+	if OS.is_debug_build():
+		var debug := VBoxContainer.new()
+		box.add_child(debug)
+		button("DEBUG ÂM THANH +", func():
+			if debug.get_child_count() > 1:
+				return
+			for cue in ["bang", "dodge", "draw", "explosion", "jail", "button"]:
+				button("Thử: " + cue, func(): AudioManager.play_gameplay(cue), debug)
+			label(str(AudioManager.volumes), 13, debug), debug)
+	button("ĐÓNG", func(): overlay.queue_free(), box)
+
+func show_visual_settings() -> void:
+	var box := modal()
+	label("CHẤT LƯỢNG HÌNH ẢNH", 24, box)
+	label("Nhân vật, bài và mục tiêu luôn hiển thị đầy đủ ở mọi mức.", 16, box)
+	for entry in [["LOW", "THẤP · Ít hạt, không bóng"], ["MEDIUM", "VỪA · Web / điện thoại"], ["HIGH", "CAO · Bóng cho desktop"]]:
+		button(entry[1], func(): VisualSettings.set_quality(entry[0]); refresh(), box)
+	label("Đang dùng: " + VisualSettings.level, 16, box)
+	button("ĐÓNG", func(): overlay.queue_free(), box)
