@@ -215,6 +215,23 @@ func _free_named(node_name: String) -> void:
 		remove_child(old)
 		old.queue_free()
 
+func set_modal_blocked(value: bool) -> void:
+	if is_instance_valid(loadout_panel):
+		loadout_panel.set_modal_blocked(value)
+	if is_instance_valid(hand):
+		hand.visible = not value
+	var actions: Control = get_node_or_null("HandActions") as Control
+	if is_instance_valid(actions):
+		actions.visible = not value
+	if is_instance_valid(target_picker):
+		target_picker.visible = not value and str(request.get("reaction_type", "")) == "transfer"
+	if value:
+		close_preview()
+		var info: Node = app.root.get_node_or_null("PlayerInfoCard")
+		if info:
+			app.root.remove_child(info)
+			info.queue_free()
+
 func _sync_table_panels() -> void:
 	if not is_instance_valid(loadout_panel):
 		loadout_panel = load("res://scenes/ui/PlayerLoadoutPanel.tscn").instantiate()
@@ -505,6 +522,7 @@ func build_hand() -> void:
 	add_child(footer)
 
 	footer.name = "HandActions"
+	footer.z_index = layout.Z_ACTION
 
 	footer.set_anchors_and_offsets_preset(
 		Control.PRESET_BOTTOM_WIDE
@@ -549,7 +567,7 @@ func build_hand() -> void:
 			- 4.0
 		)
 
-		footer.z_index = 200
+		footer.z_index = layout.Z_ACTION
 
 	footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -714,12 +732,17 @@ func build_hand() -> void:
 		).name = "CancelSelection"
 
 	elif state.current_player == app.local_id() and state.phase == "ACTION_PHASE":
-		action(
+		var end_turn := action(
 			"END TURN",
 			func():
 				app.intent("end"),
 			footer
-		).name = "EndTurn"
+		)
+		end_turn.name = "EndTurn"
+		if layout.mobile_landscape(self):
+			end_turn.custom_minimum_size = Vector2(layout.units(self, 128.0), layout.units(self, 46.0))
+		elif layout.mobile_portrait(self):
+			end_turn.custom_minimum_size.x = minf(layout.units(self, 180.0), size.x * 0.46)
 
 	if (
 		local.get("is_alive", false)
@@ -806,6 +829,7 @@ func build_hand() -> void:
 		hand.preview_closed.connect(close_preview)
 
 	hand.visible = true
+	hand.z_index = layout.Z_HAND
 
 	hand.set_anchors_and_offsets_preset(
 		Control.PRESET_BOTTOM_WIDE
@@ -1006,7 +1030,7 @@ func show_preview(card: Dictionary) -> void:
 	preview = Panel.new()
 	preview.name = "CardPreview"
 	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	preview.z_index = 950
+	preview.z_index = layout.Z_PREVIEW
 
 	var style: StyleBoxFlat = SaloonTheme.panel(
 		Color(0.055, 0.075, 0.075, 0.97),

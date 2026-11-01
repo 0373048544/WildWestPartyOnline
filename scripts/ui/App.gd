@@ -76,6 +76,14 @@ func _process(_delta: float) -> void:
 func refresh_layout() -> void:
 	layout_refresh_queued = false
 	if is_instance_valid(root):
+		# Rebuild only responsive UI sections/modal; the table, HUD and CardViews
+		# remain persistent and authoritative state is untouched.
+		if is_instance_valid(match_hud):
+			match_hud.top_signature = ""
+			match_hud.hand_signature = ""
+			match_hud.flow_signature = ""
+		if is_instance_valid(overlay):
+			clear_game_modal()
 		refresh()
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -87,6 +95,14 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		elif not NetworkManager.public_state.is_empty() and NetworkManager.public_state.get("started", false):
 			menu_open = not menu_open
 		refresh()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not (event is InputEventScreenTouch or event is InputEventMouseButton) or not event.pressed:
+		return
+	var info: Control = root.get_node_or_null("PlayerInfoCard") as Control
+	if is_instance_valid(info) and not info.get_global_rect().has_point(event.position):
+		root.remove_child(info)
+		info.queue_free()
 
 func label(text: String, size: int = 18, parent: Node = content) -> Label:
 	var node := Label.new()
@@ -333,21 +349,50 @@ func play_selected(target: int) -> void:
 	intent("play", {"card": uid, "target": target})
 
 func modal() -> VBoxContainer:
+	clear_game_modal()
+	var layout: Script = load("res://scripts/ui/MatchLayout.gd")
 	overlay = ColorRect.new()
 	overlay.name = "GameModal"
 	overlay.color = Color(0.025, 0.03, 0.05, 0.96)
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	overlay.z_index = layout.Z_MODAL_BACKDROP
 	root.add_child(overlay)
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	overlay.add_child(center)
-	var box := VBoxContainer.new()
-	box.custom_minimum_size.x = minf(720, root.size.x - 112)
-	box.add_theme_constant_override("separation", 20)
+	if is_instance_valid(match_hud):
+		match_hud.set_modal_blocked(true)
+	if is_instance_valid(personal_toasts):
+		personal_toasts.visible = false
+	if is_instance_valid(reaction_banner):
+		reaction_banner.visible = false
+	var available: Rect2 = layout.modal_rect(root)
+	var responsive_width := available.size.x * (0.88 if layout.mobile_landscape(root) else (0.94 if layout.mobile_portrait(root) else 1.0))
+	var frame_width: float = minf(available.size.x, minf(responsive_width, 860.0 if not layout.mobile(root) else available.size.x))
 	var frame := PanelContainer.new()
-	frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#172b37"), SaloonTheme.GOLD, 28))
-	center.add_child(frame)
-	frame.add_child(box)
+	frame.name = "ModalFrame"
+	frame.z_index = layout.Z_MODAL_CONTENT
+	frame.mouse_filter = Control.MOUSE_FILTER_STOP
+	frame.position = Vector2(available.get_center().x - frame_width * 0.5, available.position.y)
+	frame.size = Vector2(frame_width, available.size.y)
+	frame.custom_minimum_size = frame.size
+	frame.clip_contents = true
+	frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#172b37"), SaloonTheme.GOLD, 18 if layout.mobile(root) else 28))
+	overlay.add_child(frame)
+	var padding := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		padding.add_theme_constant_override("margin_" + side, int(layout.units(root, 10.0 if layout.mobile_landscape(root) else 16.0)))
+	frame.add_child(padding)
+	var scroll := ScrollContainer.new()
+	scroll.name = "ModalScroll"
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	padding.add_child(scroll)
+	var box := VBoxContainer.new()
+	box.name = "ModalContent"
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.add_theme_constant_override("separation", 10 if layout.mobile_landscape(root) else 16)
+	scroll.add_child(box)
 	var enter := frame.create_tween()
 	frame.modulate = Color(1, 1, 1, 0.75)
 	enter.tween_property(frame, "modulate", Color.WHITE, 0.18)
@@ -361,6 +406,10 @@ func clear_game_modal() -> void:
 	overlay = null
 	reaction_label = null
 	set_process(false)
+	if is_instance_valid(match_hud):
+		match_hud.set_modal_blocked(false)
+	if is_instance_valid(personal_toasts):
+		personal_toasts.visible = true
 
 func show_role(role: String, match_number: int) -> void:
 	AudioManager.play_once("role:%d" % match_number, "role")
@@ -415,9 +464,14 @@ func show_reaction(request: Dictionary) -> void:
 
 func show_character_selection(own: Dictionary) -> void:
 	var box := modal()
-	label("CHỌN NHÂN VẬT", 26, box)
-	label("Hai lựa chọn riêng của bạn. Chọn một thẻ rồi xác nhận. Hết giờ: máy chủ chọn một trong hai.", 15, box)
-	reaction_label = label("", 18, box)
+	var layout: Script = load("res://scripts/ui/MatchLayout.gd")
+	var landscape_phone: bool = bool(layout.mobile_landscape(root))
+	var heading := label("CHỌN NHÂN VẬT", 21 if landscape_phone else 26, box)
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if not landscape_phone:
+		label("Hai lựa chọn riêng của bạn. Chọn một thẻ rồi xác nhận. Hết giờ: máy chủ chọn một trong hai.", 15, box)
+	reaction_label = label("", 14 if landscape_phone else 18, box)
+	reaction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	set_process(true)
 	reaction_until = Time.get_ticks_msec() / 1000.0 + float(own.get("character_remaining", 25))
 	if own.get("character_chosen", false):
@@ -429,6 +483,8 @@ func show_character_selection(own: Dictionary) -> void:
 	panel.configure(self, own.get("character_options", []))
 
 func show_character_info(player: Dictionary) -> void:
+	if is_instance_valid(overlay):
+		return
 	var old: Node = root.get_node_or_null("PlayerInfoCard")
 	var signature := JSON.stringify(player) + str(root.size)
 	if old and old.get_meta("snapshot", "") == signature:
@@ -449,10 +505,13 @@ func show_character_info(player: Dictionary) -> void:
 	frame.set_meta("character_id", player.character_id)
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(frame)
-	var compact: bool = root.size.x < 1100
-	var card_width: float = 218 if compact else 270
-	frame.position = Vector2(12 if compact else root.size.x - card_width - 18, 102 if compact else 76)
+	var layout: Script = load("res://scripts/ui/MatchLayout.gd")
+	var compact: bool = layout.mobile(root) or root.size.x < 1100
+	var card_width: float = minf(layout.units(root, 210.0), root.size.x * 0.28) if layout.mobile_landscape(root) else (218 if compact else 250)
+	var focus: Rect2 = layout.get_table_focus_rect(root)
+	frame.position = Vector2(focus.position.x + layout.units(root, 8.0), focus.position.y + layout.units(root, 8.0)) if compact else Vector2(root.size.x - card_width - 18, 76)
 	frame.custom_minimum_size.x = card_width
+	frame.z_index = layout.Z_EQUIPMENT
 	frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#3c3028"), Color("#b99058"), 12))
 	var column := VBoxContainer.new()
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -551,7 +610,7 @@ func show_audio_settings() -> void:
 			for cue in ["bang", "dodge", "draw", "explosion", "jail", "button"]:
 				button("Thử: " + cue, func(): AudioManager.play_gameplay(cue), debug)
 			label(str(AudioManager.volumes), 13, debug), debug)
-	button("ĐÓNG", func(): overlay.queue_free(), box)
+	button("ĐÓNG", func(): clear_game_modal(); refresh(), box)
 
 func show_visual_settings() -> void:
 	var box := modal()
@@ -560,4 +619,4 @@ func show_visual_settings() -> void:
 	for entry in [["LOW", "THẤP · Ít hạt, không bóng"], ["MEDIUM", "VỪA · Web / điện thoại"], ["HIGH", "CAO · Bóng cho desktop"]]:
 		button(entry[1], func(): VisualSettings.set_quality(entry[0]); refresh(), box)
 	label("Đang dùng: " + VisualSettings.level, 16, box)
-	button("ĐÓNG", func(): overlay.queue_free(), box)
+	button("ĐÓNG", func(): clear_game_modal(); refresh(), box)

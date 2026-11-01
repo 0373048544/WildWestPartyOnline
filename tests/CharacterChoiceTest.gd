@@ -78,7 +78,13 @@ func _ready() -> void:
 	var keys: Array = panel.cards.keys()
 	await get_tree().process_frame
 	await get_tree().process_frame
-	check(panel.cards[keys[0]].global_position.x < panel.cards[keys[1]].global_position.x and is_equal_approx(panel.cards[keys[0]].global_position.y, panel.cards[keys[1]].global_position.y), "cards laid out side by side")
+	var portrait_stack: bool = load("res://scripts/ui/MatchLayout.gd").mobile_portrait(panel)
+	var correctly_arranged: bool = (
+		panel.cards[keys[0]].global_position.y < panel.cards[keys[1]].global_position.y
+		if portrait_stack
+		else panel.cards[keys[0]].global_position.x < panel.cards[keys[1]].global_position.x and is_equal_approx(panel.cards[keys[0]].global_position.y, panel.cards[keys[1]].global_position.y)
+	)
+	check(correctly_arranged, "character cards use portrait stack or landscape/desktop side-by-side layout")
 	if OS.get_cmdline_user_args().has("--capture"):
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("res://tests/artifacts/character-options.png")

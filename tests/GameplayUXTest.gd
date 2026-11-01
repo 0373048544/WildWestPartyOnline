@@ -246,7 +246,7 @@ func _ready() -> void:
 	GameManager.publish()
 	await settle()
 	check(not app.table.objects.token_allowed({"kind": "market", "card": GameManager.flow.market[0].instance_id}), "other player's store pick cannot be clicked")
-	check(is_instance_valid(app.match_hud.loadout_panel) and app.match_hud.loadout_panel.visible, "own public loadout stays visible in compact side panel")
+	check(is_instance_valid(app.match_hud.loadout_panel) and not app.match_hud.loadout_panel.visible, "empty equipment HUD stays hidden")
 	setup()
 	give(1, "shoot")
 	GameManager.players[2].equipment.jail = give(2, "jail")

@@ -15,6 +15,19 @@ func settle() -> void:
 	await get_tree().create_timer(0.35).timeout
 	await get_tree().physics_frame
 
+func collect_hand_blockers(node: Node, hand: Control, blockers: Array) -> void:
+	if node == hand:
+		return
+	if node is Control:
+		var control := node as Control
+		if not control.is_visible_in_tree():
+			return
+		var visually_hidden := control.modulate.a <= 0.01 or control.self_modulate.a <= 0.01
+		if visually_hidden and control.mouse_filter == Control.MOUSE_FILTER_STOP and control.get_global_rect().intersects(hand.get_global_rect()):
+			blockers.append(str(control.get_path()))
+	for child in node.get_children():
+		collect_hand_blockers(child, hand, blockers)
+
 func _ready() -> void:
 	get_window().content_scale_aspect = Window.CONTENT_SCALE_ASPECT_IGNORE
 	app = load("res://scenes/menu/MainMenu.tscn").instantiate()
@@ -39,12 +52,16 @@ func _ready() -> void:
 		GameManager.players[1].hand.append(CardInstance.make(9100+index,"shoot","HEART",7))
 	GameManager.publish()
 	app.seen_role = GameManager.match_id
-	for css in [Vector2i(360,800),Vector2i(390,844),Vector2i(393,852),Vector2i(412,915),Vector2i(430,932),Vector2i(844,390),Vector2i(932,430),Vector2i(1920,1080)]:
-		var compact: bool = css.x < 1000
+	for css in [Vector2i(360,800),Vector2i(390,844),Vector2i(393,852),Vector2i(412,915),Vector2i(430,932),Vector2i(844,390),Vector2i(915,412),Vector2i(932,430),Vector2i(1024,768),Vector2i(1180,820),Vector2i(1440,900),Vector2i(1920,1080)]:
 		get_window().size = css
-		var logical := Vector2i(600,int(600.0*css.y/css.x)) if css.y>css.x else (Vector2i(960,int(960.0*css.y/css.x)) if compact else Vector2i(1440,810))
-		get_window().content_scale_size = logical
 		get_viewport().set_meta("match_css_size",Vector2(css))
+		var layout_mode: String = LAYOUT.mode(app)
+		var compact: bool = layout_mode != LAYOUT.DESKTOP
+		var logical := (
+			Vector2i(600,int(600.0*css.y/css.x)) if layout_mode == LAYOUT.MOBILE_PORTRAIT
+			else (Vector2i(960,int(960.0*css.y/css.x)) if layout_mode == LAYOUT.MOBILE_LANDSCAPE else (Vector2i(1024,int(1024.0*css.y/css.x)) if layout_mode == LAYOUT.TABLET else Vector2i(1440,int(1440.0*css.y/css.x))))
+		)
+		get_window().content_scale_size = logical
 		var sx: float = float(logical.x)/css.x
 		var sy: float = float(logical.y)/css.y
 		# Exercise asymmetric notches and home indicator in both orientations.
@@ -54,7 +71,7 @@ func _ready() -> void:
 		app.refresh()
 		await settle()
 		check(LAYOUT.mobile(app)==compact,"viewport-based classification "+str(css))
-		var expected_mode := LAYOUT.DESKTOP if not compact else (LAYOUT.MOBILE_PORTRAIT if css.y>css.x else LAYOUT.MOBILE_LANDSCAPE)
+		var expected_mode := layout_mode
 		check(LAYOUT.mode(app)==expected_mode,"explicit portrait/landscape/desktop mode "+str(css))
 		for avatar in app.table.avatars.values():
 			var avatar_center: Vector2 = app.table.camera.unproject_position(avatar.global_position+Vector3.UP*1.6)
@@ -80,6 +97,13 @@ func _ready() -> void:
 			"allowed_card_types": [], "remaining": 8.0},NetworkManager.public_state)
 		check(app.reaction_banner.get_node("Banner/Content/Actions/Primary").disabled and not app.reaction_banner.get_node("Banner/Content/Actions/Skip").disabled,"no Dodge disables primary but leaves Skip")
 		app.reaction_banner.hide_banner()
+		var end_turn: Control = app.match_hud.get_node("HandActions/EndTurn")
+		var equipment_hud: Control = app.match_hud.loadout_panel
+		check(end_turn.visible and not end_turn.get_global_rect().intersects(equipment_hud.get_global_rect()),"End Turn never intersects equipment HUD %s end=%s equipment=%s" % [css,end_turn.get_global_rect(),equipment_hud.get_global_rect()])
+		check(not fan.get_global_rect().intersects(app.match_hud.get_node("TopBar").get_global_rect()),"hand never overlaps TopBar "+str(css))
+		var stop_blockers: Array = []
+		collect_hand_blockers(app.canvas, fan, stop_blockers)
+		check(stop_blockers.is_empty(),"no visible MOUSE_FILTER_STOP node covers hand %s blockers=%s" % [css,stop_blockers])
 		if compact:
 			check(fan.clip_contents,"cards clipped at left/right safe bounds")
 			check(fan.global_position.x>=safe.x and fan.global_position.x+fan.size.x<=logical.x-safe.z,"hand respects side safe areas")
@@ -91,18 +115,20 @@ func _ready() -> void:
 			var expected_action_height: float = LAYOUT.action_height(app) / sy
 			check(absf(footer.size.y/sy-expected_action_height)<=2,"action bar uses the mobile orientation height")
 			var first: Button = fan.cards[0]
+			check(first.size.x/sx>=44 and first.size.y/sy>=44,"card touch target is at least 44 CSS pixels "+str(css))
 			var minimum_card_width: float = 140.0 if css.y>css.x else 88.0
 			var rendered_body_size: float = first.visual.get_node("CardDescription").get_theme_font_size("font_size")*first.visual.scale.y/sy
 			check(first.size.x/sx>=minimum_card_width and rendered_body_size>=12,"orientation-specific mobile card and body text stay readable width=%s body=%s css=%s" % [first.size.x/sx,rendered_body_size,css])
 			var visible_ratio: float = (fan.size.y-first.position.y)/first.size.y
 			check(visible_ratio>=1.0,"resting hand shows the complete card body")
-			check(is_equal_approx(app.table.camera.fov,59.0 if css.y>css.x else 55.0),"mobile camera uses orientation-specific framing")
-			if css.x>css.y:
+			var expected_fov := 59.0 if layout_mode == LAYOUT.MOBILE_PORTRAIT else (55.0 if layout_mode == LAYOUT.MOBILE_LANDSCAPE else 57.0)
+			check(is_equal_approx(app.table.camera.fov,expected_fov),"mobile/tablet camera uses mode-specific framing")
+			if layout_mode == LAYOUT.MOBILE_LANDSCAPE:
 				check(expected_hand_height/css.y>=0.24 and expected_hand_height/css.y<=0.28,"landscape hand reserves only 24-28 percent of short side")
 			app.match_hud.show_preview(NetworkManager.private_state.hand[0])
 			var card_preview: Control = app.match_hud.preview
 			check(is_instance_valid(card_preview) and absf(card_preview.get_rect().get_center().x-logical.x*0.5)<2,"touch preview is centered instead of relying on hover position rect="+str(card_preview.get_rect()))
-			if css.x>css.y:
+			if layout_mode == LAYOUT.MOBILE_LANDSCAPE:
 				var preview_ratio: float = card_preview.size.x/logical.x
 				check(preview_ratio>=0.28 and preview_ratio<=0.34,"landscape preview stays within 28-34 percent width")
 				var loadout: Control = app.match_hud.loadout_panel
@@ -128,6 +154,24 @@ func _ready() -> void:
 			check(is_instance_valid(desktop_preview) and desktop_preview.size.x>=220 and desktop_preview.size.x<=280 and desktop_preview.size.y<=180,"desktop uses one compact custom card preview")
 			check(fan.cards[0].tooltip_text.is_empty(),"native tooltip disabled to prevent duplicate preview")
 			app.match_hud.close_preview()
+		# True character-selection modal stays inside safe viewport and suppresses
+		# every interactive secondary HUD layer.
+		app.selected = -1
+		app.refresh()
+		var definitions: Array = CharacterData.definitions().values()
+		app.show_character_selection({"character_options": [definitions[0], definitions[1]], "character_remaining": 20.0, "character_chosen": false})
+		await get_tree().process_frame
+		var modal_frame: Control = app.root.get_node("GameModal/ModalFrame")
+		var modal_safe: Rect2 = LAYOUT.modal_rect(app.root)
+		check(modal_safe.encloses(modal_frame.get_global_rect()),"modal frame remains inside safe viewport "+str(css))
+		check(not app.match_hud.loadout_panel.visible and not app.match_hud.hand.visible and not app.match_hud.get_node("HandActions").visible,"true modal hides equipment, hand and actions")
+		var confirm: Control = modal_frame.find_child("ConfirmCharacter",true,false)
+		check(is_instance_valid(confirm) and modal_safe.encloses(confirm.get_global_rect()),"character confirm remains reachable in viewport %s safe=%s confirm=%s" % [css,modal_safe,confirm.get_global_rect() if is_instance_valid(confirm) else Rect2()])
+		app.clear_game_modal()
+		app.refresh()
+		await get_tree().process_frame
+		var restored_end: Control = app.match_hud.get_node_or_null("HandActions/EndTurn") as Control
+		check(is_instance_valid(app.match_hud.hand) and app.match_hud.hand.visible and is_instance_valid(restored_end) and restored_end.visible,"HUD and End Turn survive modal/orientation reflow phase=%s player=%s" % [GameManager.turns.phase,GameManager.turns.current_player])
 		app.selected = 9100
 		app.refresh()
 		await settle()

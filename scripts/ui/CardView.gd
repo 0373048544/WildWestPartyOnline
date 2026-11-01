@@ -64,7 +64,7 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	var corner := add_text(CardInstance.corner(card), Rect2(10, 39, 62, 32), 22, CardInstance.suit_color(card.suit))
 	corner.name = "RankSuitCorner"
 	corner.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	add_text(TextCatalog.text(CardData.CardType.keys()[definition.type]), Rect2(10, 98, 190, 18), 11, accent.darkened(0.3))
+	add_text(TextCatalog.text(CardData.CardType.keys()[definition.type]), Rect2(10, 98, 190, 18), 11, accent.darkened(0.3)).name = "CardType"
 	add_text(definition.description, Rect2(12, 115, 186, 72), 13, Color("#29333a")).name = "CardDescription"
 	var lower := add_text(CardInstance.corner(card), Rect2(145, 190, 54, 20), 14, CardInstance.suit_color(card.suit))
 	lower.name = "RankSuitLower"
@@ -180,6 +180,12 @@ func touch_compact(width: float) -> void:
 		"font_size",
 		mini(36, maxi(18, int(round(15.0 / touch_scale))))
 	)
+	# Mobile face is glanceable: name, rank/suit, icon and type. Full rules text
+	# belongs to the deliberate 0.45s long-press preview.
+	visual.get_node("CardDescription").visible = false
+	visual.get_node("RankSuitLower").visible = false
+	visual.get_node("CardType").position.y = 142.0
+	visual.get_node("CardType").add_theme_font_size_override("font_size", 14)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 func draw_symbol(icon: Control) -> void:

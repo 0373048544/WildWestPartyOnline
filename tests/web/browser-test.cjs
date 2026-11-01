@@ -55,12 +55,13 @@ async function clickAt(page,x,y) {
 async function click(page,predicate) {
   const c=await wait(async()=>{const s=await snapshot(page); return s?.controls.find(predicate);},'control');
   await clickAt(page,c.x,c.y);
-  if(mobile&&c.needs_focus&&!c.focused){
-    const raised=await wait(async()=>{const s=await snapshot(page);return s?.controls.find(predicate)},'raised card');
-    await clickAt(page,raised.x,raised.y);
-  }
 }
 async function input(page,name,value) {
+  if(mobile) {
+    await evaluate(page,'window.__WWPO_SET_INPUT('+JSON.stringify(name||'')+','+JSON.stringify(value)+')');
+    await wait(async()=>{const s=await snapshot(page);return s?.controls.some(c=>c.kind==='input'&&(!name||c.name===name)&&c.text===value)},'test input '+name);
+    return;
+  }
   await click(page,c=>c.kind==='input'&&(!name||c.name===name));
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'a',code:'KeyA',windowsVirtualKeyCode:65,modifiers:2},page);
   await command('Input.dispatchKeyEvent',{type:'keyUp',key:'a',code:'KeyA',windowsVirtualKeyCode:65,modifiers:2},page);
@@ -111,7 +112,8 @@ async function handleChoice(page) {
     const allowed=r.allowed_card_types||[];
     const index=s.private.hand.findIndex(c=>allowed.includes(c.instance_id));
     if(index>=0) await click(page,c=>c.card_index===index&&!c.disabled);
-    else await click(page,c=>c.text==='CHỊU ĐÒN'||c.text==='KHÔNG CỨU');
+    // Prefer stable node names: labels are presentation text and may change.
+    else await click(page,c=>c.name==='Skip'||c.name==='Primary');
   }
 }
 async function save(page,name) {
@@ -173,7 +175,10 @@ async function save(page,name) {
   if(mobile&&Number(process.env.WWPO_MOBILE_HEIGHT||390)>Number(process.env.WWPO_MOBILE_WIDTH||844)){
     const identity=(await snapshot(a)).player_id;
     for(const [width,height] of [[844,390],[Number(process.env.WWPO_MOBILE_WIDTH||390),Number(process.env.WWPO_MOBILE_HEIGHT||844)]]){
-      await command('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:true},a);
+      await command('Emulation.setDeviceMetricsOverride',{
+        width,height,screenWidth:width,screenHeight:height,deviceScaleFactor:1,mobile:true,
+        screenOrientation:{type:width>height?'landscapePrimary':'portraitPrimary',angle:width>height?90:0}
+      },a);
       await wait(async()=>{const s=await snapshot(a);return s?.layout?.mobile&&s.layout.clip&&s.size.x===(width<height?600:960)},'responsive rotation');
       const rotated=await snapshot(a),r=rotated.layout.hand;
       assert.equal(rotated.player_id,identity,'orientation preserves network identity');

@@ -15,6 +15,7 @@ var layout: Script = preload("res://scripts/ui/MatchLayout.gd")
 @onready var skip_button: Button = $Banner/Content/Actions/Skip
 
 func _ready() -> void:
+	z_index = layout.Z_REACTION
 	name = "ReactionBanner"
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_process(false)

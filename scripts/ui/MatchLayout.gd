@@ -5,6 +5,19 @@ const TABLET := "tablet"
 const MOBILE_PORTRAIT := "mobile_portrait"
 const MOBILE_LANDSCAPE := "mobile_landscape"
 
+# Shared canvas layer contract. UI scripts must use these instead of inventing
+# unrelated z-index values that can cover actions or true modals.
+const Z_TABLE := 0
+const Z_NAMEPLATE := 100
+const Z_HAND := 200
+const Z_EQUIPMENT := 250
+const Z_ACTION := 300
+const Z_TOAST := 600
+const Z_REACTION := 700
+const Z_PREVIEW := 750
+const Z_MODAL_BACKDROP := 900
+const Z_MODAL_CONTENT := 910
+
 static func mode(node: Node) -> String:
 	var css: Vector2 = css_size(node)
 	# Treat phones and compact browser windows as mobile even when an in-app
@@ -47,7 +60,7 @@ static func action_height(node: Node) -> float:
 	if mobile_portrait(node):
 		return units(node, 48.0)
 	if mobile_landscape(node):
-		return units(node, 44.0)
+		return units(node, 46.0)
 	return 42.0
 
 static func get_mobile_banner_height(node: Node) -> float:
@@ -69,6 +82,8 @@ static func portrait(node: Node) -> bool:
 static func hand_height(node: Node, targeting: bool = false) -> float:
 	if not mobile(node):
 		return 182.0
+	if tablet(node):
+		return units(node, 176.0 if targeting else 190.0)
 	# Portrait gets enough room for a full touch card + scrollbar.
 	if mobile_portrait(node):
 		return units(node, 172.0 if targeting else 194.0)
@@ -82,6 +97,8 @@ static func get_hand_zone_height(node: Node, targeting: bool = false) -> float:
 	return hand_height(node, targeting)
 
 static func touch_card_width(node: Node) -> float:
+	if tablet(node):
+		return units(node, 150.0)
 	if mobile_portrait(node):
 		return units(node, 152.0)
 	if mobile_landscape(node):
@@ -95,7 +112,7 @@ static func get_mobile_card_width(node: Node) -> float:
 	return touch_card_width(node)
 
 static func get_mobile_nameplate_scale(node: Node) -> float:
-	return 0.84 if mobile_landscape(node) else (0.9 if mobile_portrait(node) else 1.0)
+	return 0.84 if mobile_landscape(node) else (0.9 if mobile_portrait(node) else (0.92 if tablet(node) else 1.0))
 
 static func get_equipment_compact_mode(node: Node) -> bool:
 	return mobile_landscape(node)
@@ -112,6 +129,48 @@ static func get_table_focus_rect(node: Node) -> Rect2:
 			maxf(1.0, viewport_size.y - top - bottom_reserve)
 		)
 	)
+
+static func safe_rect(node: Node, margin_css: float = 0.0) -> Rect2:
+	var viewport_size := node.get_viewport().get_visible_rect().size
+	var safe := safe_insets(node) if mobile(node) else Vector4.ZERO
+	var margin := units(node, margin_css) if mobile(node) else margin_css
+	return Rect2(
+		Vector2(safe.x + margin, safe.y + margin),
+		Vector2(
+			maxf(1.0, viewport_size.x - safe.x - safe.z - margin * 2.0),
+			maxf(1.0, viewport_size.y - safe.y - safe.w - margin * 2.0)
+		)
+	)
+
+static func top_hud_rect(node: Node) -> Rect2:
+	var safe := safe_rect(node)
+	var height := get_mobile_banner_height(node) if mobile(node) else 52.0
+	return Rect2(safe.position, Vector2(safe.size.x, height))
+
+static func hand_rect(node: Node, targeting: bool = false) -> Rect2:
+	var safe := safe_rect(node)
+	var height := hand_height(node, targeting)
+	return Rect2(Vector2(safe.position.x, safe.end.y - height), Vector2(safe.size.x, height))
+
+static func action_rect(node: Node, targeting: bool = false) -> Rect2:
+	var hand_zone := hand_rect(node, targeting)
+	var height := action_height(node)
+	return Rect2(Vector2(hand_zone.position.x, hand_zone.position.y - height - units(node, 4.0)), Vector2(hand_zone.size.x, height))
+
+static func equipment_rect(node: Node, expanded: bool = false) -> Rect2:
+	var safe := safe_rect(node, 8.0 if mobile(node) else 16.0)
+	var action_zone := action_rect(node)
+	var width: float = (
+		minf(units(node, 180.0), safe.size.x * 0.30)
+		if mobile_landscape(node)
+		else minf(320.0, safe.size.x * 0.30)
+	)
+	var height := units(node, 136.0 if expanded else 52.0) if mobile(node) else (124.0 if expanded else 76.0)
+	return Rect2(Vector2(safe.end.x - width, action_zone.position.y - height - units(node, 6.0)), Vector2(width, height))
+
+static func modal_rect(node: Node) -> Rect2:
+	var margin_css := 12.0 if mobile_landscape(node) else (16.0 if mobile(node) else 28.0)
+	return safe_rect(node, margin_css)
 
 static func hand_scrollbar_height(node: Node) -> float:
 	if mobile_landscape(node):

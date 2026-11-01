@@ -9,45 +9,60 @@ var portraits: Dictionary = {}
 func configure(owner_app: Node, options: Array) -> void:
 	app = owner_app
 	name = "CharacterChoicePanel"
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 16)
-	add_child(row)
+	var layout: Script = load("res://scripts/ui/MatchLayout.gd")
+	var landscape_phone: bool = bool(layout.mobile_landscape(self))
+	var portrait_phone: bool = bool(layout.mobile_portrait(self))
+	var body := ScrollContainer.new()
+	body.name = "CharacterOptionsScroll"
+	body.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	body.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if portrait_phone else ScrollContainer.SCROLL_MODE_DISABLED
+	body.custom_minimum_size.y = layout.units(self, 178.0) if landscape_phone else (layout.units(self, 480.0) if portrait_phone else 330.0)
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	add_child(body)
+	var row: Container = VBoxContainer.new() if portrait_phone else HBoxContainer.new()
+	row.add_theme_constant_override("separation", int(layout.units(self, 8.0 if landscape_phone else 14.0)))
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_child(row)
 	for index in range(options.size()):
 		var data: Dictionary = options[index]
 		var card := Button.new()
 		card.name = "CharacterOption%d" % index
 		card.set_meta("character_id", data.character_id)
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		card.custom_minimum_size = Vector2(0, 310)
+		card.custom_minimum_size = Vector2(0, layout.units(self, 166.0) if landscape_phone else (layout.units(self, 286.0) if portrait_phone else 310.0))
 		card.tooltip_text = data.display_name + "\n" + data.ability_description_vi
 		row.add_child(card)
 		var column := VBoxContainer.new()
 		column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		column.offset_left = 12
-		column.offset_right = -12
-		column.offset_top = 12
-		column.offset_bottom = -12
+		var inset: float = float(layout.units(self, 6.0 if landscape_phone else 12.0))
+		column.offset_left = inset
+		column.offset_right = -inset
+		column.offset_top = inset
+		column.offset_bottom = -inset
 		card.add_child(column)
-		var title: Label = app.label(data.display_name, 21, column)
+		var title: Label = app.label(data.display_name, 17 if landscape_phone else 21, column)
 		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		var portrait: Control = load("res://scripts/ui/CharacterPortrait.gd").new()
 		column.add_child(portrait)
-		portrait.configure(data.character_id, 145)
+		portrait.configure(data.character_id, int(layout.units(self, 58.0 if landscape_phone else (112.0 if portrait_phone else 145.0))))
 		portraits[data.character_id] = portrait
 		card.mouse_entered.connect(func(): portrait.react("dodge"))
-		var hp: Label = app.label("%d MÁU" % data.max_hp, 20, column)
+		var hp: Label = app.label("%d MÁU" % data.max_hp, 15 if landscape_phone else 20, column)
 		hp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		var icon: String = CharacterData.ability_icon(data.ability_id)
-		var ability: Label = app.label(icon + " " + data.ability_description_vi, 16, column)
+		var ability: Label = app.label(icon + " " + data.ability_description_vi, 13 if landscape_phone else 16, column)
+		ability.max_lines_visible = 2 if landscape_phone else 3
+		ability.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		ability.set_meta("ability_id", data.ability_id)
 		for child in column.get_children():
 			if child is Control:
 				child.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		card.pressed.connect(func(): select(data.character_id))
+		card.pressed.connect(select.bind(str(data.character_id)))
 		cards[data.character_id] = card
 	confirm = app.button("XÁC NHẬN NHÂN VẬT", commit, self, true)
 	confirm.name = "ConfirmCharacter"
+	confirm.custom_minimum_size.y = layout.units(self, 44.0 if landscape_phone else 48.0) if layout.mobile(self) else 46.0
 	if cards.has(app.character_draft):
 		select(app.character_draft)
 

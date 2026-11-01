@@ -18,7 +18,7 @@ func _ready() -> void:
 	name = "PersonalEventToasts"
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	z_index = 900
+	z_index = layout.Z_TOAST
 	set_process(false)
 	resized.connect(_position_panel)
 
@@ -373,7 +373,7 @@ func _show_next() -> void:
 	panel = Panel.new()
 	panel.name = "PersonalToast"
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.z_index = 901
+	panel.z_index = layout.Z_TOAST + 1
 	panel.clip_contents = true
 	add_child(panel)
 

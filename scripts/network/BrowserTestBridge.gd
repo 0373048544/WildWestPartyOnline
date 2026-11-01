@@ -4,6 +4,25 @@ extends Node
 # Exposes only what this browser already owns/sees. No token or server registry.
 var app: Node
 var tick: float = 0
+var input_callback: JavaScriptObject
+
+func _ready() -> void:
+	# CDP cannot reliably drive Godot's browser virtual-keyboard overlay when
+	# touch emulation is enabled. Keep this debug-only hook scoped to ?e2e=1.
+	input_callback = JavaScriptBridge.create_callback(_set_test_input)
+	var window: JavaScriptObject = JavaScriptBridge.get_interface("window")
+	window.__WWPO_SET_INPUT = input_callback
+
+func _set_test_input(arguments: Array) -> void:
+	if arguments.size() < 2 or not is_instance_valid(app) or not is_instance_valid(app.root):
+		return
+	var wanted := str(arguments[0])
+	var value := str(arguments[1])
+	for node in app.root.find_children("*", "LineEdit", true, false):
+		if wanted.is_empty() or str(node.name) == wanted:
+			node.text = value
+			node.text_changed.emit(value)
+			return
 
 func _process(delta: float) -> void:
 	tick += delta
@@ -11,7 +30,9 @@ func _process(delta: float) -> void:
 		return
 	tick = 0
 	var controls: Array = []
-	collect(app.root, controls)
+	# ReactionBanner and other high-priority overlays are CanvasLayer siblings of
+	# root, so collect from the canvas to make the E2E view match visible UI.
+	collect(app.canvas, controls)
 	var avatars: Dictionary = {}
 	var objects: Dictionary = {}
 	if is_instance_valid(app.table):

@@ -1,6 +1,8 @@
 extends Node
 
 var _last_focus: Control = null
+var _last_css_size := Vector2.ZERO
+var _next_viewport_poll: int = 0
 
 
 func _ready() -> void:
@@ -25,6 +27,19 @@ func _process(_delta: float) -> void:
 			_hide_virtual_keyboard()
 
 	_last_focus = focus
+
+	# Safari/embedded browsers resize visualViewport when their toolbar expands
+	# without always changing the outer canvas immediately. Poll cheaply and
+	# reflow only when the real CSS viewport changed.
+	if OS.has_feature("web") and Time.get_ticks_msec() >= _next_viewport_poll:
+		_next_viewport_poll = Time.get_ticks_msec() + 250
+		var measured: Variant = JavaScriptBridge.eval("JSON.stringify([Math.min(window.visualViewport?.width||window.innerWidth,window.innerWidth,window.screen?.width||window.innerWidth),Math.min(window.visualViewport?.height||window.innerHeight,window.innerHeight,window.screen?.height||window.innerHeight)])")
+		var parsed: Variant = JSON.parse_string(str(measured))
+		if parsed is Array and parsed.size() == 2:
+			var next_css := Vector2(float(parsed[0]), float(parsed[1]))
+			if not next_css.is_equal_approx(_last_css_size):
+				_last_css_size = next_css
+				resize()
 
 
 func _input(event: InputEvent) -> void:
@@ -72,8 +87,12 @@ func resize() -> void:
 	if not OS.has_feature("web"):
 		return
 
-	var width: int = int(JavaScriptBridge.eval("window.innerWidth"))
-	var height: int = int(JavaScriptBridge.eval("window.innerHeight"))
+	# screen.* closes a Chromium touch-emulation edge case where visualViewport
+	# briefly reports the legacy 980 px layout viewport despite a phone screen.
+	var width: int = int(JavaScriptBridge.eval("Math.min(window.visualViewport?.width||window.innerWidth,window.innerWidth,window.screen?.width||window.innerWidth)"))
+	var height: int = int(JavaScriptBridge.eval("Math.min(window.visualViewport?.height||window.innerHeight,window.innerHeight,window.screen?.height||window.innerHeight)"))
+	var previous_css: Vector2 = get_viewport().get_meta("match_css_size", Vector2.ZERO)
+	var previous_target: Vector2i = get_window().content_scale_size
 
 	var target := (
 		Vector2i(
@@ -156,7 +175,9 @@ return result;
 		)
 
 		if (
-			previous != insets
+			(previous != insets
+			or previous_css != Vector2(width, height)
+			or previous_target != target)
 			and get_parent().has_method("refresh_layout")
 		):
 			get_parent().call_deferred(

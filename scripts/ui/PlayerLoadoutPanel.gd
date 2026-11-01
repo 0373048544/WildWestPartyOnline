@@ -11,10 +11,12 @@ var expanded: bool = false
 var current_weapon_name: String = "Colt .45"
 var current_range: int = 1
 var current_equipment_count: int = 0
+var has_public_loadout: bool = false
+var modal_blocked: bool = false
 
 func _ready() -> void:
 	name = "PlayerLoadoutPanel"
-	z_index = 180
+	z_index = layout.Z_EQUIPMENT
 	mouse_filter = Control.MOUSE_FILTER_PASS
 	add_theme_stylebox_override(
 		"panel",
@@ -50,6 +52,7 @@ func update_loadout(row: Dictionary) -> void:
 	for child in items.get_children():
 		child.queue_free()
 	var weapon: Dictionary = row.get("weapon_card", {})
+	has_public_loadout = not weapon.is_empty() or not row.get("equipment_cards", []).is_empty()
 	var weapon_name := "Colt .45" if weapon.is_empty() else str(CardData.data(weapon.get("card_data_id", "")).get("name", "Colt .45"))
 	current_weapon_name = weapon_name
 	current_range = int(row.get("weapon_range", 1))
@@ -59,6 +62,10 @@ func update_loadout(row: Dictionary) -> void:
 		var data: Dictionary = CardData.data(card.get("card_data_id", ""))
 		_add_item(str(data.get("name", "")), _icon(str(card.get("card_data_id", ""))), card, str(data.get("description", "")))
 	_apply_layout()
+
+func set_modal_blocked(value: bool) -> void:
+	modal_blocked = value
+	visible = has_public_loadout and not modal_blocked
 
 func _toggle_details() -> void:
 	expanded = not expanded
@@ -88,13 +95,11 @@ func _icon(card_id: String) -> String:
 func _apply_layout() -> void:
 	var mobile: bool = bool(layout.mobile(self))
 	var compact: bool = bool(layout.get_equipment_compact_mode(self))
-	var safe: Vector4 = layout.safe_insets(self) if mobile else Vector4.ZERO
 	var width: float
 	if compact:
 		width = minf(layout.units(self, 180.0), get_viewport_rect().size.x * 0.28)
 	else:
 		width = minf(layout.units(self, 260.0) if mobile else 280.0, get_viewport_rect().size.x * (0.52 if mobile else 0.28))
-	custom_minimum_size.x = width
 	title_button.text = (
 		"♠ %s · T%d%s" % [current_weapon_name.left(9), current_range, " · +%d" % current_equipment_count if current_equipment_count > 0 else ""]
 		if compact
@@ -103,15 +108,10 @@ func _apply_layout() -> void:
 	title_button.custom_minimum_size.y = layout.units(self, 34.0) if compact else 36.0
 	details_scroll.visible = not compact or expanded
 	set_anchors_preset(Control.PRESET_TOP_LEFT, false)
-	var viewport_size := get_viewport_rect().size
-	var panel_height: float = float(layout.units(self, 92.0 if details_scroll.visible else 38.0))
-	var y: float
-	if compact:
-		y = viewport_size.y - safe.w - layout.hand_height(self) - layout.action_height(self) - panel_height - layout.units(self, 6.0)
-	else:
-		y = maxf(safe.y + layout.units(self, 66.0), viewport_size.y * (0.52 if mobile else 0.58))
-	position = Vector2(
-		viewport_size.x - safe.z - width - layout.units(self, 8.0 if compact else 10.0),
-		maxf(safe.y + layout.get_mobile_banner_height(self), y) if mobile else y
-	)
-	visible = true
+	var zone: Rect2 = layout.equipment_rect(self, details_scroll.visible)
+	width = minf(width, zone.size.x)
+	custom_minimum_size = Vector2(width, 0.0)
+	reset_size()
+	size.x = width
+	position = Vector2(zone.end.x - width, zone.position.y)
+	visible = has_public_loadout and not modal_blocked

@@ -21,7 +21,7 @@ var content_signature: String = ""
 
 func _ready() -> void:
 	name = "TargetCardPicker"
-	z_index = 920
+	z_index = layout.Z_REACTION
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	visible = false
 	set_process(false)
