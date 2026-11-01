@@ -20,14 +20,23 @@ func _ready() -> void:
 	if not embedded:
 		NetworkManager.mode = "dedicated"
 		GameManager.set_process(false)
+	var env_port := OS.get_environment("PORT")
+	if env_port.is_valid_int():
+		var parsed_port := int(env_port)
+		if parsed_port > 0 and parsed_port <= 65535:
+			port = parsed_port
 	for arg in OS.get_cmdline_user_args():
 		if arg == "--development":
 			development = true
 		elif arg.begins_with("--port="):
-			port = int(arg.trim_prefix("--port="))
+			var requested_port := arg.trim_prefix("--port=")
+			if requested_port.is_valid_int():
+				var parsed_port := int(requested_port)
+				if parsed_port > 0 and parsed_port <= 65535:
+					port = parsed_port
 	var address := "127.0.0.1" if embedded else OS.get_environment("WWPO_BIND")
 	if address.is_empty():
-		address = "127.0.0.1"
+		address = "127.0.0.1" if embedded else "0.0.0.0"
 	startup_error = listener.listen(port, address)
 	if startup_error != OK:
 		if not embedded:
@@ -101,7 +110,7 @@ func _process(_delta: float) -> void:
 			if message is Dictionary:
 				dispatch(id, message)
 			else:
-				reject(id, "Thông điệp không hợp lệ.", false)
+				reject(id, "ThÃ´ng Ä‘iá»‡p khÃ´ng há»£p lá»‡.", false)
 	if now - last_cleanup > 1000:
 		last_cleanup = now
 		cleanup(now)
@@ -148,7 +157,7 @@ func valid_name(value: Variant) -> bool:
 
 func dispatch(connection_id: int, message: Dictionary) -> void:
 	if not message.get("type", null) is String or not message.get("payload", null) is Dictionary or message.get("version", 0) != RoomProtocol.VERSION:
-		reject(connection_id, "Phiên bản giao thức không hợp lệ.", false)
+		reject(connection_id, "PhiÃªn báº£n giao thá»©c khÃ´ng há»£p lá»‡.", false)
 		return
 	var kind: String = message.type
 	var payload: Dictionary = message.payload
@@ -161,11 +170,11 @@ func dispatch(connection_id: int, message: Dictionary) -> void:
 		elif kind in ["CREATE_ROOM", "JOIN_ROOM"]:
 			admit(connection_id, kind, payload)
 		else:
-			reject(connection_id, "Bạn chưa tham gia phòng.", false)
+			reject(connection_id, "Báº¡n chÆ°a tham gia phÃ²ng.", false)
 		return
 	var session := session_for(conn.player)
 	if session.is_empty() or not rooms.has(session.room):
-		reject(connection_id, "Phòng không còn tồn tại.")
+		reject(connection_id, "PhÃ²ng khÃ´ng cÃ²n tá»“n táº¡i.")
 		return
 	var room: Dictionary = rooms[session.room]
 	room.activity = Time.get_ticks_msec()
@@ -175,16 +184,16 @@ func dispatch(connection_id: int, message: Dictionary) -> void:
 		return
 	var decoded := RoomProtocol.decode(kind, payload)
 	if decoded.is_empty() or not NetworkManager.valid_arguments(decoded.action, decoded.args):
-		reject(connection_id, "Hành động hoặc dữ liệu không hợp lệ.", false)
+		reject(connection_id, "HÃ nh Ä‘á»™ng hoáº·c dá»¯ liá»‡u khÃ´ng há»£p lá»‡.", false)
 		return
 	# Keep duplicate suppression on the authenticated session, including reconnect.
 	if not message.has("intent_id"):
-		reject(connection_id, "Thiếu mã hành động.", false)
+		reject(connection_id, "Thiáº¿u mÃ£ hÃ nh Ä‘á»™ng.", false)
 		return
 	if message.has("intent_id"):
 		var intent_id: Variant = message.intent_id
 		if not intent_id is String or intent_id.is_empty() or intent_id.length() > 64:
-			reject(connection_id, "Mã hành động không hợp lệ.", false)
+			reject(connection_id, "MÃ£ hÃ nh Ä‘á»™ng khÃ´ng há»£p lá»‡.", false)
 			return
 		var seen: Dictionary = session.get("seen_intents", {})
 		if seen.has(intent_id):
@@ -207,12 +216,12 @@ func make_code() -> String:
 
 func admit(connection_id: int, kind: String, payload: Dictionary) -> void:
 	if not valid_name(payload.get("player_name", null)):
-		reject(connection_id, "Tên người chơi không hợp lệ (1–24 ký tự).")
+		reject(connection_id, "TÃªn ngÆ°á»i chÆ¡i khÃ´ng há»£p lá»‡ (1â€“24 kÃ½ tá»±).")
 		return
 	var room: Dictionary
 	if kind == "CREATE_ROOM":
 		if rooms.size() >= 100:
-			reject(connection_id, "Máy chủ đang đầy. Hãy thử lại sau.")
+			reject(connection_id, "MÃ¡y chá»§ Ä‘ang Ä‘áº§y. HÃ£y thá»­ láº¡i sau.")
 			return
 		var code := make_code()
 		room = {"room_code": code, "host_player_id": next_player, "members": [], "created_at": Time.get_unix_time_from_system(), "activity": Time.get_ticks_msec()}
@@ -230,14 +239,14 @@ func admit(connection_id: int, kind: String, payload: Dictionary) -> void:
 	else:
 		var code := str(payload.get("room_code", "")).strip_edges().to_upper()
 		if not rooms.has(code):
-			reject(connection_id, "Mã phòng không tồn tại.")
+			reject(connection_id, "MÃ£ phÃ²ng khÃ´ng tá»“n táº¡i.")
 			return
 		room = rooms[code]
 		if room.game.started:
-			reject(connection_id, "Trận đấu đã bắt đầu.")
+			reject(connection_id, "Tráº­n Ä‘áº¥u Ä‘Ã£ báº¯t Ä‘áº§u.")
 			return
 		if room.members.size() >= 7:
-			reject(connection_id, "Phòng đã đầy.")
+			reject(connection_id, "PhÃ²ng Ä‘Ã£ Ä‘áº§y.")
 			return
 	var id := next_player
 	next_player += 1
@@ -253,11 +262,11 @@ func admit(connection_id: int, kind: String, payload: Dictionary) -> void:
 
 func resume(connection_id: int, token: String) -> void:
 	if token.length() != 64 or not sessions.has(token):
-		reject(connection_id, "Phiên chơi đã hết hạn. Hãy tham gia lại.")
+		reject(connection_id, "PhiÃªn chÆ¡i Ä‘Ã£ háº¿t háº¡n. HÃ£y tham gia láº¡i.")
 		return
 	var session: Dictionary = sessions[token]
 	if not rooms.has(session.room) or (session.expires > 0 and Time.get_ticks_msec() > int(session.expires)):
-		reject(connection_id, "Phiên chơi đã hết hạn. Hãy tham gia lại.")
+		reject(connection_id, "PhiÃªn chÆ¡i Ä‘Ã£ háº¿t háº¡n. HÃ£y tham gia láº¡i.")
 		return
 	var previous: int = session.connection
 	if connections.has(previous) and previous != connection_id:
@@ -337,5 +346,5 @@ func cleanup(now: int) -> void:
 		var room: Dictionary = rooms[code]
 		if now - int(room.activity) > 7200000:
 			for id in room.members.duplicate():
-				send_player(id, "ERROR", {"message": "Phòng đã hết thời gian hoạt động.", "fatal": true})
+				send_player(id, "ERROR", {"message": "PhÃ²ng Ä‘Ã£ háº¿t thá»i gian hoáº¡t Ä‘á»™ng.", "fatal": true})
 				remove_session(str(players_to_tokens.get(id, "")))

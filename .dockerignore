@@ -1,0 +1,10 @@
+.git
+.github
+.godot/editor
+.godot/mono
+build
+tests/artifacts
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
