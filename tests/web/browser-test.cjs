@@ -57,11 +57,6 @@ async function click(page,predicate) {
   await clickAt(page,c.x,c.y);
 }
 async function input(page,name,value) {
-  if(mobile) {
-    await evaluate(page,'window.__WWPO_SET_INPUT('+JSON.stringify(name||'')+','+JSON.stringify(value)+')');
-    await wait(async()=>{const s=await snapshot(page);return s?.controls.some(c=>c.kind==='input'&&(!name||c.name===name)&&c.text===value)},'test input '+name);
-    return;
-  }
   await click(page,c=>c.kind==='input'&&(!name||c.name===name));
   await command('Input.dispatchKeyEvent',{type:'keyDown',key:'a',code:'KeyA',windowsVirtualKeyCode:65,modifiers:2},page);
   await command('Input.dispatchKeyEvent',{type:'keyUp',key:'a',code:'KeyA',windowsVirtualKeyCode:65,modifiers:2},page);

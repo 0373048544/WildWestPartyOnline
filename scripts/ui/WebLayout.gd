@@ -1,6 +1,5 @@
 extends Node
 
-var _last_focus: Control = null
 var _last_css_size := Vector2.ZERO
 var _next_viewport_poll: int = 0
 
@@ -20,13 +19,7 @@ func _process(_delta: float) -> void:
 		return
 
 	var focus: Control = get_viewport().gui_get_focus_owner()
-
-	# If a LineEdit/TextEdit has just lost focus, force-close the OS keyboard.
-	if is_instance_valid(_last_focus):
-		if _is_text_input(_last_focus) and focus != _last_focus:
-			_hide_virtual_keyboard()
-
-	_last_focus = focus
+	var text_input_focused := is_instance_valid(focus) and _is_text_input(focus)
 
 	# Safari/embedded browsers resize visualViewport when their toolbar expands
 	# without always changing the outer canvas immediately. Poll cheaply and
@@ -38,8 +31,11 @@ func _process(_delta: float) -> void:
 		if parsed is Array and parsed.size() == 2:
 			var next_css := Vector2(float(parsed[0]), float(parsed[1]))
 			if not next_css.is_equal_approx(_last_css_size):
-				_last_css_size = next_css
-				resize()
+				# Opening the mobile keyboard shrinks visualViewport. Rebuilding the
+				# menu here destroys the focused LineEdit and makes the keyboard flash
+				# open/closed. Keep the last stable layout until editing finishes.
+				if not text_input_focused:
+					resize()
 
 
 func _input(event: InputEvent) -> void:
@@ -57,21 +53,32 @@ func _input(event: InputEvent) -> void:
 		_hide_virtual_keyboard()
 		return
 
-	# Tapping anywhere outside the active text field closes the keyboard.
+	# Defer outside-tap handling until Godot GUI has had a chance to transfer
+	# focus. Otherwise a tap from PlayerName to RoomCode closes the keyboard
+	# because the pointer is outside the previously focused LineEdit.
 	if event is InputEventScreenTouch and event.pressed:
-		var text_control := focus as Control
-		if not text_control.get_global_rect().has_point(event.position):
-			text_control.release_focus()
-			_hide_virtual_keyboard()
-			return
+		call_deferred("_finish_pointer_focus", focus, event.position)
+		return
 
 	# Also support mouse/pointer taps in mobile browsers and desktop testing.
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			var text_control := focus as Control
-			if not text_control.get_global_rect().has_point(event.position):
-				text_control.release_focus()
-				_hide_virtual_keyboard()
+			call_deferred("_finish_pointer_focus", focus, event.position)
+
+
+func _finish_pointer_focus(previous_focus: Control, pointer_position: Vector2) -> void:
+	if not is_instance_valid(previous_focus) or not _is_text_input(previous_focus):
+		return
+	var current_focus: Control = get_viewport().gui_get_focus_owner()
+	# Switching directly between two text fields must keep the same keyboard.
+	if is_instance_valid(current_focus) and _is_text_input(current_focus):
+		if current_focus != previous_focus or current_focus.get_global_rect().has_point(pointer_position):
+			return
+	if previous_focus.get_global_rect().has_point(pointer_position):
+		return
+	if previous_focus.has_focus():
+		previous_focus.release_focus()
+	_hide_virtual_keyboard()
 
 
 func _is_text_input(control: Control) -> bool:
@@ -91,6 +98,7 @@ func resize() -> void:
 	# briefly reports the legacy 980 px layout viewport despite a phone screen.
 	var width: int = int(JavaScriptBridge.eval("Math.min(window.visualViewport?.width||window.innerWidth,window.innerWidth,window.screen?.width||window.innerWidth)"))
 	var height: int = int(JavaScriptBridge.eval("Math.min(window.visualViewport?.height||window.innerHeight,window.innerHeight,window.screen?.height||window.innerHeight)"))
+	_last_css_size = Vector2(width, height)
 	var previous_css: Vector2 = get_viewport().get_meta("match_css_size", Vector2.ZERO)
 	var previous_target: Vector2i = get_window().content_scale_size
 
