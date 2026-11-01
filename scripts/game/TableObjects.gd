@@ -46,10 +46,12 @@ func sync(snapshot: Dictionary, owner: int, request: Dictionary) -> void:
 				item.scale = Vector3.ONE * 0.82
 				objects[key] = item
 				item.play_spawn()
-			var column: int = index % 3
-			var row: int = index / 3
-			var columns: int = mini(3,zones.size())
-			var slot: Vector3 = radial*(2.55+row*0.7)+tangent*((column-(columns-1)/2.0)*0.7)+Vector3.UP*1.43
+			# Four compact public cards per row stay readable without stretching the
+			# equipment strip across the neighbouring player's nameplate.
+			var column: int = index % 4
+			var row: int = index / 4
+			var columns: int = mini(4, zones.size() - row * 4)
+			var slot: Vector3 = radial * (2.55 + row * 0.68) + tangent * ((column - (columns - 1) / 2.0) * 0.62) + Vector3.UP * 1.43
 			objects[key].position.x = slot.x
 			objects[key].position.z = slot.z
 			objects[key].title.text = zone.name
@@ -78,6 +80,7 @@ func sync(snapshot: Dictionary, owner: int, request: Dictionary) -> void:
 			item.position = Vector3((column - minf(3, market.size() - 1) / 2) * 0.79, 1.49, -0.95 + row * 1.9)
 			objects[key] = item
 		objects[key].highlight(choice.get("reaction_type", "") == "store")
+		objects[key].set_attention(int(state.get("choice_player", 0)) > 0)
 	for key in objects.keys():
 		if not present.has(key):
 			objects[key].play_remove()

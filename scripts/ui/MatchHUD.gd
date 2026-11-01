@@ -11,6 +11,9 @@ var top_signature: String = ""
 var log_signature: String = ""
 var hand_signature: String = ""
 var flow_signature: String = ""
+var target_picker: Control
+var loadout_panel: Control
+var dismissed_picker_request: int = -1
 
 
 func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> void:
@@ -93,6 +96,7 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 		app.local_id(),
 		request
 	)
+	_sync_table_panels()
 
 	if app.selected >= 0:
 		var selected_cards: Array = own.get("hand", []).filter(
@@ -210,6 +214,51 @@ func _free_named(node_name: String) -> void:
 	if old:
 		remove_child(old)
 		old.queue_free()
+
+func _sync_table_panels() -> void:
+	if not is_instance_valid(loadout_panel):
+		loadout_panel = load("res://scenes/ui/PlayerLoadoutPanel.tscn").instantiate()
+		add_child(loadout_panel)
+		loadout_panel.card_inspected.connect(show_preview)
+	for row in state.get("players", []):
+		if int(row.get("player_id", 0)) == app.local_id():
+			loadout_panel.update_loadout(row)
+			break
+
+	var is_transfer := str(request.get("reaction_type", "")) == "transfer"
+	if not is_transfer:
+		if is_instance_valid(target_picker):
+			target_picker.dismiss()
+		dismissed_picker_request = -1
+		return
+
+	if not is_instance_valid(target_picker):
+		target_picker = load("res://scenes/ui/TargetCardPicker.tscn").instantiate()
+		add_child(target_picker)
+		target_picker.choice_selected.connect(_submit_picker_choice)
+		target_picker.cancel_requested.connect(_dismiss_target_picker)
+	if int(request.get("request_id", 0)) != dismissed_picker_request:
+		target_picker.present(app, request, state)
+
+func _submit_picker_choice(token: Dictionary) -> void:
+	var args := {
+		"request": int(request.get("request_id", 0)),
+		"accept": true,
+		"option": str(token.get("option", ""))
+	}
+	if token.has("card"):
+		args["card"] = int(token.card)
+	app.intent("reaction", args)
+
+func _dismiss_target_picker() -> void:
+	dismissed_picker_request = int(request.get("request_id", 0))
+	if is_instance_valid(target_picker):
+		target_picker.dismiss()
+
+func _reopen_target_picker() -> void:
+	dismissed_picker_request = -1
+	if is_instance_valid(target_picker):
+		target_picker.present(app, request, state)
 
 
 func text(
@@ -505,6 +554,13 @@ func build_hand() -> void:
 
 	if not local.get("is_alive", false):
 		message = "BẠN ĐÃ BỊ LOẠI · ĐANG THEO DÕI"
+	elif int(state.get("choice_player", 0)) > 0:
+		var chooser_name := "CAO BỒI"
+		for chooser in state.get("players", []):
+			if int(chooser.get("player_id", 0)) == int(state.choice_player):
+				chooser_name = str(chooser.get("display_name", chooser_name))
+				break
+		message = "BÁCH HÓA · ĐẾN LƯỢT %s CHỌN BÀI" % chooser_name
 
 	elif app.sid_mode:
 		message = (
@@ -640,6 +696,12 @@ func build_hand() -> void:
 				if reaction_type == "draw_discard"
 				else "CHỌN CHỒNG RÚT HOẶC TAY BÀI ĐỐI THỦ"
 			)
+		elif reaction_type == "transfer":
+			action(
+				"CHỌN BÀI",
+				_reopen_target_picker,
+				footer
+			).name = "OpenTargetCardPicker"
 
 	elif app.selected >= 0:
 		action(

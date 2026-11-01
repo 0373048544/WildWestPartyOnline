@@ -10,6 +10,7 @@ var corner_label: Label3D
 var prop_kind: String = ""
 var weapon_id: String = ""
 var hovered: bool = false
+var attention: bool = false
 var lift: float = 0
 var spawn_tween: Tween
 var base_color := Color("#446985")
@@ -155,8 +156,12 @@ func configure(kind: String, data: Dictionary, metadata: Dictionary) -> void:
 
 func highlight(value: bool) -> void:
 	enabled = value
-	frame_material.albedo_color = Color("#f3c268") if value or hovered else base_color
+	frame_material.albedo_color = Color("#f3c268") if value or hovered else (Color("#a68145") if attention else base_color)
 	title.modulate = Color("#2c343c")
+
+func set_attention(value: bool) -> void:
+	attention = value
+	highlight(enabled)
 
 func set_hovered(value: bool) -> void:
 	hovered = value

@@ -200,7 +200,12 @@ func transfer(job: Dictionary) -> void:
 		choices.append({"id": key, "instance_id": victim.equipment[key].instance_id, "label": CardData.data(key).name})
 	if choices.is_empty():
 		return
-	prompt(job.source, "transfer", job, {"choices": choices, "title": "CHỌN LÁ BÀI CỦA " + victim.display_name})
+	var action_title := (
+		"CHỌN 1 LÁ ĐỂ LẤY CỦA "
+		if bool(job.get("steal", false))
+		else "CHỌN 1 LÁ ĐỂ BỎ CỦA "
+	)
+	prompt(job.source, "transfer", job, {"choices": choices, "title": action_title + victim.display_name})
 
 func resolve(args: Dictionary) -> bool:
 	if game.reactions.active.is_empty():
