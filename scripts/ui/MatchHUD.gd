@@ -217,16 +217,16 @@ func build_top() -> void:
 	bar.offset_bottom = 52
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	var owner: String = ""
+	var current_player_name: String = ""
 
 	for player in state.players:
 		if player.player_id == state.current_player:
-			owner = player.display_name
+			current_player_name = player.display_name
 
 	var title: String = (
 		"LƯỢT CỦA BẠN"
 		if state.current_player == app.local_id()
-		else "LƯỢT CỦA " + owner
+		else "LƯỢT CỦA " + current_player_name
 	)
 
 	var phase: String = TextCatalog.text(
@@ -883,205 +883,157 @@ func world_action(token: Dictionary) -> void:
 func show_preview(card: Dictionary) -> void:
 	close_preview()
 
-	var mobile_preview: bool = bool(
-		layout.mobile(self)
-	)
-
-	preview = (
-		Panel.new()
+	var mobile_preview: bool = bool(layout.mobile(self))
+	var data: Dictionary = CardData.data(card.card_data_id)
+	var accent: Color = [
+		Color("#bc6449"),
+		Color("#6a9b9f"),
+		Color("#a38748"),
+		Color("#7b719d")
+	][int(data.get("type", 0))]
+	var unit: float = layout.units(self, 1.0) if mobile_preview else 1.0
+	var safe: Vector4 = layout.safe_insets(self) if mobile_preview else Vector4.ZERO
+	var preview_width: float = (
+		minf(280.0 * unit, size.x - safe.x - safe.z - 24.0 * unit)
 		if mobile_preview
-		else PanelContainer.new()
+		else minf(260.0, size.x - 24.0)
 	)
+	var reason: String = str(
+		own.get("disabled_reasons", {}).get(card.instance_id, "")
+	)
+	var preview_height: float = (176.0 if not reason.is_empty() else 150.0) * unit
 
+	preview = Panel.new()
 	preview.name = "CardPreview"
 	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.z_index = 950
 
-	preview.add_theme_stylebox_override(
-		"panel",
-		SaloonTheme.panel(
-			Color(
-				0.055,
-				0.075,
-				0.075,
-				0.98
-			),
-			SaloonTheme.GOLD,
-			16
-		)
+	var style: StyleBoxFlat = SaloonTheme.panel(
+		Color(0.055, 0.075, 0.075, 0.97),
+		accent,
+		14.0 * unit
 	)
+	style.set_corner_radius_all(int(15.0 * unit))
+	style.shadow_color = Color(0, 0, 0, 0.35)
+	style.shadow_size = int(7.0 * unit)
+	style.shadow_offset = Vector2(0, 3.0 * unit)
+	preview.add_theme_stylebox_override("panel", style)
 
 	add_child(preview)
 
-	var column := VBoxContainer.new()
-
-	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
-
-	preview.add_child(column)
-
-	var font_scale: float = (
-		float(layout.units(self, 1.0))
-		if mobile_preview
-		else 1.0
-	)
-
-	var preview_width: float = (
-		minf(
-			float(
-				layout.units(
-					self,
-					290.0
-				)
-			),
-			size.x
-			- float(
-				layout.units(
-					self,
-					24.0
-				)
-			)
-		)
-		if mobile_preview
-		else 290.0
-	)
+	var left: float
+	var top: float
 
 	if mobile_preview:
-		column.set_anchors_and_offsets_preset(
-			Control.PRESET_FULL_RECT
+		var hand_height: float = layout.hand_height(self, app.selected >= 0)
+		left = (size.x - preview_width) * 0.5
+		top = (
+			size.y - safe.w - hand_height
+			- preview_height - 12.0 * unit
+		)
+		top = maxf(top, safe.y + 74.0 * unit)
+	else:
+		var mouse: Vector2 = get_viewport().get_mouse_position()
+		left = mouse.x + 18.0
+		top = mouse.y - preview_height - 12.0
+
+		if left + preview_width > size.x - 12.0:
+			left = mouse.x - preview_width - 18.0
+
+		if top < 70.0:
+			top = mouse.y + 18.0
+
+		left = clampf(left, 12.0, size.x - preview_width - 12.0)
+		top = clampf(
+			top,
+			70.0,
+			maxf(70.0, size.y - preview_height - 194.0)
 		)
 
-		var inner: float = float(
-			layout.units(
-				self,
-				14.0
-			)
+	var banner_rect: Rect2 = get_viewport().get_meta(
+		"reaction_banner_rect",
+		Rect2()
+	)
+	var proposed := Rect2(
+		Vector2(left, top),
+		Vector2(preview_width, preview_height)
+	)
+
+	if not banner_rect.size.is_zero_approx() and proposed.intersects(banner_rect):
+		top = minf(
+			banner_rect.end.y + 8.0 * unit,
+			size.y - preview_height - 12.0 * unit
 		)
 
-		column.offset_left = inner
-		column.offset_top = inner
-		column.offset_right = -inner
-		column.offset_bottom = -inner
+	preview.set_anchors_preset(Control.PRESET_TOP_LEFT, false)
+	preview.offset_left = left
+	preview.offset_top = top
+	preview.offset_right = left + preview_width
+	preview.offset_bottom = top + preview_height
 
-	var data: Dictionary = CardData.data(
-		card.card_data_id
-	)
+	var card_name := Label.new()
+	card_name.text = str(data.get("name", ""))
+	card_name.position = Vector2(14.0, 10.0) * unit
+	card_name.size = Vector2(preview_width / unit - 92.0, 26.0) * unit
+	card_name.add_theme_font_size_override("font_size", int(18.0 * unit))
+	card_name.add_theme_color_override("font_color", accent.lightened(0.22))
+	card_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview.add_child(card_name)
 
-	text(
-		data.name,
-		int(19.0 * font_scale),
-		column
-	).add_theme_color_override(
-		"font_color",
-		SaloonTheme.GOLD
-	)
+	var corner := Label.new()
+	corner.text = CardInstance.corner(card)
+	corner.position = Vector2(preview_width - 76.0 * unit, 10.0 * unit)
+	corner.size = Vector2(62.0, 26.0) * unit
+	corner.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	corner.add_theme_font_size_override("font_size", int(17.0 * unit))
+	corner.add_theme_color_override("font_color", CardInstance.suit_color(card.suit))
+	corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview.add_child(corner)
 
-	text(
-		CardInstance.corner(card),
-		int(22.0 * font_scale),
-		column
-	).add_theme_color_override(
-		"font_color",
-		SaloonTheme.CREAM
+	var type_label := Label.new()
+	type_label.text = TextCatalog.text(
+		CardData.CardType.keys()[int(data.get("type", 0))]
 	)
+	type_label.position = Vector2(14.0, 39.0) * unit
+	type_label.size = Vector2(preview_width / unit - 28.0, 18.0) * unit
+	type_label.add_theme_font_size_override("font_size", int(12.0 * unit))
+	type_label.add_theme_color_override("font_color", accent.lightened(0.12))
+	type_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview.add_child(type_label)
 
-	var description := text(
-		data.description,
-		int(16.0 * font_scale),
-		column
-	)
-
-	description.custom_minimum_size.x = (
-		preview_width
-		- float(
-			layout.units(
-				self,
-				32.0
-			)
-		)
-		if mobile_preview
-		else 260.0
-	)
-
-	var reason: String = str(
-		own.get(
-			"disabled_reasons",
-			{}
-		).get(
-			card.instance_id,
-			""
-		)
-	)
+	var description := Label.new()
+	description.text = str(data.get("description", ""))
+	description.position = Vector2(14.0, 63.0) * unit
+	description.size = Vector2(
+		preview_width / unit - 28.0,
+		64.0 if not reason.is_empty() else 72.0
+	) * unit
+	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	description.add_theme_font_size_override("font_size", int(14.0 * unit))
+	description.add_theme_color_override("font_color", SaloonTheme.CREAM)
+	description.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview.add_child(description)
 
 	if not reason.is_empty():
-		text(
-			reason,
-			int(15.0 * font_scale),
-			column
-		).add_theme_color_override(
-			"font_color",
-			Color("#ffb995")
-		)
+		var reason_label := Label.new()
+		reason_label.text = reason
+		reason_label.position = Vector2(14.0, 139.0) * unit
+		reason_label.size = Vector2(preview_width / unit - 28.0, 26.0) * unit
+		reason_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		reason_label.add_theme_font_size_override("font_size", int(12.0 * unit))
+		reason_label.add_theme_color_override("font_color", Color("#ffb995"))
+		reason_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		preview.add_child(reason_label)
 
-	if mobile_preview:
-		var safe: Vector4 = layout.safe_insets(self)
+	preview.modulate.a = 0.0
+	preview.scale = Vector2(0.98, 0.98)
+	preview.pivot_offset = preview.size * 0.5
 
-		preview_width = minf(
-			preview_width,
-			size.x
-			- safe.x
-			- safe.z
-			- float(
-				layout.units(
-					self,
-					24.0
-				)
-			)
-		)
-
-		var preview_height: float = float(
-			layout.units(
-				self,
-				230.0
-			)
-		)
-
-		var left: float = (
-			size.x
-			- preview_width
-		) * 0.5
-
-		var top: float = (
-			safe.y
-			+ float(
-				layout.units(
-					self,
-					76.0
-				)
-			)
-		)
-
-		preview.set_anchors_preset(
-			Control.PRESET_TOP_LEFT,
-			false
-		)
-
-		preview.offset_left = left
-		preview.offset_top = top
-		preview.offset_right = left + preview_width
-		preview.offset_bottom = top + preview_height
-
-	else:
-		preview.position = Vector2(
-			clampf(
-				get_viewport().get_mouse_position().x - 130.0,
-				12.0,
-				size.x - 304.0
-			),
-			size.y - 370.0
-		)
-
-		preview.size.x = 290.0
-
+	var tween := preview.create_tween()
+	tween.set_trans(Tween.TRANS_QUAD)
+	tween.set_ease(Tween.EASE_OUT)
+	tween.tween_property(preview, "modulate:a", 1.0, 0.13)
+	tween.parallel().tween_property(preview, "scale", Vector2.ONE, 0.15)
 
 func _input(event: InputEvent) -> void:
 	if (

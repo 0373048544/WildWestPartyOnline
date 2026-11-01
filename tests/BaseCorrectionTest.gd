@@ -60,7 +60,7 @@ func _ready() -> void:
 		var corner: Label = view.visual.get_node("RankSuitCorner")
 		check(corner.text == sample[2], "real card UI corner " + sample[2])
 		check(corner.get_theme_color("font_color") == CardInstance.suit_color(sample[1]), "red/dark suit rendering")
-		check(view.tooltip_text.contains("Không phải lượt") and CardData.data("schofield").weapon_range == 2, "disabled inspection; weapon range separate from rank")
+		check(view.tooltip_text.is_empty() and str(view.get_meta("disabled_reason", "")).contains("Không phải lượt") and CardData.data("schofield").weapon_range == 2, "custom preview owns disabled inspection; weapon range separate from rank")
 		view.free()
 	# Full legal matches, with all 80 physical cards conserved at every server step.
 	seed(20261101)

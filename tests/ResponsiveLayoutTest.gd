@@ -108,6 +108,11 @@ func _ready() -> void:
 		else:
 			check(not fan.mobile_mode and not fan.clip_contents and fan.size.y>=170,"desktop retains full fan")
 			check(is_equal_approx(app.table.camera.fov,57) and app.table.camera_goal.is_equal_approx(Vector3(0,7.7,9.1)),"desktop camera unchanged")
+			app.match_hud.show_preview(NetworkManager.private_state.hand[0])
+			var desktop_preview: Control = app.match_hud.preview
+			check(is_instance_valid(desktop_preview) and desktop_preview.size.x>=220 and desktop_preview.size.x<=280 and desktop_preview.size.y<=180,"desktop uses one compact custom card preview")
+			check(fan.cards[0].tooltip_text.is_empty(),"native tooltip disabled to prevent duplicate preview")
+			app.match_hud.close_preview()
 		app.selected = 9100
 		app.refresh()
 		await settle()

@@ -17,7 +17,10 @@ var hold_time: float = 0.0
 func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: bool, reason: String = "") -> void:
 	custom_minimum_size = Vector2(210, 214)
 	disabled = not usable
-	tooltip_text = definition.name + " · " + CardInstance.corner(card) + "\n" + definition.description + ("\n" + reason if not reason.is_empty() else "")
+	# MatchHUD owns the single compact preview on both desktop and touch.
+	# Keeping the native tooltip empty prevents a second preview from appearing.
+	tooltip_text = ""
+	set_meta("disabled_reason", reason)
 	accent = [Color("#bc6449"), Color("#6a9b9f"), Color("#a38748"), Color("#7b719d")][int(definition.type)]
 	effect = definition.effect
 	# The Button owns input; its child carries the hover lift outside container layout.
