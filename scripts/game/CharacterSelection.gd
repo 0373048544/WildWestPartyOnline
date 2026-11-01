@@ -45,7 +45,7 @@ func apply_character(player: PlayerState, character_id: String) -> void:
 	player.character_id = data.character_id
 	player.ability_id = data.ability_id
 	player.max_hp = int(data.max_hp) + int(player.role == PlayerState.Role.SHERIFF)
-	player.current_hp = player.max_hp
+	player.current_hp = player.max_hp if player.is_alive else 0
 
 func finish(game: Node) -> void:
 	if not game.network.is_authority() or game.turns.phase != "CHARACTER_SELECTION" or chosen.size() != game.players.size():

@@ -50,7 +50,7 @@ func _ready() -> void:
 	other.connect_to_server("ws://127.0.0.1:7000")
 	await until(func(): return other_state.get("players", []).size() == 2 and NetworkManager.public_state.players.size() == 2, "shared player list")
 	NetworkManager.send_intent("ready")
-	other.send_message({"type": "SET_READY", "version": 1, "payload": {}})
+	other.send_message({"type": "SET_READY", "version": 1, "payload": {}, "intent_id": "guest-ready"})
 	await until(func(): return other_state.players.all(func(p): return p.ready) and NetworkManager.public_state.players.all(func(p): return p.ready), "Ready synchronizes both ways")
 	other.send_message({"type": "LEAVE_ROOM", "version": 1, "payload": {}})
 	await until(func(): return NetworkManager.public_state.players.size() == 1, "guest leaves")

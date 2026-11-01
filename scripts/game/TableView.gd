@@ -12,7 +12,8 @@ var camera_shake: float = 0.0
 var targeting: TargetingController
 var player_names: Dictionary = {}
 var status_labels: Dictionary = {}
-var turn_marker: Label3D
+var nameplates: Dictionary = {}
+var turn_marker: MeshInstance3D
 var objects: Node3D
 var player_rows: Dictionary = {}
 var local_player: int = 1
@@ -22,6 +23,7 @@ var duel_focus := Vector3.ZERO
 var duel_until: int = 0
 var presentation_queue: Array = []
 var presentation_wait: float = 0
+var seen_presentation: Dictionary = {}
 
 func _ready() -> void:
 	AudioManager.table = self
@@ -42,12 +44,7 @@ func _ready() -> void:
 	targeting = TargetingController.new()
 	targeting.table = self
 	add_child(targeting)
-	turn_marker = Label3D.new()
-	turn_marker.text = "▼ LƯỢT HIỆN TẠI"
-	turn_marker.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	turn_marker.font_size = 28
-	turn_marker.pixel_size = 0.005
-	turn_marker.modulate = Color("#ffdc89")
+	turn_marker = load("res://scripts/ui/PlayerNameplate.gd").make_star()
 	add_child(turn_marker)
 	context_label = Label3D.new()
 	context_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -74,13 +71,32 @@ func _process(delta: float) -> void:
 	var offset := Vector3(sin(Time.get_ticks_msec() * 0.08), cos(Time.get_ticks_msec() * 0.1), 0) * camera_shake
 	camera.position = camera.position.lerp(camera_goal + offset, minf(1.0, delta * 12))
 	camera.look_at(duel_focus if Time.get_ticks_msec() < duel_until else Vector3(0, 1.0, 0))
+	layout_nameplates()
 	for ring in rings.values():
 		ring.rotation.y += delta * 0.5
+		ring.scale = Vector3.ONE * (1.0 + 0.025 * sin(Time.get_ticks_msec() * 0.005))
 	if avatars.has(turns_player()):
 		turn_marker.position = avatars[turns_player()].position + Vector3(0, 3.8 + sin(Time.get_ticks_msec() * 0.004) * 0.1, 0)
 
 func turns_player() -> int:
 	return int(NetworkManager.public_state.get("current_player", 0))
+
+func layout_nameplates() -> void:
+	var placements: Array = []
+	for id in nameplates:
+		placements.append({"plate": nameplates[id], "rect": nameplates[id].place(camera, avatars[id].global_position)})
+	placements.sort_custom(func(a, b): return a.rect.position.x < b.rect.position.x)
+	var occupied: Array[Rect2] = []
+	var width: float = get_viewport().get_visible_rect().size.x
+	for item in placements:
+		var rect: Rect2 = item.rect
+		for previous in occupied:
+			if rect.intersects(previous):
+				rect.position.x = previous.end.x + 6
+		rect.position.x = clampf(rect.position.x, 8, maxf(8, width - rect.size.x - 8))
+		var depth: float = -camera.to_local(item.plate.global_position).z
+		item.plate.global_position = camera.project_position(rect.get_center(), depth)
+		occupied.append(rect)
 
 func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 	local_player = local_id
@@ -96,8 +112,12 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 		for status_label in status_labels.values():
 			status_label.free()
 		status_labels.clear()
+		for plate in nameplates.values():
+			plate.free()
+		nameplates.clear()
 		objects.clear()
 		presentation_queue.clear()
+		seen_presentation.clear()
 		presentation_wait = 0
 		hide_context()
 		targeting.cancel_targeting(false)
@@ -124,13 +144,7 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 			avatar.picking_area.set_meta("player_id", id)
 			avatar.look_at(Vector3.ZERO, Vector3.UP)
 			avatars[id] = avatar
-			var ring := TorusMesh.new()
-			ring.inner_radius = 0.68
-			ring.outer_radius = 0.75
-			ring.rings = 24
-			ring.ring_segments = 8
-			var ring_mesh := MeshInstance3D.new()
-			ring_mesh.mesh = ring
+			var ring_mesh: MeshInstance3D = load("res://scripts/ui/TargetRing3D.gd").new()
 			ring_mesh.material_override = StandardMaterial3D.new()
 			add_child(ring_mesh)
 			ring_mesh.position = at + Vector3(0, 0.1, 0)
@@ -146,28 +160,15 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 			marker_mesh.material_override = seat_material
 			marker.add_child(marker_mesh)
 			marker_mesh.position.y = 0.04
-			var status_label := Label3D.new()
-			status_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-			status_label.font_size = 26
-			status_label.pixel_size = 0.005
-			status_label.outline_size = 6
-			add_child(status_label)
-			status_label.position = at + Vector3(0, 3.25, 0)
+			var plate: Node3D = load("res://scripts/ui/PlayerNameplate.gd").new()
+			add_child(plate)
+			plate.position = at + Vector3.UP * 3.2
+			nameplates[id] = plate
+			var status_label: Label3D = plate.label
+			status_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 			status_labels[id] = status_label
-		var hearts: String = "♥".repeat(maxi(0, int(p.current_hp))) + "♡".repeat(maxi(0, int(p.max_hp) - maxi(0, int(p.current_hp))))
 		avatars[id].apply_character(str(p.get("character_id", "")))
-		status_labels[id].text = "%s%s\n%s · %d lá\n⌖ %d%s" % [
-			"★ " if p.public_role == "SHERIFF" else "", p.display_name, hearts, p.hand_count,
-			p.weapon_range, " · " + equipment_symbols(p.equipment_ids) if not p.equipment_ids.is_empty() else ""]
-		if OS.has_feature("web"):
-			# Built-in Web font fallback lacks several decorative glyphs.
-			status_labels[id].text = "%s%s\n%d/%d máu · %d lá\nTầm %d" % [
-				"CS " if p.public_role == "SHERIFF" else "", p.display_name, p.current_hp, p.max_hp, p.hand_count, p.weapon_range]
-		if not p.is_alive:
-			status_labels[id].text = p.display_name + "\n" + TextCatalog.text(p.public_role)
-		elif not str(p.get("character_id", "")).is_empty():
-			status_labels[id].text = p.display_name + "\n" + str(p.character.display_name) + " · " + CharacterData.ability_icon(p.character.ability_id) + "\n" + status_labels[id].text.get_slice("\n", 1) + " · Tầm %d" % p.weapon_range
-		status_labels[id].modulate = seat_color.lightened(0.35)
+		nameplates[id].update_info(p, local_id, int(state.current_player))
 		avatars[id].set_target_state(not targets.is_empty() and not targets.has(id) and id != local_id)
 		if targets.has(id):
 			avatars[id].set_expression("targeted", 1000)
@@ -219,6 +220,13 @@ func hide_context() -> void:
 func presentation(event: Dictionary) -> void:
 	if event.has("match_id") and int(event.match_id) != built_match:
 		return
+	var event_id: String = str(event.get("audio_event_id", ""))
+	if not event_id.is_empty():
+		if seen_presentation.has(event_id):
+			return
+		seen_presentation[event_id] = true
+		if seen_presentation.size() > 1024:
+			seen_presentation.erase(seen_presentation.keys()[0])
 	if presentation_queue.size() < 256:
 		var visual: Dictionary = event.duplicate(true)
 		if event.get("kind", "") == "transfer" and not event.get("hidden", true):
@@ -242,7 +250,19 @@ func present_event(event: Dictionary) -> void:
 			for index in range(mini(8, int(event.get("count", 1)))):
 				effects.flying_card(Vector3(-0.45, 1.7, 0), at + Vector3.UP * 1.4, {}, index * 0.22)
 		"judge", "reveal":
-			effects.judgement(at + Vector3.UP * 2.7, event.get("card", {}))
+			effects.judgement(at + Vector3.UP * 2.7, event.get("card", {}), kind == "reveal")
+			if kind == "reveal":
+				# Black Jack reveals a card that remains in hand, never in discard.
+				var reveal_id: int = int(event.get("card", {}).get("instance_id", 0))
+				var revealed: Node3D = effects.judgement_cards.get(reveal_id)
+				effects.judgement_cards.erase(reveal_id)
+				if is_instance_valid(revealed):
+					var reveal := revealed.create_tween()
+					reveal.tween_interval(0.95)
+					reveal.tween_property(revealed, "position", at + Vector3.UP * 1.4, 0.3)
+					reveal.tween_callback(revealed.queue_free)
+		"judgement_discard":
+			effects.discard_judgement(at + Vector3.UP * 2.7, event.get("card", {}))
 		"barrel_result":
 			effects.floating(at + Vector3.UP * 2.7, ("THÙNG: NÉ" if event.success else "THÙNG: TRƯỢT") + " %d/%d" % [event.resolved, event.required], Color("#b5dbe2"))
 		"missed":
@@ -272,7 +292,8 @@ func present_event(event: Dictionary) -> void:
 			for index in range(mini(8, int(event.get("count", 1)))):
 				effects.flying_card(origin, destination, event.get("card", {}), index * 0.22, bool(event.get("hidden", true)))
 		"discard":
-			effects.flying_card(at + Vector3.UP * 1.4, Vector3(0.45, 1.7, 0), event.get("card", {}))
+			var origin: Vector3 = Vector3(0, 1.7, 0) if event.get("from_zone", "") == "market" else at + Vector3.UP * 1.4
+			effects.flying_card(origin, Vector3(0.45, 1.7, 0), event.get("card", {}))
 		"equip":
 			var from: Vector3 = avatars.get(int(event.get("from_player", id)), avatars[id]).position
 			effects.flying_card(from + Vector3.UP * 1.6, at.normalized() * 2.55 + Vector3.UP * 1.5, event.get("card", {}))
@@ -299,34 +320,30 @@ func animate(actor: int, kind: String, target: int) -> void:
 func play_animation(actor: int, kind: String, target: int) -> void:
 	if not avatars.has(actor):
 		return
+	var spread_targets: Array = []
 	if kind == "gatling":
 		for id in avatars:
 			if id != actor and not avatars[id].dead:
-				var fan := TargetingArrow.new()
-				add_child(fan)
-				fan.aim(avatars[actor].position + Vector3.UP * 1.5, avatars[id].position + Vector3.UP * 1.5)
-				var fade := fan.create_tween()
-				fade.tween_interval(0.6)
-				fade.tween_callback(fan.queue_free)
+				spread_targets.append(avatars[id].position + Vector3.UP * 1.5)
 		kind = "shoot"
 	if kind == "shoot" and avatars.has(target):
 		avatars[actor].face_target(avatars[target].global_position)
-		var shot_arrow := TargetingArrow.new()
-		add_child(shot_arrow)
-		shot_arrow.aim(avatars[actor].position + Vector3.UP * 1.5, avatars[target].position + Vector3.UP * 1.5)
-		var lock := shot_arrow.create_tween()
-		lock.tween_interval(0.35)
-		lock.tween_callback(shot_arrow.queue_free)
 	avatars[actor].act(kind)
 	var at: Vector3 = avatars[actor].position + Vector3(0, 2.6, 0)
 	match kind:
 		"shoot":
+			camera_shake = maxf(camera_shake, 0.018)
 			var shooting_avatar: PlayerAvatar = avatars[actor]
 			var flash_timing := shooting_avatar.create_tween()
 			flash_timing.tween_interval(0.1)
 			flash_timing.tween_callback(func():
 				if is_instance_valid(shooting_avatar):
-					effects.muzzle(shooting_avatar.arm.to_global(Vector3(0, -0.5, -0.37))))
+					var muzzle: Vector3 = shooting_avatar.arm.to_global(Vector3(0, -0.5, -0.37))
+					effects.muzzle(muzzle)
+					if avatars.has(target):
+						effects.bullet(muzzle, avatars[target].position + Vector3.UP * 1.5)
+					for index in range(spread_targets.size()):
+						effects.bullet(muzzle, spread_targets[index], index * 0.045))
 		"hit":
 			effects.starburst(at - Vector3.UP * 0.7)
 			effects.spark(at - Vector3(0, 1.1, 0), Color("#e9bd78"))

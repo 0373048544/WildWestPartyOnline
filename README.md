@@ -4,6 +4,10 @@ Project Godot 4.7.2, client Web + server Godot headless có thẩm quyền, giao
 
 ## Web multiplayer cục bộ
 
+Ngắm mục tiêu: chọn lá bài rồi rê chuột lên người muốn nhắm. Không tự chọn đối thủ đầu tiên. Trên màn hình cảm ứng, chạm đối thủ để xem trước và chạm lần nữa để xác nhận; nút Hủy luôn cho phép bỏ chọn. Nhãn trên đầu chỉ hiện tên, tim và số lá trên tay; rê chuột một lúc hoặc chạm để xem thông tin chi tiết.
+
+Nhạc menu/phòng chờ sử dụng bản waltz miền Tây tự tạo mới. Khi vào ván đấu, Music vẫn tắt hoàn toàn; âm thanh môi trường và hiệu ứng được giữ riêng.
+
 Đã chuẩn bị build tại build/web. Khi server và web server đang chạy, mở:
 
     http://127.0.0.1:8080

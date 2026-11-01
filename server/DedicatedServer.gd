@@ -177,6 +177,22 @@ func dispatch(connection_id: int, message: Dictionary) -> void:
 	if decoded.is_empty() or not NetworkManager.valid_arguments(decoded.action, decoded.args):
 		reject(connection_id, "Hành động hoặc dữ liệu không hợp lệ.", false)
 		return
+	# Keep duplicate suppression on the authenticated session, including reconnect.
+	if not message.has("intent_id"):
+		reject(connection_id, "Thiếu mã hành động.", false)
+		return
+	if message.has("intent_id"):
+		var intent_id: Variant = message.intent_id
+		if not intent_id is String or intent_id.is_empty() or intent_id.length() > 64:
+			reject(connection_id, "Mã hành động không hợp lệ.", false)
+			return
+		var seen: Dictionary = session.get("seen_intents", {})
+		if seen.has(intent_id):
+			return
+		seen[intent_id] = true
+		if seen.size() > 512:
+			seen.erase(seen.keys()[0])
+		session["seen_intents"] = seen
 	# Identity comes exclusively from this socket's authenticated room session.
 	room.game.handle_intent(int(conn.player), decoded.action, decoded.args)
 

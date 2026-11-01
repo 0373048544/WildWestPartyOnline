@@ -1,6 +1,8 @@
 class_name TableEffects
 extends Node3D
 
+var judgement_cards: Dictionary = {}
+
 func spark(at: Vector3, color: Color, count: int = 6, radius: float = 0.65) -> void:
 	count = VisualSettings.particle_count(count)
 	for i in range(count):
@@ -36,7 +38,7 @@ func floating(at: Vector3, value: String, color: Color) -> void:
 	tween.tween_property(label, "modulate:a", 0.0, 0.4).set_delay(0.55)
 	tween.chain().tween_callback(label.queue_free)
 
-func starburst(at: Vector3, size: float = 0.5) -> void:
+func starburst(at: Vector3, size: float = 0.5, duration: float = 0.33) -> void:
 	var shape := ImmediateMesh.new()
 	shape.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
 	var points: Array[Vector3] = []
@@ -61,8 +63,8 @@ func starburst(at: Vector3, size: float = 0.5) -> void:
 	node.position = at
 	node.scale = Vector3.ONE * 0.25
 	var tween := node.create_tween()
-	tween.tween_property(node, "scale", Vector3.ONE, 0.08).set_trans(Tween.TRANS_BACK)
-	tween.tween_property(node, "scale", Vector3.ONE * 0.01, 0.25)
+	tween.tween_property(node, "scale", Vector3.ONE, duration * 0.24).set_trans(Tween.TRANS_BACK)
+	tween.tween_property(node, "scale", Vector3.ONE * 0.01, duration * 0.76)
 	tween.tween_callback(node.queue_free)
 
 func smoke(at: Vector3) -> void:
@@ -87,6 +89,7 @@ func smoke(at: Vector3) -> void:
 		tween.chain().tween_callback(puff.queue_free)
 
 func muzzle(at: Vector3) -> void:
+	starburst(at, 0.23, 0.12)
 	var flash := OmniLight3D.new()
 	flash.light_color = Color("#ffca70")
 	flash.light_energy = 2.0
@@ -97,6 +100,28 @@ func muzzle(at: Vector3) -> void:
 	tween.tween_property(flash, "light_energy", 0.0, 0.12)
 	tween.tween_callback(flash.queue_free)
 	spark(at, Color("#ffd978"), 5, 0.35)
+
+func bullet(origin: Vector3, target: Vector3, delay: float = 0) -> void:
+	# No collision, damage or authority. A short moving fleck, never a laser.
+	var node := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.028, 0.028, 0.22)
+	node.mesh = mesh
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.albedo_color = Color("#ffeab0")
+	node.material_override = material
+	add_child(node)
+	node.position = origin
+	if origin.distance_to(target) > 0.01:
+		node.look_at(target)
+	var tween := node.create_tween()
+	if delay > 0:
+		node.visible = false
+		tween.tween_interval(delay)
+		tween.tween_callback(func(): node.visible = true)
+	tween.tween_property(node, "position", target, 0.08)
+	tween.tween_callback(node.queue_free)
 
 func flying_card(origin: Vector3, destination: Vector3, face: Dictionary = {}, delay: float = 0.0, hidden: bool = false) -> void:
 	var card := TableObject.new()
@@ -126,7 +151,7 @@ func flying_card(origin: Vector3, destination: Vector3, face: Dictionary = {}, d
 		tween.tween_interval(0.35)
 	tween.tween_callback(card.queue_free)
 
-func judgement(at: Vector3, face: Dictionary) -> void:
+func judgement(at: Vector3, face: Dictionary, from_hand: bool = false) -> void:
 	if face.is_empty():
 		return
 	var card := TableObject.new()
@@ -136,10 +161,21 @@ func judgement(at: Vector3, face: Dictionary) -> void:
 	data["rank_label"] = GameManager.rank_text(face.rank)
 	card.configure("card", data, {})
 	card.area.collision_layer = 0
-	card.position = at
+	card.position = at - Vector3.UP * 1.3 if from_hand else Vector3(-0.45, 1.7, 0)
+	judgement_cards[int(face.instance_id)] = card
 	card.rotation.x = PI / 3
 	var tween := card.create_tween()
-	tween.tween_property(card, "position:y", at.y + 0.2, 0.16)
-	tween.tween_interval(1.0)
-	tween.tween_property(card, "scale", Vector3.ONE * 0.01, 0.2)
+	tween.tween_property(card, "position", at + Vector3.UP * 0.2, 0.22).set_trans(Tween.TRANS_SINE)
+	# Stay visible until the authority actually discards the reserved judgement.
+
+func discard_judgement(at: Vector3, face: Dictionary) -> void:
+	var id: int = int(face.get("instance_id", 0))
+	var card: Node3D = judgement_cards.get(id)
+	judgement_cards.erase(id)
+	if not is_instance_valid(card):
+		flying_card(at, Vector3(0.45, 1.7, 0), face)
+		return
+	var tween := card.create_tween()
+	tween.tween_property(card, "position", Vector3(0.45, 1.7, 0), 0.3).set_trans(Tween.TRANS_SINE)
+	tween.parallel().tween_property(card, "rotation:x", 0.0, 0.3)
 	tween.tween_callback(card.queue_free)

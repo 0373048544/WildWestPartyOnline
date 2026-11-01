@@ -71,7 +71,7 @@ func _ready() -> void:
 	await settle()
 	var controller: TargetingController = app.table.targeting
 	check(controller.selected_card == shot.instance_id, "card enters 3D targeting")
-	check(controller.targeting_arrow.visible, "curved arrow visible")
+	check(not controller.targeting_arrow.visible and controller.hovered_target == 0, "aim arc waits for actual hover")
 	check(app.table.rings[2].visible, "valid avatar ring visible")
 	var hit_position: Vector2 = app.table.camera.unproject_position(app.table.avatars[2].global_position + Vector3.UP * 1.65)
 	check(controller.pick_at(hit_position) == 2, "ray picks real avatar Area3D")
@@ -80,6 +80,7 @@ func _ready() -> void:
 	Input.parse_input_event(hover)
 	await settle()
 	check(controller.hovered_target == 2 and controller.tooltip.text.contains("Khoảng cách"), "mouse hover displays public distance/range")
+	check(controller.reticle.visible and controller.target_style == "BANG", "BANG gets western reticle")
 	await capture("mouse-arrow")
 	var click := InputEventMouseButton.new()
 	click.button_index = MOUSE_BUTTON_LEFT
@@ -89,6 +90,7 @@ func _ready() -> void:
 	await settle()
 	check(GameManager.find_card(1, shot.instance_id).is_empty(), "real mouse click sends accepted play intention")
 	check(GameManager.reactions.active.reaction_type == "dodge", "clicked target receives Dodge prompt")
+	check(not controller.targeting_arrow.visible and not controller.reticle.visible, "aim preview clears before presentation fires")
 	GameManager.resolve_reaction(true)
 	GameManager.publish()
 	check(GameManager.players[2].current_hp == 4, "Dodge succeeds after 3D click")
@@ -104,7 +106,10 @@ func _ready() -> void:
 	touch.position = hit_position
 	Input.parse_input_event(touch)
 	await settle()
-	check(GameManager.find_card(1, shot.instance_id).is_empty() and GameManager.players[2].current_hp == 3, "touch tap on avatar plays Shoot")
+	check(not GameManager.find_card(1, shot.instance_id).is_empty() and controller.reticle.visible, "first touch previews target without consuming card")
+	Input.parse_input_event(touch.duplicate())
+	await settle()
+	check(GameManager.find_card(1, shot.instance_id).is_empty() and GameManager.players[2].current_hp == 3, "second touch confirms Shoot")
 	GameManager.begin_turn(1)
 	shot = give(1, "shoot")
 	GameManager.players[1].weapon = {}
@@ -114,7 +119,7 @@ func _ready() -> void:
 	controller.update_hover_target(3)
 	controller.select_target(3)
 	check(not GameManager.find_card(1, shot.instance_id).is_empty(), "invalid target cannot play")
-	check(controller.tooltip.text.contains("Không hợp lệ"), "invalid preview clearly marked")
+	check(controller.tooltip.text.contains("NGOÀI TẦM"), "invalid preview clearly marked")
 	var cancel := InputEventMouseButton.new()
 	cancel.button_index = MOUSE_BUTTON_RIGHT
 	cancel.pressed = true
@@ -136,7 +141,34 @@ func _ready() -> void:
 	await settle()
 	check(app.table.avatars.size() == 7 and app.table.targeting.valid_target_ids.size() == 6, "seven-player targets")
 	check(app.content.global_position.y + app.content.size.y <= 900, "seven-player HUD fits viewport")
+	for plate in app.table.nameplates.values():
+		check(plate.hearts.size() == 5 and not plate.label.text.contains("Tầm"), "nameplate only identity, vector hearts and hand count")
+	for pair in [["showdown", "DUEL"], ["panic", "STEAL"], ["cat_balou", "DISCARD"], ["jail", "JAIL"]]:
+		give(2, "beer")
+		var context_card := give(1, pair[0])
+		GameManager.publish()
+		app.selected = context_card.instance_id
+		app.refresh()
+		check(app.table.targeting.target_style == pair[1], "context-specific reticle " + pair[1])
+	app.selected = shot.instance_id
+	app.refresh()
 	await capture("seven-player")
+	get_window().content_scale_size = Vector2i(960, 600)
+	get_window().size = Vector2i(844, 390)
+	await settle()
+	var plate_rects: Array[Rect2] = []
+	for plate in app.table.nameplates.values():
+		var camera: Camera3D = app.table.camera
+		var center: Vector2 = camera.unproject_position(plate.global_position)
+		var right: Vector2 = camera.unproject_position(plate.global_position + camera.global_basis.x * 0.91 * plate.scale.x)
+		var top: Vector2 = camera.unproject_position(plate.global_position + camera.global_basis.y * 0.325 * plate.scale.x)
+		var extent := Vector2(absf(right.x - center.x), absf(top.y - center.y))
+		var rect := Rect2(center - extent, extent * 2)
+		check(rect.size.x >= 128 and rect.position.x >= 0 and rect.end.x <= get_viewport().get_visible_rect().size.x, "mobile nameplate stays readable and inside viewport")
+		for previous in plate_rects:
+			check(not rect.intersects(previous), "seven-player mobile nameplates do not overlap")
+		plate_rects.append(rect)
+	await capture("seven-player-mobile")
 	print("PASS: %d real mouse/touch, arrow, cancellation and seven-player UI checks" % checks)
 	GameManager.clear()
 	get_tree().quit()

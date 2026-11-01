@@ -26,7 +26,11 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 	app.table.update_state(state, app.local_id(), targets)
 	app.table.objects.sync(state, app.local_id(), request)
 	if app.selected >= 0:
-		app.table.targeting.begin_targeting(app.selected, app.local_id(), targets, own.get("target_info", {}))
+		var selected_cards: Array = own.get("hand", []).filter(func(c): return c.instance_id == app.selected)
+		var style: String = "GENERIC"
+		if not selected_cards.is_empty():
+			style = {"shoot": "BANG", "dodge": "BANG", "showdown": "DUEL", "panic": "STEAL", "cat_balou": "DISCARD", "jail": "JAIL"}.get(selected_cards[0].card_data_id, "GENERIC")
+		app.table.targeting.begin_targeting(app.selected, app.local_id(), targets, own.get("target_info", {}), style)
 	else:
 		app.table.targeting.cancel_targeting(false)
 	build_top()

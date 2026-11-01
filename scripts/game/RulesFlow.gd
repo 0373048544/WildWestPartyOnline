@@ -36,6 +36,12 @@ func run() -> void:
 		jobs.clear()
 		market.clear()
 	elif jobs.is_empty() and game.reactions.active.is_empty():
+		# A chooser may have disconnected/died after Store cards were revealed.
+		# Leftovers still belong to the 80-card deck and cannot be silently cleared.
+		for leftover in market:
+			game.deck.discard(leftover)
+			game.emit_event("CARD_DISCARDED", game.turns.current_player, {"kind": "discard", "card": leftover.duplicate(), "from_zone": "market"})
+		market.clear()
 		game.finish_resolution()
 
 func prompt(id: int, kind: String, context: Dictionary, payload: Dictionary) -> void:
@@ -99,6 +105,8 @@ func judge(id: int, purpose: String, context: Dictionary) -> void:
 	else:
 		var card: Dictionary = cards[0] if not cards.is_empty() else {}
 		game.deck.discard(card)
+		if not card.is_empty():
+			game.emit_event("CARD_DISCARDED", id, {"kind": "judgement_discard", "card": card.duplicate()})
 		push({"kind": "judged", "target": id, "purpose": purpose, "card": card, "continuation": context}, true)
 
 func judged(job: Dictionary) -> void:
@@ -306,6 +314,7 @@ func resolve(args: Dictionary) -> bool:
 			var result: Dictionary = {}
 			for judged_card in context.cards:
 				game.deck.discard(judged_card)
+				game.emit_event("CARD_DISCARDED", id, {"kind": "judgement_discard", "card": judged_card.duplicate()})
 				if selected.has(judged_card.instance_id):
 					result = judged_card
 			push({"kind": "judged", "target": id, "purpose": context.purpose, "card": result, "continuation": context.continuation}, true)
@@ -359,6 +368,7 @@ func cancel_for_disconnect(id: int) -> void:
 			# Return private reserved cards safely; do not strand the queue.
 			for card in r.context.get("cards", []):
 				game.deck.discard(card)
+				game.emit_event("CARD_DISCARDED", id, {"kind": "judgement_discard" if r.reaction_type == "judge" else "discard", "card": card.duplicate(), "from_zone": "reserved"})
 			game.reactions.active = {}
 	elif r.reaction_type == "duel" and r.context.get("source", 0) == id:
 		game.reactions.active = {}

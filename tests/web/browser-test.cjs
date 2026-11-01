@@ -8,8 +8,11 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const root=path.resolve(__dirname,'../..');
 const edge=process.env.WWPO_BROWSER || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 let browser,ws,next=1;
+const keepAlive=setInterval(()=>{},1000);
 const mobile=process.argv.includes('--mobile');
+const cdpPort=Number(process.env.WWPO_CDP_PORT||9223);
 const touchPages=new Set();
+const testPages=[];
 const calls=new Map(), errors=[];
 function command(method,params={},sessionId) {
   return new Promise((resolve,reject)=>{
@@ -28,7 +31,12 @@ async function evaluate(page,expression) {
   if(r.exceptionDetails) throw Error(r.exceptionDetails.text);
   return r.result.value;
 }
-async function snapshot(page) { const value=await evaluate(page,'JSON.stringify(window.__WWPO_TEST || null)');return value?JSON.parse(value):null; }
+async function snapshot(page) {
+  // Web rendering pauses in background tabs: sample a fresh visible frame.
+  await command('Page.bringToFront',{},page);
+  await delay(160);
+  const value=await evaluate(page,'JSON.stringify(window.__WWPO_TEST || null)');return value?JSON.parse(value):null;
+}
 async function clickAt(page,x,y) {
   await command('Page.bringToFront',{},page);
   const s=await snapshot(page);
@@ -64,6 +72,7 @@ async function newPage(width=1440,height=900) {
   const target=await command('Target.createTarget',{url:'about:blank',browserContextId:context.browserContextId});
   const session=await command('Target.attachToTarget',{targetId:target.targetId,flatten:true});
   const page=session.sessionId;
+  testPages.push(page);
   await command('Runtime.enable',{},page);
   await command('Page.enable',{},page);
   if(process.env.WWPO_TEST_URL) {
@@ -81,6 +90,8 @@ async function choose(page) {
   await click(page,c=>c.name==='ConfirmCharacter'&&!c.disabled);
 }
 async function handleChoice(page) {
+	const initial = await snapshot(page);
+	if(initial?.controls.some(c=>c.text==='TIẾP TỤC')) await click(page,c=>c.text==='TIẾP TỤC');
   const s=await snapshot(page), r=s?.private.reaction;
   if(!r?.request_id) return;
   if(r.cards) {
@@ -105,13 +116,13 @@ async function save(page,name) {
   fs.writeFileSync(path.join(root,'tests/artifacts/web',(mobile?'mobile-':'')+name+'.png'),Buffer.from(result.data,'base64'));
 }
 (async()=>{
-  browser=spawn(edge,['--headless=new','--remote-debugging-port=9223','--remote-allow-origins=*',
-    '--user-data-dir='+path.join(root,'tests/web/browser-profile'),'--no-first-run','--no-default-browser-check',
+  browser=spawn(edge,['--headless=new','--remote-debugging-port='+cdpPort,'--remote-allow-origins=*',
+    '--user-data-dir='+path.join(root,'tests/artifacts/browser-profile-'+cdpPort),'--no-first-run','--no-default-browser-check',
     '--disable-extensions','--disable-sync','--disable-features=msEdgeSignin,msEdgeFirstRunExperience',
     '--disable-background-timer-throttling','--disable-backgrounding-occluded-windows','--disable-renderer-backgrounding',
-    '--enable-unsafe-swiftshader','--autoplay-policy=no-user-gesture-required','about:blank'],
+    '--enable-unsafe-swiftshader','--use-angle=swiftshader','--autoplay-policy=no-user-gesture-required','about:blank'],
     {windowsHide:true,stdio:'ignore'});
-  const endpoint=await wait(async()=>{try{return await(await fetch('http://127.0.0.1:9223/json/version')).json()}catch{return null}},'browser launch');
+  const endpoint=await wait(async()=>{try{return await(await fetch('http://127.0.0.1:'+cdpPort+'/json/version')).json()}catch{return null}},'browser launch');
   ws=new WebSocket(endpoint.webSocketDebuggerUrl);
   await new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:true});ws.addEventListener('error',reject,{once:true})});
   ws.addEventListener('message',e=>{
@@ -151,6 +162,7 @@ async function save(page,name) {
     if(s.controls.some(c=>c.text==='TIẾP TỤC'))await click(p,c=>c.text==='TIẾP TỤC');
   }
   const s=await snapshot(a);
+  await wait(async()=>{const mix=(await snapshot(a)).profile;return !mix.music_allowed&&!mix.music_playing},'active match has no music');
   assert.equal(s.public.current_player,s.public.players.find(p=>p.public_role==='SHERIFF').player_id);
   await save(a,'table');
   // Refresh A's actual browser tab; sessionStorage should recover identity/hand.
@@ -181,6 +193,13 @@ async function save(page,name) {
       await wait(async()=>(await snapshot(page)).selected===card.instance_id,'Shoot selection');
       const aim=(await snapshot(page)).avatars[String(target)];
       await clickAt(page,aim.x,aim.y);
+      if(mobile){
+        const preview=await snapshot(page);
+        assert.equal(preview.selected,card.instance_id,'first touch does not commit');
+        assert(preview.targeting.guide&&preview.targeting.reticle,'first touch shows aim preview');
+        await save(page,'aim');
+        await clickAt(page,aim.x,aim.y);
+      }
       await wait(async()=>!(await snapshot(page)).private.hand.some(c=>c.instance_id===card.instance_id),'accepted 3D targeting');
       targeted=true;
       await save(page,'shot');
@@ -193,6 +212,15 @@ async function save(page,name) {
   assert.equal(errors.length,0,'Godot browser errors: '+errors.join('\n'));
   console.log('PASS: two isolated '+(mobile?'touch/mobile-emulated':'desktop')+' browser clients create/join by code, ready, character selection, private hands, Sheriff starts, 3D Shoot targeting, refresh/reconnect; turns='+turns);
   await command('Browser.close');
-})().catch(async e=>{console.error(e.stack);process.exitCode=1;try{if(ws?.readyState===1)await command('Browser.close')}catch{}}).finally(()=>{
+})().catch(async e=>{
+  console.error(e.stack);process.exitCode=1;
+  for(let i=0;i<testPages.length;i++)try {
+    const s=await snapshot(testPages[i]);
+    fs.writeFileSync(path.join(root,'tests/artifacts/web/failure-'+i+'.json'),JSON.stringify(s,null,2));
+    await save(testPages[i],'failure-'+i);
+  } catch {}
+  try{if(ws?.readyState===1)await command('Browser.close')}catch{}
+}).finally(()=>{
+	clearInterval(keepAlive);
   ws?.close();if(browser&&!browser.killed)browser.kill();setTimeout(()=>process.exit(process.exitCode||0),500);
 });

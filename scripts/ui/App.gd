@@ -93,6 +93,8 @@ func button(text: String, callback: Callable, parent: Node = content, disabled: 
 
 func refresh() -> void:
 	for child in root.get_children():
+		if child.name == "PlayerInfoCard" and NetworkManager.public_state.get("started", false):
+			continue
 		# A host button can synchronously publish state while still emitting pressed.
 		# Detach the old screen now and destroy it after signal delivery completes.
 		root.remove_child(child)
@@ -367,6 +369,14 @@ func show_character_selection(own: Dictionary) -> void:
 
 func show_character_info(player: Dictionary) -> void:
 	var old: Node = root.get_node_or_null("PlayerInfoCard")
+	var signature := JSON.stringify(player)
+	if old and old.get_meta("snapshot", "") == signature:
+		return
+	var saved_portrait: Control
+	if old and not player.is_empty() and old.get_meta("character_id", "") == player.get("character_id", ""):
+		saved_portrait = old.find_child("CharacterPortrait", true, false)
+		if saved_portrait:
+			saved_portrait.get_parent().remove_child(saved_portrait)
 	if old:
 		root.remove_child(old)
 		old.queue_free()
@@ -374,6 +384,8 @@ func show_character_info(player: Dictionary) -> void:
 		return
 	var frame := PanelContainer.new()
 	frame.name = "PlayerInfoCard"
+	frame.set_meta("snapshot", signature)
+	frame.set_meta("character_id", player.character_id)
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(frame)
 	frame.position = Vector2(root.size.x - 310, 76)
@@ -382,9 +394,10 @@ func show_character_info(player: Dictionary) -> void:
 	var column := VBoxContainer.new()
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	frame.add_child(column)
-	var portrait: Control = load("res://scripts/ui/CharacterPortrait.gd").new()
+	var portrait: Control = saved_portrait if saved_portrait else load("res://scripts/ui/CharacterPortrait.gd").new()
 	column.add_child(portrait)
-	portrait.configure(player.character_id, 135)
+	if not saved_portrait:
+		portrait.configure(player.character_id, 135)
 	label(player.character.display_name, 22, column)
 	label("%s · %d/%d máu · %d lá" % [player.display_name, player.current_hp, player.max_hp, player.hand_count], 15, column)
 	var equipment: Array = player.get("equipment_ids", []).map(func(key): return CardData.data(key).name)

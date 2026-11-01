@@ -92,6 +92,7 @@ func send_intent(action: String, args: Dictionary) -> void:
 		return
 	var message := RoomProtocol.encode(action, args)
 	if not message.is_empty():
+		message["intent_id"] = Crypto.new().generate_random_bytes(16).hex_encode()
 		transport.send_message(message)
 
 func leave() -> void:

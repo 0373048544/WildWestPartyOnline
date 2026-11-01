@@ -119,7 +119,7 @@ func _ready() -> void:
 	check(app.match_hud.has_node("HandActions/EndTurn"), "End Turn accessible near hand")
 	await click_hand(shot.instance_id)
 	check(app.selected == shot.instance_id, "real hand click selects Shoot")
-	check(app.table.targeting.targeting_arrow.visible, "arrow visible")
+	check(not app.table.targeting.targeting_arrow.visible and app.table.targeting.hovered_target == 0, "target mode never auto-locks first player")
 	await click_hand(shot.instance_id)
 	check(app.selected == -1, "click selected card again cancels")
 	app.choose_card(shot.instance_id)

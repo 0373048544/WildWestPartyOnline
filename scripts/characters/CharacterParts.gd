@@ -36,8 +36,10 @@ func build(a: PlayerAvatar, d: Dictionary) -> void:
 	a.part(a.box(Vector3(0.18, 0.14, 0.05)), Vector3(0, 0.71 * h, -0.27), accent)
 	for side in [-1, 1]:
 		a.part(a.box(Vector3(0.25 * w, 0.34 * h, 0.29)), Vector3(side * 0.21 * w, 0.46 * h, 0), coat.darkened(0.2))
-		a.part(a.box(Vector3(0.32 * w, 0.25, 0.49)), Vector3(side * 0.21 * w, 0.19, -0.08), Color("#59402f"))
-		a.part(a.box(Vector3(0.34 * w, 0.04, 0.5)), Vector3(side * 0.21 * w, 0.08, -0.08), Color("#382f2d"))
+		var boot := a.part(a.cylinder(0.16 * w, 0.18 * w, 0.25), Vector3(side * 0.21 * w, 0.19, -0.08), Color("#59402f"))
+		boot.scale.z = 1.45
+		var sole := a.part(a.cylinder(0.185 * w, 0.185 * w, 0.045), Vector3(side * 0.21 * w, 0.08, -0.08), Color("#382f2d"))
+		sole.scale.z = 1.5
 	var head_y: float = 1.7 * h
 	a.part(a.sphere(0.49, 0.82), Vector3(0, head_y, -0.035), skin)
 	# Hair cap and modular long shapes give readable head silhouettes.
@@ -57,12 +59,13 @@ func build(a: PlayerAvatar, d: Dictionary) -> void:
 		a.brows.append(brow)
 		if d.hair_style in ["stubble", "beard", "goatee", "handlebar", "large_mustache", "curled", "chin_beard"]:
 			var size := Vector3(0.28 if d.hair_style in ["large_mustache", "handlebar"] else 0.17, 0.13 if d.hair_style == "large_mustache" else 0.075, 0.08)
-			var mustache := a.part(a.box(size), Vector3(side * 0.13, head_y - 0.13, -0.48), hair)
+			var mustache := a.part(a.sphere(0.13, 0.13), Vector3(side * 0.13, head_y - 0.13, -0.48), hair)
+			mustache.scale = Vector3(size.x / 0.26, size.y / 0.13, size.z / 0.26)
 			mustache.rotation.z = side * (0.38 if d.hair_style in ["curled", "handlebar"] else -0.15)
 	if d.hair_style in ["beard", "goatee", "chin_beard"]:
 		a.part(a.cylinder(0.19, 0.07, 0.34 if d.hair_style == "chin_beard" else 0.22), Vector3(0, head_y - 0.29, -0.25), hair)
 	a.part(a.sphere(0.11, 0.16), Vector3(0, head_y - 0.01, -0.54), skin.darkened(0.08))
-	a.part(a.box(Vector3(0.16, 0.035, 0.025)), Vector3(0, head_y - 0.24, -0.45), Color("#813e36"))
+	a.mouth = a.part(a.box(Vector3(0.16, 0.035, 0.025)), Vector3(0, head_y - 0.24, -0.45), Color("#813e36"))
 	a.part(a.box(Vector3(0.42, 0.13, 0.45)), Vector3(0, 1.37 * h, -0.03), accent)
 	var scarf := a.part(a.box(Vector3(0.17, 0.29, 0.05)), Vector3(0.09, 1.23 * h, -0.29), accent)
 	scarf.rotation.z = 0.35
@@ -71,18 +74,18 @@ func build(a: PlayerAvatar, d: Dictionary) -> void:
 	a.hat.position.y = head_y + 0.36
 	a.hat_rest_y = a.hat.position.y
 	a.hat.rotation.z = d.tilt
-	a.part(a.cylinder(d.brim, float(d.brim) * 1.04, 0.11), Vector3.ZERO, Color(d.hat), a.hat)
+	a.part(a.curved_brim(float(d.brim), d.outfit in ["poncho", "patched", "ragged"]), Vector3.ZERO, Color(d.hat), a.hat)
 	a.part(a.cylinder(0.34, 0.43, d.crown), Vector3(0, float(d.crown) / 2, 0), Color(d.hat).lightened(0.08), a.hat)
 	a.part(a.cylinder(0.42, 0.44, 0.095), Vector3(0, 0.07, 0), accent, a.hat)
 	a.part(a.box(Vector3(0.12, 0.1, 0.04)), Vector3(0, 0.07, -0.44), Color("#f1cd69"), a.hat)
 	prop(a, d, head_y)
 	var arm_x: float = 0.44 * w
-	a.part(a.box(Vector3(0.24, 0.46, 0.25)), Vector3(-arm_x, 1.06 * h, 0), shirt)
+	a.part(a.cylinder(0.12, 0.13, 0.46), Vector3(-arm_x, 1.06 * h, 0), shirt)
 	a.part(a.sphere(0.15, 0.24), Vector3(-arm_x, 0.79 * h, -0.02), skin)
 	a.arm = Node3D.new()
 	a.rig.add_child(a.arm)
 	a.arm.position = Vector3(arm_x, 1.28 * h, 0)
-	a.part(a.box(Vector3(0.24, 0.46, 0.25)), Vector3(0, -0.22, 0), shirt, a.arm)
+	a.part(a.cylinder(0.12, 0.13, 0.46), Vector3(0, -0.22, 0), shirt, a.arm)
 	a.part(a.sphere(0.15, 0.24), Vector3(0, -0.49, 0), skin, a.arm)
 	a.gun = a.part(a.box(Vector3(0.13, 0.18, 0.38)), Vector3(0, -0.5, -0.18), Color("#6a7f89"), a.arm)
 	a.bottle = a.part(a.cylinder(0.065, 0.11, 0.34), Vector3(0, -0.55, -0.12), Color("#5aaf88"), a.arm)

@@ -12,7 +12,9 @@ Each room owns one instance of the existing GameManager script and one RoomBridg
 
 Client frames are WebSocket text JSON:
 
-    {"version":1,"type":"PLAY_CARD","payload":{"card_instance_id":123,"target_player_id":105}}
+    {"version":1,"type":"PLAY_CARD","intent_id":"unique-random-action-id","payload":{"card_instance_id":123,"target_player_id":105}}
+
+Authenticated gameplay intents require a unique nonempty `intent_id` (maximum 64 characters). Each session remembers its last 512 IDs, including across reconnect, and ignores repeated deliveries. CREATE_ROOM/JOIN_ROOM/RESUME_SESSION, PONG and LEAVE_ROOM do not require an intent ID. RoomClient supplies IDs automatically.
 
 Handshake: CREATE_ROOM {player_name}, JOIN_ROOM {player_name,room_code}, RESUME_SESSION {session_token}. Reply: ROOM_CREATED, JOIN_ACCEPTED or SESSION_RESUMED with {player_id,room_code,host_player_id,session_token}. Only the admitted connection gets the token.
 

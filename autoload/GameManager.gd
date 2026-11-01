@@ -320,6 +320,9 @@ func check_win() -> String:
 		winner = "SHERIFF TEAM WINS"
 	if not winner.is_empty():
 		turns.phase = "GAME_OVER"
+		for reserved in reactions.active.get("context", {}).get("cards", []):
+			deck.discard(reserved)
+			emit_event("CARD_DISCARDED", int(reactions.active.get("target_player_id", 0)), {"kind": "judgement_discard" if reactions.active.get("reaction_type", "") == "judge" else "discard", "card": reserved.duplicate(), "from_zone": "reserved"})
 		reactions.active = {}
 		flow.jobs.clear()
 		for card in flow.market:
@@ -346,7 +349,7 @@ func disconnect_player(id: int) -> void:
 			seat += 1
 	else:
 		players[id].is_connected = false
-		if turns.phase == "CHARACTER_SELECTION" and selection.options.has(id):
+		if turns.phase == "CHARACTER_SELECTION" and selection.options.has(id) and not selection.chosen.has(id):
 			selection.chosen[id] = selection.options[id].pick_random()
 		flow.cancel_for_disconnect(id)
 		if players[id].is_alive and winner.is_empty():

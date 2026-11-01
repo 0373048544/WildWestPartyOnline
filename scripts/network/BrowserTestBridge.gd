@@ -26,6 +26,16 @@ func _process(delta: float) -> void:
 		"selected": app.selected, "error": app.error_text, "size": {"x": app.root.size.x, "y": app.root.size.y},
 		"connected": not NetworkManager.connecting, "room": NetworkManager.room_client.room_code,
 		"client_registry_count": GameManager.players.size()}
+	snapshot["profile"] = {"fps": Performance.get_monitor(Performance.TIME_FPS),
+		"draw_calls": Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+		"primitives": Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),
+		"audio_players": AudioManager.pool.size() + AudioManager.world_pool.size() + AudioManager.loops.size(),
+		"presentation_queue": app.table.presentation_queue.size() if is_instance_valid(app.table) else 0,
+		"music_allowed": AudioManager.music_allowed, "music_playing": AudioManager.loops[1].playing, "quality": VisualSettings.level}
+	if is_instance_valid(app.table):
+		snapshot["targeting"] = {"guide": app.table.targeting.targeting_arrow.visible,
+			"reticle": app.table.targeting.reticle.visible, "style": app.table.targeting.target_style,
+			"hover": app.table.targeting.hovered_target}
 	var serialized := JSON.stringify(snapshot)
 	JavaScriptBridge.eval("window.__WWPO_TEST = JSON.parse(" + JSON.stringify(serialized) + ")")
 

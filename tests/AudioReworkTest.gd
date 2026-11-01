@@ -20,6 +20,8 @@ func _ready() -> void:
 	AudioManager.start_ambience()
 	check(AudioManager.music_allowed, "menu permits music")
 	var music: AudioStreamPlayer = AudioManager.loops[1]
+	var composition := AudioStreamWAV.load_from_file(AudioManager.manifest.piano[0])
+	check(composition.get_length() > 30, "original menu waltz has full 16-bar arrangement")
 	check(music.playing, "menu loop playing")
 	var preference: float = AudioManager.volumes.Music
 	for phase in ["TURN_START", "DRAW_PHASE", "ACTION_PHASE", "REACTION", "DISCARD_PHASE", "TURN_END"]:

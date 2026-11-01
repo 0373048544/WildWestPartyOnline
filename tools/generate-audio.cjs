@@ -8,15 +8,28 @@ groups.weapons.push('schofield','remington','carabine','winchester','ricochet');
 groups.ambience.push('wood_creak');
 groups.ui.push('duel_alert');
 const guns={bang:[95,34],schofield:[125,39],remington:[65,25],carabine:[165,45],winchester:[135,32],volcanic:[145,52],gatling:[110,40]};
+// Original 16-bar saloon waltz: fingerpicked accompaniment, bass and melody.
+// Used exclusively on screens where Music is allowed by AudioManager.
+function saloonWaltz(t){
+ const beat=60/92,bar=beat*3,b=Math.floor(t/bar)%16,local=t%bar;
+ const chords=[[50,57,62,65],[50,57,62,65],[55,59,62,67],[57,61,64,67],[53,57,60,65],[53,57,60,65],[52,55,60,64],[57,61,64,67],[50,57,62,65],[58,62,65,69],[55,59,62,67],[57,61,64,67],[53,57,60,65],[52,55,60,64],[57,61,64,67],[50,57,62,65]];
+ const melody=[[74,77,76,74,69,0],[72,74,77,0,76,74],[71,74,79,78,74,71],[73,76,81,0,79,76],[77,81,79,77,72,0],[76,77,81,0,79,77],[76,79,84,83,79,76],[73,76,79,0,76,73],[74,77,81,79,77,74],[77,82,81,77,74,0],[79,78,74,71,74,0],[76,81,79,76,73,0],[77,76,72,69,72,77],[76,79,72,0,71,72],[73,76,79,76,73,69],[74,0,69,0,62,0]];
+ const hz=m=>440*2**((m-69)/12);
+ const pluck=(m,a,decay=5)=>a<0||a>2?0:(Math.sin(2*Math.PI*hz(m)*a)+.28*Math.sin(2*Math.PI*hz(m)*2.003*a)+.1*Math.sin(2*Math.PI*hz(m)*3*a))*Math.exp(-a*decay)*Math.min(1,a*250);
+ let value=0;for(let k=0;k<6;k++){const a=local-k*beat/2;const note=melody[b][k];if(note)value+=pluck(note,a,4.8)*.13;value+=pluck(chords[b][1+k%3],a-.012,7)*.045;}
+ value+=pluck(chords[b][0]-12,local,3.8)*.19;value+=pluck(chords[b][0]-5,local-1.5*beat,4)*.12;
+ return value;
+}
 function synth(name,variant){
  const long=['saloon','piano'].includes(name),sting=['start','sheriff_win','outlaw_win','renegade_win'].includes(name);
- const duration=long?8:name==='fuse'?2.5:name==='explosion'?1.2:sting?1.35:name==='gatling'?.65: guns[name]?.42:name==='wood_creak'?.7:.28;
+ const duration=name==='piano'?16*3*60/92:long?8:name==='fuse'?2.5:name==='explosion'?1.2:sting?1.35:name==='gatling'?.65: guns[name]?.42:name==='wood_creak'?.7:.28;
  const n=Math.floor(duration*rate),pcm=Buffer.alloc(n*2);let low=0;
  for(let i=0;i<n;i++){
   const t=i/rate,u=t/duration,r=noise();low=low*.91+r*.09;let v=0;
   const tone=(f)=>Math.sin(2*Math.PI*f*t),env=Math.min(1,t*250)*Math.pow(1-u,3);
   if(name==='saloon')v=low*(.20+.08*Math.sin(2*Math.PI*t/8))*(.8+.2*Math.cos(2*Math.PI*t/4));
-  else if(name==='piano'||sting){const notes=name==='renegade_win'?[220,261.63,329.63,246.94]:name==='outlaw_win'?[196,246.94,293.66,392]:[261.63,329.63,392,523.25];const beat=name==='piano'?.5:.24;const a=t%beat;const f=notes[Math.floor(t/beat)%4]*(1+variant*.002);v=(Math.sin(2*Math.PI*f*a)+.35*Math.sin(2*Math.PI*f*2.002*a)+.12*Math.sin(2*Math.PI*f*3*a))*Math.exp(-a*10)*Math.min(1,a*200)*.34*Math.min(1,(duration-t)*10);}
+  else if(name==='piano')v=(saloonWaltz(t)+saloonWaltz((t+duration-.13)%duration)*.13)*Math.min(1,t*8,(duration-t)*8);
+  else if(sting){const notes=name==='renegade_win'?[220,261.63,329.63,246.94]:name==='outlaw_win'?[196,246.94,293.66,392]:[261.63,329.63,392,523.25];const beat=.24;const a=t%beat;const f=notes[Math.floor(t/beat)%4]*(1+variant*.002);v=(Math.sin(2*Math.PI*f*a)+.35*Math.sin(2*Math.PI*f*2.002*a)+.12*Math.sin(2*Math.PI*f*3*a))*Math.exp(-a*10)*Math.min(1,a*200)*.34*Math.min(1,(duration-t)*10);}
   else if(guns[name]){const a=name==='gatling'?t%.095:t,[f,decay]=guns[name];const blast=(r*.95+low*1.8+Math.sin(2*Math.PI*(f+variant*3)*a)*.55)*Math.exp(-a*decay)*Math.min(1,a*2400);const reflection=a>.055?(low*.8+r*.14)*Math.exp(-(a-.055)*20):0;const metal=Math.sin(2*Math.PI*(1700+variant*130)*a)*Math.exp(-a*90)*.14;v=(blast+reflection+metal)*Math.min(1,(duration-t)*40);}
   else if(name==='explosion'){v=(low*3.2+tone(42+variant*4)*.7+r*.3)*Math.exp(-t*5)*Math.min(1,t*1600)+r*.18*Math.exp(-Math.abs(t-.19)*17);}
   else if(name==='ricochet')v=(Math.sin(2*Math.PI*(2100*t-1700*t*t))*.35+r*.1)*env;

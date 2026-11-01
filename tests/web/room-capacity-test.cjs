@@ -3,7 +3,7 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const clients=[];
 async function connect(){
   const c={messages:[],state:null,session:null,ws:new WebSocket(process.env.WWPO_TEST_URL || 'ws://127.0.0.1:7000')};
-  c.send=(type,payload={})=>c.ws.send(JSON.stringify({type,payload,version:1}));
+  c.send=(type,payload={})=>c.ws.send(JSON.stringify({type,payload,version:1,intent_id:crypto.randomUUID()}));
   c.ws.addEventListener('message',e=>{
     const m=JSON.parse(e.data);c.messages.push(m);
     if(m.type==='STATE')c.state=m.payload;

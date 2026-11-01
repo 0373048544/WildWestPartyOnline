@@ -16,9 +16,11 @@ var character_id: String = ""
 var visual_preset: Dictionary = {}
 var eyes: Array = []
 var brows: Array = []
+var mouth: Node3D
 var expression: String = "idle"
 var expression_until: int = 0
 var hat_rest_y: float = 2.08
+var target_dimmed: bool = false
 var idle_phase: float = 0
 static var mesh_cache: Dictionary = {}
 
@@ -58,6 +60,9 @@ func set_expression(value: String, duration: int = 600) -> void:
 		eyes[index].scale.y = 0.25 if value in ["hit", "death"] else (1.35 if value in ["dodge", "panic", "targeted"] else 1.0)
 	for index in range(brows.size()):
 		brows[index].rotation.z = (-1 if index == 0 else 1) * (0.4 if value == "shoot" else (-0.3 if value in ["dodge", "targeted"] else 0.14))
+	if is_instance_valid(mouth):
+		mouth.scale = Vector3(1.3, 2.8, 1) if value in ["panic", "dodge"] else (Vector3(1.4, 0.7, 1) if value == "drink" else Vector3.ONE)
+		mouth.rotation.z = 0.24 if value == "death" else 0.0
 
 func part(mesh: Mesh, at: Vector3, color: Color, parent: Node3D = null) -> MeshInstance3D:
 	var node := MeshInstance3D.new()
@@ -105,6 +110,30 @@ func sphere(radius: float, height: float) -> SphereMesh:
 	mesh.height = height
 	mesh.radial_segments = 12
 	mesh.rings = 6
+	mesh_cache[key] = mesh
+	return mesh
+
+func curved_brim(radius: float, floppy: bool) -> ArrayMesh:
+	var key := "brim:%s:%s" % [radius, floppy]
+	if mesh_cache.has(key):
+		return mesh_cache[key]
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for index in range(16):
+		var top: Array = []
+		var bottom: Array = []
+		for step in [index, index + 1]:
+			var angle: float = step * TAU / 16
+			var bend: float = sin(angle * 3) * 0.045 if floppy else pow(absf(cos(angle)), 4) * 0.13
+			for r in [radius * 0.36, radius]:
+				var y: float = bend if r == radius else 0.0
+				top.append(Vector3(cos(angle) * r, y + 0.045, sin(angle) * r * 0.9))
+				bottom.append(Vector3(cos(angle) * r, y - 0.045, sin(angle) * r * 0.9))
+		for triangle in [[top[0], top[2], top[3]], [top[0], top[3], top[1]], [bottom[0], bottom[3], bottom[2]], [bottom[0], bottom[1], bottom[3]], [top[1], top[3], bottom[3]], [top[1], bottom[3], bottom[1]]]:
+			for vertex in triangle:
+				surface.add_vertex(vertex)
+	surface.generate_normals()
+	var mesh := surface.commit()
 	mesh_cache[key] = mesh
 	return mesh
 
@@ -160,8 +189,14 @@ func build(color: Color) -> void:
 	picking_area.add_child(collision)
 
 func set_target_state(dimmed: bool) -> void:
+	target_dimmed = dimmed
 	for color in materials:
 		materials[color].albedo_color = Color(color).darkened(0.48) if dimmed else color
+
+func set_hover_state(value: bool) -> void:
+	for color in materials:
+		var base: Color = Color(color).darkened(0.48) if target_dimmed else color
+		materials[color].albedo_color = base.lightened(0.12) if value else base
 
 func _process(_delta: float) -> void:
 	if rig == null or dead:

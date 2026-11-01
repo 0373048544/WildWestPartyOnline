@@ -14,10 +14,21 @@ var target_info: Dictionary = {}
 var targeting_arrow: TargetingArrow
 var tooltip: Label3D
 var blocked: bool = false
+var target_style: String = "BANG"
+var reticle: Node3D
+var info_hover: int = 0
+var hover_since: int = 0
+
+func _process(_delta: float) -> void:
+	if not blocked and selected_card < 0 and info_hover > 0 and hover_since > 0 and Time.get_ticks_msec() - hover_since > 450:
+		hover_since = 0
+		table.show_context(info_hover)
 
 func _ready() -> void:
 	targeting_arrow = TargetingArrow.new()
 	table.add_child(targeting_arrow)
+	reticle = load("res://scripts/ui/TargetReticle3D.gd").new()
+	table.add_child(reticle)
 	tooltip = Label3D.new()
 	tooltip.font_size = 30
 	tooltip.pixel_size = 0.006
@@ -27,42 +38,82 @@ func _ready() -> void:
 	table.add_child(tooltip)
 	tooltip.visible = false
 
-func begin_targeting(uid: int, owner_id: int, targets: Array, info: Dictionary) -> void:
+func begin_targeting(uid: int, owner_id: int, targets: Array, info: Dictionary, style: String = "BANG") -> void:
+	var new_card: bool = selected_card != uid
 	selected_card = uid
+	target_style = style
 	local_player = owner_id
 	valid_target_ids = targets.duplicate()
 	target_info = info
 	if not table.avatars.has(local_player) or targets.is_empty():
 		cancel_targeting(false)
 		return
-	if not targets.has(hovered_target):
-		hovered_target = int(targets[0])
-	update_hover_target(hovered_target)
+	if new_card:
+		table.hide_context()
+		info_hover = 0
+		hover_since = 0
+		if targeting_arrow.guide_motion:
+			targeting_arrow.guide_motion.kill()
+		hovered_target = 0
+		selected_target = 0
+		targeting_arrow.visible = false
+		reticle.visible = false
+		tooltip.visible = false
+	elif hovered_target > 0:
+		update_hover_target(hovered_target)
 
 func cancel_targeting(emit_event: bool = true) -> void:
+	Input.set_default_cursor_shape(Input.CURSOR_ARROW)
+	if targeting_arrow.guide_motion:
+		targeting_arrow.guide_motion.kill()
 	selected_card = -1
+	for id in table.nameplates:
+		table.nameplates[id].hovered = false
+		table.avatars[id].set_hover_state(false)
 	valid_target_ids.clear()
 	hovered_target = 0
 	selected_target = 0
 	targeting_arrow.visible = false
+	reticle.visible = false
 	tooltip.visible = false
 	if emit_event:
 		cancelled.emit()
 
 func update_hover_target(id: int) -> void:
 	if selected_card < 0 or not table.avatars.has(id) or id == local_player:
+		if targeting_arrow.guide_motion:
+			targeting_arrow.guide_motion.kill()
+		hovered_target = 0
+		for player_id in table.nameplates:
+			table.nameplates[player_id].hovered = false
+			table.avatars[player_id].set_hover_state(false)
+		targeting_arrow.visible = false
+		reticle.visible = false
+		tooltip.visible = false
 		return
 	hovered_target = id
+	for player_id in table.nameplates:
+		table.nameplates[player_id].hovered = player_id == id
+		table.avatars[player_id].set_hover_state(player_id == id)
 	var valid: bool = valid_target_ids.has(id)
 	var from: Vector3 = table.avatars[local_player].global_position + Vector3(0, 1.45, 0)
 	var to: Vector3 = table.avatars[id].global_position + Vector3(0, 1.5, 0)
-	targeting_arrow.aim(from, to, valid)
+	targeting_arrow.double_ended = target_style == "DUEL"
+	targeting_arrow.aim_smooth(from, to, valid)
+	reticle.lock(to, target_style, valid)
+	Input.set_default_cursor_shape(Input.CURSOR_CROSS if valid else Input.CURSOR_FORBIDDEN)
 	var info: Dictionary = target_info.get(id, {})
-	tooltip.text = "%s\nKhoảng cách: %d • Tầm súng: %d\n%s" % [
-		table.player_names.get(id, ""), info.get("distance", 0), info.get("range", 1),
-		"Có thể chọn" if valid else "Không hợp lệ / ngoài tầm"]
+	var distance_text: String = "Khoảng cách: %d" % info.get("distance", 0)
+	if target_style == "BANG":
+		distance_text += " • Tầm súng: %d" % info.get("range", 1)
+	elif target_style == "STEAL":
+		distance_text += " • Tầm cướp: 1"
+	tooltip.text = "%s\n%s\n%s" % [
+		table.player_names.get(id, ""), distance_text,
+		"Có thể chọn" if valid else ("NGOÀI TẦM" if target_style in ["BANG", "STEAL"] else ("Không thể giam Cảnh sát trưởng" if target_style == "JAIL" and table.player_rows[id].public_role == "SHERIFF" else "Không hợp lệ"))]
 	tooltip.modulate = Color("#ffe0a0") if valid else Color("#da9a8a")
-	tooltip.position = to + Vector3(0, 1.35, 0)
+	tooltip.position = to + Vector3(0, -1.0, 0)
+	tooltip.scale = Vector3.ONE * table.nameplates[id].scale.x
 	tooltip.visible = true
 
 func select_target(id: int) -> void:
@@ -74,7 +125,9 @@ func select_target(id: int) -> void:
 
 func confirm_target() -> void:
 	if valid_target_ids.has(selected_target):
-		target_chosen.emit(selected_target)
+		var chosen: int = selected_target
+		cancel_targeting(false)
+		target_chosen.emit(chosen)
 
 func pick_at(screen_position: Vector2) -> int:
 	if not is_instance_valid(table.camera):
@@ -100,6 +153,22 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		if selected_card >= 0:
 			update_hover_target(pick_at(event.position))
+		else:
+			var id := pick_at(event.position)
+			if id != info_hover:
+				if table.avatars.has(info_hover):
+					table.avatars[info_hover].set_hover_state(false)
+				if table.nameplates.has(info_hover):
+					table.nameplates[info_hover].hovered = false
+				info_hover = id
+				hover_since = Time.get_ticks_msec() if id > 0 else 0
+				if table.nameplates.has(id):
+					table.nameplates[id].hovered = true
+				if table.avatars.has(id):
+					table.avatars[id].set_hover_state(true)
+				if id == 0:
+					table.hide_context()
+			Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND if id > 0 else Input.CURSOR_ARROW)
 	elif selected_card >= 0 and event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
 		cancel_targeting()
 		get_viewport().set_input_as_handled()
@@ -108,9 +177,20 @@ func _unhandled_input(event: InputEvent) -> void:
 	if blocked:
 		return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		interact(event.position)
+		if event.device != InputEvent.DEVICE_ID_EMULATION:
+			interact(event.position)
 	elif event is InputEventScreenTouch and event.pressed:
-		interact(event.position)
+		if selected_card >= 0:
+			var id := pick_at(event.position)
+			if id == selected_target and valid_target_ids.has(id):
+				confirm_target()
+			else:
+				selected_target = id
+				update_hover_target(id)
+				if valid_target_ids.has(id):
+					tooltip.text += "\nChạm lần nữa để xác nhận"
+		else:
+			interact(event.position)
 
 func interact(at: Vector2) -> void:
 	if selected_card >= 0:

@@ -7,6 +7,8 @@ var title: Label3D
 var token: Dictionary = {}
 var enabled: bool = false
 var corner_label: Label3D
+static var material_cache: Dictionary = {}
+static var mesh_cache: Dictionary = {}
 
 func set_face(card: Dictionary) -> void:
 	if not is_instance_valid(corner_label):
@@ -23,17 +25,23 @@ func set_face(card: Dictionary) -> void:
 func mesh(mesh_data: Mesh, at: Vector3, color: Color) -> MeshInstance3D:
 	var item := MeshInstance3D.new()
 	item.mesh = mesh_data
-	var material := StandardMaterial3D.new()
-	material.albedo_color = color
-	material.roughness = 0.8
-	item.material_override = material
+	if not material_cache.has(color):
+		var material := StandardMaterial3D.new()
+		material.albedo_color = color
+		material.roughness = 0.8
+		material_cache[color] = material
+	item.material_override = material_cache[color]
 	add_child(item)
 	item.position = at
 	return item
 
 func box(size: Vector3, at: Vector3, color: Color) -> MeshInstance3D:
+	var key := str(size)
+	if mesh_cache.has(key):
+		return mesh(mesh_cache[key], at, color)
 	var data := BoxMesh.new()
 	data.size = size
+	mesh_cache[key] = data
 	return mesh(data, at, color)
 
 func cylinder(radius: float, height: float, at: Vector3, color: Color) -> void:
@@ -47,6 +55,8 @@ func cylinder(radius: float, height: float, at: Vector3, color: Color) -> void:
 func configure(kind: String, data: Dictionary, metadata: Dictionary) -> void:
 	token = metadata
 	var frame := box(Vector3(0.64, 0.045, 0.88), Vector3.ZERO, Color("#815c3f"))
+	# Only the selection frame changes color; faces/props share immutable materials.
+	frame.material_override = frame.material_override.duplicate()
 	frame_material = frame.material_override
 	box(Vector3(0.58, 0.025, 0.82), Vector3(0, 0.04, 0), Color("#e5d1a5") if kind != "hand" else Color("#654951"))
 	title = Label3D.new()
