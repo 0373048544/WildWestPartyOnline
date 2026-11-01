@@ -1,0 +1,87 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/ReactionBanner.gd" id="1_banner"]
+[ext_resource type="Script" path="res://scripts/ui/WesternButton.gd" id="2_button"]
+
+[node name="ReactionBanner" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("1_banner")
+
+[node name="Banner" type="Panel" parent="."]
+offset_left = 420.0
+offset_top = 58.0
+offset_right = 1020.0
+offset_bottom = 196.0
+mouse_filter = 1
+
+[node name="Content" type="VBoxContainer" parent="Banner"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 18.0
+offset_top = 10.0
+offset_right = -18.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 5
+
+[node name="TitleRow" type="HBoxContainer" parent="Banner/Content"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="Label" parent="Banner/Content/TitleRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.905882, 0.721569, 0.427451, 1)
+theme_override_font_sizes/font_size = 24
+text = "✦"
+vertical_alignment = 1
+
+[node name="Title" type="Label" parent="Banner/Content/TitleRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.984314, 0.894118, 0.741176, 1)
+theme_override_font_sizes/font_size = 21
+text = "Văn Thắng đang bắn bạn!"
+text_overrun_behavior = 3
+
+[node name="Countdown" type="Label" parent="Banner/Content/TitleRow"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.905882, 0.721569, 0.427451, 1)
+theme_override_font_sizes/font_size = 14
+text = "8.0 s"
+vertical_alignment = 1
+
+[node name="Detail" type="Label" parent="Banner/Content"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.831373, 0.788235, 0.690196, 1)
+theme_override_font_sizes/font_size = 14
+text = "Dùng NÉ hoặc chịu 1 sát thương"
+horizontal_alignment = 1
+autowrap_mode = 2
+max_lines_visible = 2
+
+[node name="Actions" type="HBoxContainer" parent="Banner/Content"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Primary" type="Button" parent="Banner/Content/Actions"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "DÙNG NÉ"
+script = ExtResource("2_button")
+
+[node name="Skip" type="Button" parent="Banner/Content/Actions"]
+custom_minimum_size = Vector2(0, 40)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "BỎ QUA"
+script = ExtResource("2_button")

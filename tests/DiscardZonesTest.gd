@@ -80,6 +80,8 @@ func _ready() -> void:
 			var shot := give(1, "shoot")
 			GameManager.resolver.play(GameManager, 1, shot.instance_id, 2)
 			check(not events.any(func(e): return e.get("kind") == "judge"), "removed physical Barrel never judges")
+			check(GameManager.reactions.active.get("reaction_type", "") == "dodge" and GameManager.reactions.active.get("allowed_card_types", []).is_empty(), "undefended BANG still exposes the compact skip reaction")
+			GameManager.resolve_reaction(false)
 			check(GameManager.players[2].current_hp == 3, "undefended BANG hits")
 		else:
 			events.clear()

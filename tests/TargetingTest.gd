@@ -109,7 +109,10 @@ func _ready() -> void:
 	check(not GameManager.find_card(1, shot.instance_id).is_empty() and controller.reticle.visible, "first touch previews target without consuming card")
 	Input.parse_input_event(touch.duplicate())
 	await settle()
-	check(GameManager.find_card(1, shot.instance_id).is_empty() and GameManager.players[2].current_hp == 3, "second touch confirms Shoot")
+	check(GameManager.find_card(1, shot.instance_id).is_empty() and GameManager.reactions.active.get("reaction_type", "") == "dodge", "second touch confirms Shoot and opens the no-card reaction banner")
+	GameManager.resolve_reaction(false)
+	GameManager.publish()
+	check(GameManager.players[2].current_hp == 3, "skipping the no-card reaction applies one damage")
 	GameManager.begin_turn(1)
 	shot = give(1, "shoot")
 	GameManager.players[1].weapon = {}

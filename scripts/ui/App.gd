@@ -30,6 +30,7 @@ var hud_match: int = -1
 var character_draft: String = ""
 var layout_refresh_queued: bool = false
 var personal_toasts: Control
+var reaction_banner: Control
 
 func _ready() -> void:
 	add_child(load("res://scripts/ui/WebLayout.gd").new())
@@ -41,6 +42,8 @@ func _ready() -> void:
 	root.theme = theme
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	canvas.add_child(root)
+	reaction_banner = load("res://scenes/ui/ReactionBanner.tscn").instantiate()
+	canvas.add_child(reaction_banner)
 	personal_toasts = load("res://scripts/ui/PersonalEventToast.gd").new()
 	canvas.add_child(personal_toasts)
 	root.resized.connect(func():
@@ -55,7 +58,8 @@ func _ready() -> void:
 	NetworkManager.table_event.connect(func(event):
 		if is_instance_valid(table):
 			table.presentation(event)
-		if is_instance_valid(personal_toasts):
+		var is_local_bang: bool = str(event.get("kind", "")) == "bang" and int(event.get("target", 0)) == local_id()
+		if is_instance_valid(personal_toasts) and not is_local_bang:
 			personal_toasts.consume_event(event, local_id(), NetworkManager.public_state))
 	refresh()
 	if OS.has_feature("web") and OS.is_debug_build() and bool(JavaScriptBridge.eval("new URLSearchParams(location.search).get('e2e') === '1'")):
@@ -129,6 +133,8 @@ func refresh() -> void:
 	elif not in_game and is_instance_valid(table):
 		table.free()
 		table = null
+	if not in_game and is_instance_valid(reaction_banner):
+		reaction_banner.hide_banner()
 	var backdrop: Control
 	if in_game and hud_match != int(state.match_id):
 		hud_match = state.match_id
@@ -266,14 +272,16 @@ func leave() -> void:
 	sid_cards.clear()
 	if is_instance_valid(personal_toasts):
 		personal_toasts.reset_for_match(-1)
+	if is_instance_valid(reaction_banner):
+		reaction_banner.hide_banner()
 	NetworkManager.leave()
 
 func build_game(state: Dictionary) -> void:
 	var own: Dictionary = NetworkManager.private_state
 	if own.get("match_id", state.match_id) != state.match_id:
 		own = {}
-	if is_instance_valid(personal_toasts):
-		personal_toasts.consume_reaction(own.get("reaction", {}), state)
+	if is_instance_valid(reaction_banner):
+		reaction_banner.present(self, own.get("reaction", {}), state)
 	match_hud = load("res://scripts/ui/MatchHUD.gd").new()
 	root.add_child(match_hud)
 	match_hud.initialize(self, state, own)

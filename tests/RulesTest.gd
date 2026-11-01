@@ -212,6 +212,8 @@ func test_shoot() -> void:
 		respond(false)
 	check(not p[1].shoot_used_this_turn, "new turn resets Shoot")
 	GameManager.resolver.play(GameManager, 1, again.instance_id, 2)
+	check(GameManager.reactions.active.reaction_type == "dodge" and GameManager.reactions.active.payload.allowed_cards.is_empty(), "Shoot without Dodge still offers skippable reaction")
+	respond(false)
 	check(p[2].current_hp == 3, "Shoot deals one")
 	for exception in ["volcanic", "unlimited_shoot"]:
 		setup()
@@ -220,7 +222,9 @@ func test_shoot() -> void:
 		else:
 			GameManager.players[1].ability_id = exception
 		play(1, "shoot", 2)
+		respond(false)
 		play(1, "shoot", 2)
+		respond(false)
 		check(GameManager.players[2].current_hp == 2, exception + " unlimited Shoot")
 	setup()
 	GameManager.players[1].ability_id = "convert"
@@ -404,6 +408,7 @@ func test_cards() -> void:
 	play(1, "gatling")
 	check(GameManager.reactions.active.required_count == 1, "Slab does not amplify Gatling")
 	respond()
+	respond(false)
 	check(not GameManager.players[1].shoot_used_this_turn and GameManager.players[3].current_hp == 3, "Gatling hits all others without Shoot limit")
 	setup()
 	GameManager.players[2].ability_id = "convert"

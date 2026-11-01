@@ -66,9 +66,6 @@ func attack(job: Dictionary) -> void:
 		judge(target, "barrel", job)
 		return
 	var cards: Array = game.abilities.response_cards(game, target, "dodge")
-	if cards.is_empty():
-		push({"kind": "damage", "target": target, "source": job.source, "amount": 1}, true)
-		return
 	prompt(target, "dodge", job, {"title": "BẠN ĐANG BỊ BẮN! • NÉ %d/%d" % [int(job.total_required) - required, int(job.total_required)],
 		"allowed_cards": cards.map(func(c): return c.instance_id), "allowed_actions": ["card", "pass"]})
 

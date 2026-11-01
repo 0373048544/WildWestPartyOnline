@@ -95,7 +95,12 @@ const TEXT: Dictionary = {
 	"server did not admit this player": "Chủ phòng không chấp nhận người chơi này",
 	"Lobby full": "Phòng đã đầy", "Invalid name": "Tên người chơi không hợp lệ",
 	"Duplicate player": "Người chơi đã tồn tại", "Registration timeout": "Hết thời gian kết nối",
-	"Waiting for players...": "Đang chờ người chơi..."
+	"Waiting for players...": "Đang chờ người chơi...",
+	"%s is shooting you!": "%s đang bắn bạn!", "Use DODGE or take 1 damage": "Dùng NÉ hoặc chịu 1 sát thương",
+	"USE DODGE": "DÙNG NÉ", "SKIP REACTION": "BỎ QUA", "No valid reaction card in hand.": "Bạn không có lá phản ứng hợp lệ.",
+	"%s challenges you to a Duel!": "%s thách đấu bạn!", "Use BANG! or take 1 damage": "Dùng BANG! hoặc chịu 1 sát thương",
+	"USE BANG": "DÙNG BANG!", "Indians attack!": "Thổ dân tấn công!",
+	"You are about to be eliminated!": "Bạn sắp bị loại!", "Use BEER to survive": "Dùng BIA để sống sót", "USE BEER": "DÙNG BIA"
 }
 
 static func text(source: String) -> String:

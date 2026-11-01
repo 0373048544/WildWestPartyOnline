@@ -133,6 +133,13 @@ func flash_hit() -> void:
 			backing.albedo_color = old_backing
 			label.modulate = old_label)
 
+func flash_target() -> void:
+	var old_backing: Color = backing.albedo_color
+	backing.albedo_color = Color("#7f3828")
+	var pulse := create_tween().set_trans(Tween.TRANS_QUAD)
+	pulse.tween_property(backing, "albedo_color", Color("#c45d3d"), 0.09)
+	pulse.tween_property(backing, "albedo_color", old_backing, 0.18)
+
 func place(camera: Camera3D, anchor: Vector3) -> Rect2:
 	global_position = anchor + Vector3.UP * base_height
 	global_basis = camera.global_basis

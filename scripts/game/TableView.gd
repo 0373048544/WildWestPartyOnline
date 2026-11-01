@@ -25,6 +25,8 @@ var duel_until: int = 0
 var presentation_queue: Array = []
 var presentation_wait: float = 0
 var seen_presentation: Dictionary = {}
+var reaction_source: int = 0
+var reaction_target: int = 0
 
 func _ready() -> void:
 	AudioManager.table = self
@@ -84,7 +86,7 @@ func turns_player() -> int:
 	return int(NetworkManager.public_state.get("current_player", 0))
 
 func layout_nameplates() -> void:
-	var key: String = str(camera.global_transform)+str(get_viewport().get_visible_rect())+str(built_match)
+	var key: String = str(camera.global_transform)+str(get_viewport().get_visible_rect())+str(built_match)+str(get_viewport().get_meta("reaction_banner_rect", Rect2()))
 	for plate in nameplates.values():
 		key += str(plate.get_instance_id())+str(plate.hovered)
 	if key == plate_layout_key:
@@ -98,6 +100,9 @@ func layout_nameplates() -> void:
 			return a.id == local_player
 		return a.rect.position.y < b.rect.position.y if not is_equal_approx(a.rect.position.y,b.rect.position.y) else a.rect.position.x < b.rect.position.x)
 	var occupied: Array[Rect2] = []
+	var banner_exclusion: Rect2 = get_viewport().get_meta("reaction_banner_rect", Rect2())
+	if banner_exclusion.has_area():
+		occupied.append(banner_exclusion)
 	var width: float = get_viewport().get_visible_rect().size.x
 	if load("res://scripts/ui/MatchLayout.gd").mobile(self):
 		var radius: float = load("res://scripts/ui/MatchLayout.gd").units(self,25)
@@ -110,7 +115,7 @@ func layout_nameplates() -> void:
 		var best: Rect2 = rect
 		var best_score: float = INF
 		for y in [0,-1,1,-2,2,-3,3,-4,4,-5,5,-6,6,-7,7,-8,8,-9,9,-10,10]:
-			for x in [0,-0.25,0.25,-0.5,0.5,-1,1]:
+			for x in [0,-0.25,0.25,-0.5,0.5,-1,1,-1.5,1.5,-2,2]:
 				var candidate := Rect2(rect.position+Vector2(x*(rect.size.x+6),y*18),rect.size)
 				candidate.position.x = clampf(candidate.position.x,8,maxf(8,width-rect.size.x-8))
 				if candidate.position.y < 58:
@@ -212,19 +217,52 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 			local_seat = p.seat_index
 	turn_marker.visible = avatars.has(int(state.current_player)) and state.winner.is_empty() and state.phase != "CHARACTER_SELECTION"
 	var local_angle: float = TAU * float(local_seat) / count
-	camera_goal = Vector3(sin(local_angle) * 9.1, 7.7, cos(local_angle) * 9.1)
-	if load("res://scripts/ui/MatchLayout.gd").portrait(self):
-		camera_goal = Vector3(sin(local_angle)*11.0,10.8,cos(local_angle)*11.0)
+	var match_layout: Script = load("res://scripts/ui/MatchLayout.gd")
+	var layout_mode: String = match_layout.mode(self)
+	var extra_seats: float = maxf(0.0, count - 4.0)
+	var camera_radius := 9.1
+	var camera_height := 7.7
+	camera.fov = 57.0
+	if layout_mode == match_layout.MOBILE_PORTRAIT:
+		camera_radius = 11.0 + extra_seats * 0.18
+		camera_height = 10.8 + extra_seats * 0.12
+		camera.fov = 59.0
 		camera.keep_aspect = Camera3D.KEEP_WIDTH
+		camera.v_offset = 0
+	elif layout_mode == match_layout.MOBILE_LANDSCAPE:
+		camera_radius = 9.4 + extra_seats * 0.12
+		camera_height = 7.9 + extra_seats * 0.08
+		camera.fov = 58.0
+		camera.keep_aspect = Camera3D.KEEP_HEIGHT
 		camera.v_offset = 0
 	else:
 		camera.keep_aspect = Camera3D.KEEP_HEIGHT
 		camera.v_offset = 0
+	camera_goal = Vector3(sin(local_angle) * camera_radius, camera_height, cos(local_angle) * camera_radius)
 	if camera.position == Vector3.ZERO:
 		camera.position = camera_goal
 	camera.look_at(Vector3(0,-1.1,0) if load("res://scripts/ui/MatchLayout.gd").portrait(self) else Vector3(0,1.0,0))
 	if context_player > 0:
 		show_context(context_player)
+
+func set_reaction_focus(source_id: int, target_id: int) -> void:
+	var changed := reaction_source != source_id or reaction_target != target_id
+	reaction_source = source_id
+	reaction_target = target_id
+	if source_id <= 0 or target_id <= 0:
+		return
+	for id in rings:
+		if id != source_id and id != target_id:
+			continue
+		rings[id].visible = true
+		rings[id].material_override.albedo_color = Color("#ffc56b") if id == source_id else Color("#ef765e")
+		rings[id].material_override.emission_enabled = true
+		rings[id].material_override.emission = rings[id].material_override.albedo_color
+	if changed:
+		if avatars.has(source_id):
+			avatars[source_id].set_expression("targeted", 650)
+		if nameplates.has(target_id):
+			nameplates[target_id].flash_target()
 
 func equipment_symbols(ids: Array) -> String:
 	var symbols := {"horse": "♞", "spyglass": "⌕", "barrel": "▣", "jail": "▥", "dynamite": "✹"}

@@ -25,6 +25,8 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 	if app.selected >= 0 and targets.is_empty():
 		app.selected = -1
 	app.table.update_state(state, app.local_id(), targets)
+	var reaction_source := int(request.get("source_player_id", 0))
+	app.table.set_reaction_focus(reaction_source, app.local_id() if reaction_source > 0 else 0)
 	app.table.objects.sync(state, app.local_id(), request)
 	if app.selected >= 0:
 		var selected_cards: Array = own.get("hand", []).filter(func(c): return c.instance_id == app.selected)
@@ -158,7 +160,7 @@ func build_hand() -> void:
 	elif app.sid_mode:
 		message = "SID · CHỌN 2 LÁ ĐỂ BỎ (%d/2)" % app.sid_cards.size()
 	elif not request.is_empty():
-		message = reaction_message(request)
+		message = "CHỌN LÁ PHẢN ỨNG ĐƯỢC TÔ SÁNG" if ["dodge", "duel", "indians", "survive"].has(request.reaction_type) else reaction_message(request)
 		if request.reaction_type == "transfer":
 			message = "CHẠM VÙNG TAY KÍN / TRANG BỊ ĐƯỢC ĐÁNH DẤU"
 		elif request.reaction_type == "store":
@@ -180,9 +182,6 @@ func build_hand() -> void:
 			footer, app.sid_cards.size() != 2).name = "SidConfirm"
 		action("HỦY", cancel_selection, footer)
 	elif not request.is_empty():
-		if ["dodge", "duel", "indians", "survive"].has(request.reaction_type):
-			action("CHỊU ĐÒN" if request.reaction_type != "survive" else "KHÔNG CỨU",
-				func(): app.intent("reaction", {"request": request.request_id, "accept": false}), footer).name = "TakeHit"
 		if request.reaction_type == "draw_steal" or request.reaction_type == "draw_discard":
 			# Deck/discard also accept the same choices directly through their table zones.
 			prompt.text = "CHỌN CHỒNG RÚT / CHỒNG BỎ" if request.reaction_type == "draw_discard" else "CHỌN CHỒNG RÚT HOẶC TAY BÀI ĐỐI THỦ"
@@ -272,23 +271,52 @@ func world_action(token: Dictionary) -> void:
 
 func show_preview(card: Dictionary) -> void:
 	close_preview()
-	preview = PanelContainer.new()
+	var mobile_preview: bool = layout.mobile(self)
+	preview = Panel.new() if mobile_preview else PanelContainer.new()
 	preview.name = "CardPreview"
 	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview.z_index = 950
+	preview.add_theme_stylebox_override("panel", SaloonTheme.panel(Color(0.055,0.075,0.075,0.98),SaloonTheme.GOLD,16))
 	add_child(preview)
 	var column := VBoxContainer.new()
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.add_child(column)
+	var font_scale: float = layout.units(self,1) if mobile_preview else 1.0
+	var preview_width: float = minf(layout.units(self,290),size.x-layout.units(self,24)) if mobile_preview else 290.0
+	if mobile_preview:
+		column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		var inner: float = layout.units(self,14)
+		column.offset_left = inner
+		column.offset_top = inner
+		column.offset_right = -inner
+		column.offset_bottom = -inner
 	var data: Dictionary = CardData.data(card.card_data_id)
-	text(data.name, 19, column).add_theme_color_override("font_color", SaloonTheme.GOLD)
-	text(CardInstance.corner(card), 22, column).add_theme_color_override("font_color", SaloonTheme.CREAM)
-	var description := text(data.description, 16, column)
-	description.custom_minimum_size.x = 260
+	text(data.name, int(19*font_scale), column).add_theme_color_override("font_color", SaloonTheme.GOLD)
+	text(CardInstance.corner(card), int(22*font_scale), column).add_theme_color_override("font_color", SaloonTheme.CREAM)
+	var description := text(data.description, int(16*font_scale), column)
+	description.custom_minimum_size.x = preview_width-layout.units(self,32) if mobile_preview else 260
 	var reason: String = str(own.get("disabled_reasons", {}).get(card.instance_id, ""))
 	if not reason.is_empty():
-		text(reason, 15, column).add_theme_color_override("font_color", Color("#ffb995"))
-	preview.position = Vector2(clampf(get_viewport().get_mouse_position().x - 130, 12, size.x - 304), size.y - 370)
-	preview.size.x = 290
+		text(reason, int(15*font_scale), column).add_theme_color_override("font_color", Color("#ffb995"))
+	if mobile_preview:
+		var safe: Vector4 = layout.safe_insets(self)
+		preview_width = minf(preview_width,size.x-safe.x-safe.z-layout.units(self,24))
+		var preview_height: float = layout.units(self,230)
+		var left: float = (size.x-preview_width)*0.5
+		var top: float = safe.y+layout.units(self,76)
+		preview.set_anchors_preset(Control.PRESET_TOP_LEFT,false)
+		preview.offset_left = left
+		preview.offset_top = top
+		preview.offset_right = left+preview_width
+		preview.offset_bottom = top+preview_height
+	else:
+		preview.position = Vector2(clampf(get_viewport().get_mouse_position().x - 130, 12, size.x - 304), size.y - 370)
+		preview.size.x = 290
+
+func _input(event: InputEvent) -> void:
+	# A long press opens the touch preview; the next tap anywhere closes it.
+	if is_instance_valid(preview) and event is InputEventScreenTouch and event.pressed:
+		close_preview()
 
 func reaction_message(active: Dictionary) -> String:
 	var actor := ""

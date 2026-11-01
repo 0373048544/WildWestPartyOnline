@@ -39,7 +39,7 @@ func _ready() -> void:
 		GameManager.players[1].hand.append(CardInstance.make(9100+index,"shoot","HEART",7))
 	GameManager.publish()
 	app.seen_role = GameManager.match_id
-	for css in [Vector2i(390,844),Vector2i(393,852),Vector2i(430,932),Vector2i(844,390),Vector2i(1920,1080)]:
+	for css in [Vector2i(360,800),Vector2i(390,844),Vector2i(393,852),Vector2i(412,915),Vector2i(430,932),Vector2i(844,390),Vector2i(932,430),Vector2i(1920,1080)]:
 		var compact: bool = css.x < 1000
 		get_window().size = css
 		var logical := Vector2i(600,int(600.0*css.y/css.x)) if css.y>css.x else (Vector2i(960,int(960.0*css.y/css.x)) if compact else Vector2i(1440,810))
@@ -54,7 +54,32 @@ func _ready() -> void:
 		app.refresh()
 		await settle()
 		check(LAYOUT.mobile(app)==compact,"viewport-based classification "+str(css))
+		var expected_mode := LAYOUT.DESKTOP if not compact else (LAYOUT.MOBILE_PORTRAIT if css.y>css.x else LAYOUT.MOBILE_LANDSCAPE)
+		check(LAYOUT.mode(app)==expected_mode,"explicit portrait/landscape/desktop mode "+str(css))
+		for avatar in app.table.avatars.values():
+			var avatar_center: Vector2 = app.table.camera.unproject_position(avatar.global_position+Vector3.UP*1.6)
+			check(avatar_center.x>=safe.x and avatar_center.x<=logical.x-safe.z and avatar_center.y>=safe.y and avatar_center.y<=logical.y-safe.w,"all seven player centers remain framed "+str(css))
 		var fan: Control = app.match_hud.hand
+		var reaction := {"request_id": 700+css.x, "reaction_type": "dodge", "source_player_id": 2,
+			"allowed_card_types": [9100], "remaining": 8.0}
+		app.reaction_banner.present(app,reaction,NetworkManager.public_state)
+		await get_tree().process_frame
+		var banner_panel: Control = app.reaction_banner.get_node("Banner")
+		var banner_rect: Rect2 = banner_panel.get_global_rect()
+		check(app.reaction_banner.visible and "Cao bồi 2" in app.reaction_banner.get_node("Banner/Content/TitleRow/Title").text,"reaction banner names attacker "+str(css))
+		check(not banner_rect.intersects(fan.get_global_rect()),"reaction banner never covers hand "+str(css))
+		for plate in app.table.nameplates.values():
+			check(not banner_rect.intersects(plate.screen_rect),"reaction banner clears player name/HP "+str(css)+" banner="+str(banner_rect)+" plate="+str(plate.screen_rect))
+		if compact:
+			check(banner_rect.position.y>=safe.y and banner_rect.end.y<logical.y*0.5,"mobile reaction banner stays in safe upper area")
+			check(app.reaction_banner.get_node("Banner/Content/Actions/Primary").size.y/sy>=44 and app.reaction_banner.get_node("Banner/Content/Actions/Skip").size.y/sy>=44,"mobile reaction buttons are at least 44 CSS pixels")
+			check(app.reaction_banner.get_node("Banner/Content/Detail").get_line_count()<=2,"reaction copy stays within two lines")
+			if css.y>css.x:
+				check(banner_rect.size.x/logical.x>=0.80 and banner_rect.size.x/logical.x<=0.92,"portrait reaction banner uses about 80-90 percent width")
+		app.reaction_banner.present(app,{"request_id": 900+css.x, "reaction_type": "dodge", "source_player_id": 2,
+			"allowed_card_types": [], "remaining": 8.0},NetworkManager.public_state)
+		check(app.reaction_banner.get_node("Banner/Content/Actions/Primary").disabled and not app.reaction_banner.get_node("Banner/Content/Actions/Skip").disabled,"no Dodge disables primary but leaves Skip")
+		app.reaction_banner.hide_banner()
 		if compact:
 			check(fan.clip_contents,"cards clipped at left/right safe bounds")
 			check(fan.global_position.x>=safe.x and fan.global_position.x+fan.size.x<=logical.x-safe.z,"hand respects side safe areas")
@@ -65,6 +90,17 @@ func _ready() -> void:
 			check(footer.size.y/sy>=36 and footer.size.y/sy<=44,"action bar is 36-44 CSS pixels high")
 			var first: Button = fan.cards[0]
 			check(first.size.x/sx>=140 and first.visual.get_node("CardDescription").get_theme_font_size("font_size")*first.visual.scale.y/sy>=12,"mobile card width and body text stay readable")
+			var visible_ratio: float = (fan.size.y-first.position.y)/first.size.y
+			check(visible_ratio>=0.40 and visible_ratio<=0.55,"resting hand reveals 40-55 percent of each card")
+			check(is_equal_approx(app.table.camera.fov,59.0 if css.y>css.x else 58.0),"mobile camera uses orientation-specific framing")
+			app.match_hud.show_preview(NetworkManager.private_state.hand[0])
+			var card_preview: Control = app.match_hud.preview
+			check(is_instance_valid(card_preview) and absf(card_preview.get_rect().get_center().x-logical.x*0.5)<2,"touch preview is centered instead of relying on hover position rect="+str(card_preview.get_rect()))
+			var close_touch := InputEventScreenTouch.new()
+			close_touch.pressed = true
+			close_touch.position = Vector2(logical.x*0.5,logical.y*0.5)
+			app.match_hud._input(close_touch)
+			check(not is_instance_valid(app.match_hud.preview),"tap outside closes touch preview")
 			fan.scroller.value = fan.scroller.max_value-fan.scroller.page
 			check(fan.cards.back().visible and not fan.cards[0].visible,"horizontal scroll reaches last card and hides offscreen cards")
 			fan.cards.back().pressed.emit()
@@ -86,7 +122,7 @@ func _ready() -> void:
 			var target: Vector2 = app.table.camera.unproject_position(app.table.avatars[id].global_position+Vector3.UP*1.6)
 			check(app.table.rings[id].visible,"valid target ring visible")
 			if compact:
-				var radius: float = LAYOUT.units(app,24)
+				var radius: float = LAYOUT.units(app,28)
 				var hit := Rect2(target-Vector2.ONE*radius,Vector2.ONE*radius*2)
 				check(not hit.intersects(fan.get_global_rect()) and not hit.intersects(app.match_hud.get_node("HandActions").get_global_rect()),"48px target hit area clear of hand and actions "+str(css)+":"+str(id))
 				check(controller.pick_touch_player(target+Vector2(radius*0.85,0))==id,"forgiving avatar touch "+str(css)+":"+str(id)+" got "+str(controller.pick_touch_player(target+Vector2(radius*0.85,0)))+" at "+str(target))
@@ -101,5 +137,5 @@ func _ready() -> void:
 	get_viewport().remove_meta("match_css_size")
 	get_viewport().remove_meta("match_safe_insets")
 	GameManager.clear()
-	print("PASS: %d safe-area, card clipping/readability, 48px target, orientation and desktop regression checks" % checks)
+	print("PASS: %d safe-area, card clipping/readability, 56px target, orientation and desktop regression checks" % checks)
 	get_tree().quit()

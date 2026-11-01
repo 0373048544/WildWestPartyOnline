@@ -1,9 +1,24 @@
 extends RefCounted
 
-static func mobile(node: Node) -> bool:
-	var logical: Vector2 = node.get_viewport().get_visible_rect().size
+const DESKTOP := "desktop"
+const MOBILE_PORTRAIT := "mobile_portrait"
+const MOBILE_LANDSCAPE := "mobile_landscape"
+
+static func mode(node: Node) -> String:
 	var css: Vector2 = css_size(node)
-	return logical.y > logical.x or css.x <= 600 or (css.x <= 1024 and css.y <= 600)
+	var is_mobile := css.x <= 600 or (css.x <= 1024 and css.y <= 600)
+	if not is_mobile:
+		return DESKTOP
+	return MOBILE_PORTRAIT if css.y >= css.x else MOBILE_LANDSCAPE
+
+static func mobile(node: Node) -> bool:
+	return mode(node) != DESKTOP
+
+static func mobile_portrait(node: Node) -> bool:
+	return mode(node) == MOBILE_PORTRAIT
+
+static func mobile_landscape(node: Node) -> bool:
+	return mode(node) == MOBILE_LANDSCAPE
 
 static func css_size(node: Node) -> Vector2:
 	return node.get_viewport().get_meta("match_css_size",Vector2(node.get_window().size))

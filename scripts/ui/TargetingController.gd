@@ -172,7 +172,8 @@ func pick_at(screen_position: Vector2) -> int:
 	return int(result.collider.get_meta("player_id", 0)) if not result.is_empty() else 0
 
 func pick_touch_player(at: Vector2) -> int:
-	var best: float = load("res://scripts/ui/MatchLayout.gd").units(self,26)
+	# A forgiving 56 CSS-pixel diameter around avatars and nameplates.
+	var best: float = load("res://scripts/ui/MatchLayout.gd").units(self,28)
 	var chosen: int = 0
 	# Nameplates are screen-space controls: resolve their full bounds before rays
 	# can hit a different model behind the visible panel.
@@ -276,11 +277,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		if selected_card >= 0:
 			var id := pick_touch_player(event.position)
 			if id == selected_target and valid_target_ids.has(id):
+				AudioManager.play_ui("confirm")
 				confirm_target()
 			else:
 				selected_target = id
 				update_hover_target(id)
 				if valid_target_ids.has(id):
+					AudioManager.play_ui("button")
+					if table.nameplates.has(id):
+						table.nameplates[id].flash_target()
 					tooltip.text += "\nChạm lần nữa để xác nhận"
 		else:
 			interact(event.position, true)
