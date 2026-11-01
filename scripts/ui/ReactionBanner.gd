@@ -126,15 +126,19 @@ func _apply_layout() -> void:
 	var mobile: bool = layout.mobile(self)
 	var short_landscape := mobile and size.x > size.y
 	var safe: Vector4 = layout.safe_insets(self) if mobile else Vector4.ZERO
-	var width: float = minf(layout.units(self, 480 if short_landscape else 540), size.x - safe.x - safe.z - layout.units(self, 20))
-	var height: float = layout.units(self, 122 if short_landscape else (150 if mobile else 138))
-	var top: float = safe.y + layout.units(self, 16 if short_landscape else (62 if mobile else 58))
+	var width: float = minf(layout.units(self, 420 if short_landscape else 540), size.x - safe.x - safe.z - layout.units(self, 20))
+	var height: float = layout.units(self, 108 if short_landscape else (150 if mobile else 138))
+	var top: float = safe.y + (
+		layout.get_mobile_banner_height(self) + layout.units(self, 4.0)
+		if short_landscape
+		else layout.units(self, 62 if mobile else 58)
+	)
 	primary_button.custom_minimum_size.y = layout.units(self, 44 if mobile else 40)
 	skip_button.custom_minimum_size.y = primary_button.custom_minimum_size.y
 	primary_button.add_theme_font_size_override("font_size", int(layout.units(self, 15)))
 	skip_button.add_theme_font_size_override("font_size", int(layout.units(self, 15)))
-	title_label.add_theme_font_size_override("font_size", int(layout.units(self, 20 if mobile else 21)))
-	detail_label.add_theme_font_size_override("font_size", int(layout.units(self, 14)))
+	title_label.add_theme_font_size_override("font_size", int(layout.units(self, 18 if short_landscape else (20 if mobile else 21))))
+	detail_label.add_theme_font_size_override("font_size", int(layout.units(self, 13 if short_landscape else 14)))
 	# Child minimum-size changes can resize a Container. Apply the final panel rect last.
 	var left := (size.x - width) * 0.5
 	banner.set_anchors_preset(Control.PRESET_TOP_LEFT, false)

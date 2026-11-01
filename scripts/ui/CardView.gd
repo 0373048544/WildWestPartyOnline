@@ -174,11 +174,11 @@ func touch_compact(width: float) -> void:
 	# least ~13 logical pixels even though the whole card becomes narrower.
 	visual.get_node("CardName").add_theme_font_size_override(
 		"font_size",
-		mini(26, maxi(19, int(round(15.0 / touch_scale))))
+		mini(36, maxi(19, int(round(15.0 / touch_scale))))
 	)
 	visual.get_node("CardDescription").add_theme_font_size_override(
 		"font_size",
-		mini(28, maxi(18, int(round(15.0 / touch_scale))))
+		mini(36, maxi(18, int(round(15.0 / touch_scale))))
 	)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 

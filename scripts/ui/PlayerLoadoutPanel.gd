@@ -4,8 +4,13 @@ signal card_inspected(card: Dictionary)
 
 var layout: Script = preload("res://scripts/ui/MatchLayout.gd")
 var signature: String = ""
-var title_label: Label
+var title_button: Button
+var details_scroll: ScrollContainer
 var items: HBoxContainer
+var expanded: bool = false
+var current_weapon_name: String = "Colt .45"
+var current_range: int = 1
+var current_equipment_count: int = 0
 
 func _ready() -> void:
 	name = "PlayerLoadoutPanel"
@@ -18,24 +23,26 @@ func _ready() -> void:
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 4)
 	add_child(column)
-	title_label = Label.new()
-	title_label.add_theme_font_size_override("font_size", 12)
-	title_label.add_theme_color_override("font_color", SaloonTheme.GOLD)
-	title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	column.add_child(title_label)
-	var scroll := ScrollContainer.new()
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.custom_minimum_size.y = 48
-	column.add_child(scroll)
+	title_button = Button.new()
+	title_button.add_theme_font_size_override("font_size", 12)
+	title_button.add_theme_color_override("font_color", SaloonTheme.GOLD)
+	title_button.custom_minimum_size.y = 36
+	title_button.tooltip_text = "Chạm để xem bài đang trang bị"
+	title_button.pressed.connect(_toggle_details)
+	column.add_child(title_button)
+	details_scroll = ScrollContainer.new()
+	details_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	details_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	details_scroll.custom_minimum_size.y = 48
+	column.add_child(details_scroll)
 	items = HBoxContainer.new()
 	items.add_theme_constant_override("separation", 5)
-	scroll.add_child(items)
+	details_scroll.add_child(items)
 
 func update_loadout(row: Dictionary) -> void:
 	var next_signature := JSON.stringify([
 		row.get("weapon_card", {}), row.get("equipment_cards", []),
-		row.get("weapon_range", 1), get_window().size
+		row.get("weapon_range", 1), layout.css_size(self), layout.mode(self)
 	])
 	if next_signature == signature:
 		return
@@ -44,11 +51,18 @@ func update_loadout(row: Dictionary) -> void:
 		child.queue_free()
 	var weapon: Dictionary = row.get("weapon_card", {})
 	var weapon_name := "Colt .45" if weapon.is_empty() else str(CardData.data(weapon.get("card_data_id", "")).get("name", "Colt .45"))
-	title_label.text = "BÀI TRÊN BÀN CỦA BẠN · TẦM %d" % int(row.get("weapon_range", 1))
+	current_weapon_name = weapon_name
+	current_range = int(row.get("weapon_range", 1))
+	current_equipment_count = row.get("equipment_cards", []).size()
 	_add_item(weapon_name, "♠", weapon, "Súng hiện tại · Tầm %d" % int(row.get("weapon_range", 1)))
 	for card in row.get("equipment_cards", []):
 		var data: Dictionary = CardData.data(card.get("card_data_id", ""))
 		_add_item(str(data.get("name", "")), _icon(str(card.get("card_data_id", ""))), card, str(data.get("description", "")))
+	_apply_layout()
+
+func _toggle_details() -> void:
+	expanded = not expanded
+	AudioManager.play_ui("button")
 	_apply_layout()
 
 func _add_item(label_text: String, icon: String, card: Dictionary, detail: String) -> void:
@@ -73,11 +87,31 @@ func _icon(card_id: String) -> String:
 
 func _apply_layout() -> void:
 	var mobile: bool = bool(layout.mobile(self))
+	var compact: bool = bool(layout.get_equipment_compact_mode(self))
 	var safe: Vector4 = layout.safe_insets(self) if mobile else Vector4.ZERO
-	var width := minf(layout.units(self, 260.0) if mobile else 280.0, get_viewport_rect().size.x * (0.52 if mobile else 0.28))
+	var width: float
+	if compact:
+		width = minf(layout.units(self, 180.0), get_viewport_rect().size.x * 0.28)
+	else:
+		width = minf(layout.units(self, 260.0) if mobile else 280.0, get_viewport_rect().size.x * (0.52 if mobile else 0.28))
 	custom_minimum_size.x = width
+	title_button.text = (
+		"♠ %s · T%d%s" % [current_weapon_name.left(9), current_range, " · +%d" % current_equipment_count if current_equipment_count > 0 else ""]
+		if compact
+		else "BÀI TRÊN BÀN CỦA BẠN · TẦM %d" % current_range
+	)
+	title_button.custom_minimum_size.y = layout.units(self, 34.0) if compact else 36.0
+	details_scroll.visible = not compact or expanded
 	set_anchors_preset(Control.PRESET_TOP_LEFT, false)
 	var viewport_size := get_viewport_rect().size
-	var middle_y := maxf(safe.y + layout.units(self, 66.0), viewport_size.y * (0.52 if mobile else 0.58))
-	position = Vector2(viewport_size.x - safe.z - width - layout.units(self, 10.0), middle_y)
+	var panel_height: float = float(layout.units(self, 92.0 if details_scroll.visible else 38.0))
+	var y: float
+	if compact:
+		y = viewport_size.y - safe.w - layout.hand_height(self) - layout.action_height(self) - panel_height - layout.units(self, 6.0)
+	else:
+		y = maxf(safe.y + layout.units(self, 66.0), viewport_size.y * (0.52 if mobile else 0.58))
+	position = Vector2(
+		viewport_size.x - safe.z - width - layout.units(self, 8.0 if compact else 10.0),
+		maxf(safe.y + layout.get_mobile_banner_height(self), y) if mobile else y
+	)
 	visible = true

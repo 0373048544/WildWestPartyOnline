@@ -14,6 +14,7 @@ var heading: Label
 var subtitle: Label
 var table_row: HBoxContainer
 var hand_row: HBoxContainer
+var section_scrolls: Array[ScrollContainer] = []
 var cancel_button: Button
 var locked: bool = false
 var content_signature: String = ""
@@ -59,6 +60,7 @@ func _build_section(title: String, face_up: bool) -> void:
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.custom_minimum_size.y = 62
 	column.add_child(scroll)
+	section_scrolls.append(scroll)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	row.mouse_filter = Control.MOUSE_FILTER_PASS
@@ -165,8 +167,12 @@ func _rebuild_hand_cards(count: int) -> void:
 func _mini_button(value: String, accent: Color) -> Button:
 	var button := Button.new()
 	button.text = value
-	button.custom_minimum_size = Vector2(70, 54)
-	button.add_theme_font_size_override("font_size", 12)
+	button.custom_minimum_size = (
+		Vector2(layout.units(self, 58.0), layout.units(self, 42.0))
+		if layout.mobile_landscape(self)
+		else Vector2(70, 54)
+	)
+	button.add_theme_font_size_override("font_size", 11 if layout.mobile_landscape(self) else 12)
 	button.add_theme_stylebox_override("normal", SaloonTheme.panel(Color("#26333a"), accent, 6))
 	button.add_theme_stylebox_override("hover", SaloonTheme.panel(Color("#3d4645"), SaloonTheme.GOLD, 6))
 	button.mouse_entered.connect(func():
@@ -186,9 +192,19 @@ func _choose(button: Button, token: Dictionary) -> void:
 
 func _apply_responsive_size() -> void:
 	var safe: Vector4 = layout.safe_insets(self) if layout.mobile(self) else Vector4.ZERO
-	var width := minf(layout.units(self, 440.0) if layout.mobile(self) else 420.0, get_viewport_rect().size.x - safe.x - safe.z - layout.units(self, 20.0))
+	var available_width: float = get_viewport_rect().size.x - safe.x - safe.z - float(layout.units(self, 20.0))
+	var width: float
+	if layout.mobile_landscape(self):
+		width = minf(layout.units(self, 360.0), available_width * 0.52)
+	else:
+		width = minf(layout.units(self, 440.0) if layout.mobile(self) else 420.0, available_width)
 	custom_minimum_size.x = width
-	cancel_button.custom_minimum_size.y = layout.units(self, 44.0) if layout.mobile(self) else 38.0
+	var compact_landscape: bool = bool(layout.mobile_landscape(self))
+	column.add_theme_constant_override("separation", 3 if compact_landscape else 6)
+	subtitle.visible = not compact_landscape
+	for scroll in section_scrolls:
+		scroll.custom_minimum_size.y = layout.units(self, 44.0) if compact_landscape else 62.0
+	cancel_button.custom_minimum_size.y = layout.units(self, 40.0 if compact_landscape else 44.0) if layout.mobile(self) else 38.0
 
 func _process(_delta: float) -> void:
 	if not visible or not is_instance_valid(app) or not is_instance_valid(app.table):
@@ -205,6 +221,9 @@ func _process(_delta: float) -> void:
 		left = (viewport_size.x - size.x) * 0.5
 		top = maxf(safe.y + layout.units(self, 72.0), minf(anchor.y - size.y * 0.5, viewport_size.y * 0.48 - size.y))
 	left = clampf(left, safe.x + 8.0, viewport_size.x - safe.z - size.x - 8.0)
-	top = clampf(top, safe.y + 58.0, viewport_size.y - safe.w - size.y - 8.0)
+	var bottom_limit: float = viewport_size.y - safe.w - size.y - 8.0
+	if layout.mobile_landscape(self):
+		bottom_limit = layout.get_table_focus_rect(self).end.y - size.y - layout.units(self, 4.0)
+	top = clampf(top, safe.y + layout.get_mobile_banner_height(self) + 4.0, maxf(safe.y + layout.get_mobile_banner_height(self) + 4.0, bottom_limit))
 	position = Vector2(left, top)
 	pivot_offset = size * 0.5

@@ -91,15 +91,25 @@ func _ready() -> void:
 			var expected_action_height: float = LAYOUT.action_height(app) / sy
 			check(absf(footer.size.y/sy-expected_action_height)<=2,"action bar uses the mobile orientation height")
 			var first: Button = fan.cards[0]
-			var minimum_card_width: float = 140.0 if css.y>css.x else 116.0
+			var minimum_card_width: float = 140.0 if css.y>css.x else 88.0
 			var rendered_body_size: float = first.visual.get_node("CardDescription").get_theme_font_size("font_size")*first.visual.scale.y/sy
 			check(first.size.x/sx>=minimum_card_width and rendered_body_size>=12,"orientation-specific mobile card and body text stay readable width=%s body=%s css=%s" % [first.size.x/sx,rendered_body_size,css])
 			var visible_ratio: float = (fan.size.y-first.position.y)/first.size.y
 			check(visible_ratio>=1.0,"resting hand shows the complete card body")
-			check(is_equal_approx(app.table.camera.fov,59.0 if css.y>css.x else 58.0),"mobile camera uses orientation-specific framing")
+			check(is_equal_approx(app.table.camera.fov,59.0 if css.y>css.x else 55.0),"mobile camera uses orientation-specific framing")
+			if css.x>css.y:
+				check(expected_hand_height/css.y>=0.24 and expected_hand_height/css.y<=0.28,"landscape hand reserves only 24-28 percent of short side")
 			app.match_hud.show_preview(NetworkManager.private_state.hand[0])
 			var card_preview: Control = app.match_hud.preview
 			check(is_instance_valid(card_preview) and absf(card_preview.get_rect().get_center().x-logical.x*0.5)<2,"touch preview is centered instead of relying on hover position rect="+str(card_preview.get_rect()))
+			if css.x>css.y:
+				var preview_ratio: float = card_preview.size.x/logical.x
+				check(preview_ratio>=0.28 and preview_ratio<=0.34,"landscape preview stays within 28-34 percent width")
+				var loadout: Control = app.match_hud.loadout_panel
+				check(loadout.custom_minimum_size.x/sx<=180.5 and not loadout.details_scroll.visible,"landscape equipment starts as a <=180px chip")
+				loadout.title_button.pressed.emit()
+				check(loadout.details_scroll.visible,"equipment details expand only after tap")
+				loadout.title_button.pressed.emit()
 			var close_touch := InputEventScreenTouch.new()
 			close_touch.pressed = true
 			close_touch.position = Vector2(logical.x*0.5,logical.y*0.5)

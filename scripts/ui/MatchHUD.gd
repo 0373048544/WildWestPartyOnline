@@ -322,7 +322,11 @@ func build_top() -> void:
 		Control.PRESET_TOP_WIDE
 	)
 
-	bar.offset_bottom = 52
+	bar.offset_bottom = (
+		layout.get_mobile_banner_height(self)
+		if layout.mobile(self)
+		else 52.0
+	)
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	var current_player_name: String = ""
@@ -347,14 +351,13 @@ func build_top() -> void:
 
 	bar.add_child(strip)
 
-	var strip_width: float = minf(
-		570.0,
-		size.x - 260.0
-	)
+	var strip_width: float = minf(570.0, size.x - 260.0)
+	if layout.mobile_landscape(self):
+		strip_width = minf(layout.units(self, 470.0), size.x - layout.units(self, 224.0))
 
 	strip.position = Vector2(
 		(size.x - strip_width) / 2.0,
-		8.0
+		layout.units(self, 4.0) if layout.mobile_landscape(self) else 8.0
 	)
 
 	strip.custom_minimum_size = Vector2(
@@ -378,12 +381,12 @@ func build_top() -> void:
 
 	menu.position = Vector2(
 		size.x - 86.0,
-		8.0
+		layout.units(self, 2.0) if layout.mobile_landscape(self) else 8.0
 	)
 
 	menu.size = Vector2(
 		74.0,
-		42.0
+		layout.units(self, 42.0) if layout.mobile_landscape(self) else 42.0
 	)
 
 	if bool(
@@ -988,11 +991,13 @@ func show_preview(card: Dictionary) -> void:
 	][int(data.get("type", 0))]
 	var unit: float = layout.units(self, 1.0) if mobile_preview else 1.0
 	var safe: Vector4 = layout.safe_insets(self) if mobile_preview else Vector4.ZERO
-	var preview_width: float = (
-		minf(280.0 * unit, size.x - safe.x - safe.z - 24.0 * unit)
-		if mobile_preview
-		else minf(260.0, size.x - 24.0)
-	)
+	var preview_width: float
+	if layout.mobile_landscape(self):
+		preview_width = clampf(size.x * 0.31, 188.0 * unit, size.x * 0.34)
+	elif mobile_preview:
+		preview_width = minf(280.0 * unit, size.x - safe.x - safe.z - 24.0 * unit)
+	else:
+		preview_width = minf(260.0, size.x - 24.0)
 	var reason: String = str(
 		own.get("disabled_reasons", {}).get(card.instance_id, "")
 	)
@@ -1022,11 +1027,12 @@ func show_preview(card: Dictionary) -> void:
 	if mobile_preview:
 		var hand_height: float = layout.hand_height(self, app.selected >= 0)
 		left = (size.x - preview_width) * 0.5
-		top = (
-			size.y - safe.w - hand_height
-			- preview_height - 12.0 * unit
-		)
-		top = maxf(top, safe.y + 74.0 * unit)
+		if layout.mobile_landscape(self):
+			var focus_rect: Rect2 = layout.get_table_focus_rect(self)
+			top = focus_rect.position.y + maxf(4.0 * unit, (focus_rect.size.y - preview_height) * 0.28)
+		else:
+			top = size.y - safe.w - hand_height - preview_height - 12.0 * unit
+		top = maxf(top, safe.y + layout.get_mobile_banner_height(self) + 6.0 * unit)
 	else:
 		var mouse: Vector2 = get_viewport().get_mouse_position()
 		left = mouse.x + 18.0

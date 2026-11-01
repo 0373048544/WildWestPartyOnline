@@ -250,9 +250,11 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 		camera.keep_aspect = Camera3D.KEEP_WIDTH
 		camera.v_offset = 0
 	elif layout_mode == match_layout.MOBILE_LANDSCAPE:
-		camera_radius = 9.4 + extra_seats * 0.12
-		camera_height = 7.9 + extra_seats * 0.08
-		camera.fov = 68.0 if targeting_frame else 58.0
+		# Landscape phones reserve only ~27% for the hand, so the camera can
+		# move closer and let the table/avatars dominate the remaining space.
+		camera_radius = 8.75 + extra_seats * 0.14
+		camera_height = 7.15 + extra_seats * 0.10
+		camera.fov = 64.0 if targeting_frame else 55.0
 		camera.keep_aspect = Camera3D.KEEP_HEIGHT
 		camera.v_offset = 0
 	else:

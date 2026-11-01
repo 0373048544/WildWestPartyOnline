@@ -146,7 +146,9 @@ func place(camera: Camera3D, anchor: Vector3) -> Rect2:
 	var center: Vector2 = camera.unproject_position(global_position)
 	var edge: Vector2 = camera.unproject_position(global_position + camera.global_basis.x * 1.82)
 	var projected_width: float = maxf(1, center.distance_to(edge))
+	var layout: Script = load("res://scripts/ui/MatchLayout.gd")
 	var minimum_width: float = 165 if get_viewport().get_visible_rect().size.y > get_viewport().get_visible_rect().size.x else 148
+	minimum_width *= float(layout.get_mobile_nameplate_scale(self))
 	var size_factor: float = clampf(minimum_width / projected_width, 1, 3.4)
 	scale = Vector3.ONE * size_factor
 	global_position.y += 0.325 * (size_factor - 1) + (0.12 if hovered else 0)

@@ -497,7 +497,7 @@ func _position_panel() -> void:
 
 	# Same width as ReactionBanner.
 	var width: float = minf(
-		layout.units(self, 480.0 if short_landscape else 540.0),
+		layout.units(self, 420.0 if short_landscape else 540.0),
 		size.x - safe.x - safe.z - layout.units(self, 20.0)
 	)
 
@@ -505,7 +505,7 @@ func _position_panel() -> void:
 	var detail_text: String = str(current.get("detail", ""))
 	var height: float = layout.units(
 		self,
-		72.0 if detail_text.is_empty() else 94.0
+		64.0 if detail_text.is_empty() and short_landscape else (82.0 if short_landscape else (72.0 if detail_text.is_empty() else 94.0))
 	)
 
 	if mobile and not short_landscape:
@@ -515,9 +515,10 @@ func _position_panel() -> void:
 		)
 
 	# Same vertical position as ReactionBanner when no reaction is active.
-	var top: float = safe.y + layout.units(
-		self,
-		16.0 if short_landscape else (62.0 if mobile else 58.0)
+	var top: float = safe.y + (
+		layout.get_mobile_banner_height(self) + layout.units(self, 4.0)
+		if short_landscape
+		else layout.units(self, 62.0 if mobile else 58.0)
 	)
 
 	# If ReactionBanner is active, place this directly underneath it.

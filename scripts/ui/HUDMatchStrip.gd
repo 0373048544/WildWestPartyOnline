@@ -6,26 +6,28 @@ var deadline: float = 0
 func configure(title: String, phase: String, remaining: float) -> void:
 	name = "MatchStrip"
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var layout: Script = load("res://scripts/ui/MatchLayout.gd")
+	var compact_landscape: bool = bool(layout.mobile_landscape(self))
 	var style := SaloonTheme.panel(Color(0.12,0.16,0.17,0.82),Color("#a78150"),10)
 	style.set_border_width_all(1)
-	style.content_margin_top = 6
-	style.content_margin_bottom = 6
+	style.content_margin_top = 4 if compact_landscape else 6
+	style.content_margin_bottom = 4 if compact_landscape else 6
 	style.shadow_size = 2
 	add_theme_stylebox_override("panel",style)
 	var row := HBoxContainer.new()
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_theme_constant_override("separation",12)
+	row.add_theme_constant_override("separation",8 if compact_landscape else 12)
 	add_child(row)
 	var label := Label.new()
 	label.text = title + "  ·  " + phase
 	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	label.add_theme_font_size_override("font_size",17)
+	label.add_theme_font_size_override("font_size",15 if compact_landscape else 17)
 	label.add_theme_color_override("font_color",SaloonTheme.CREAM)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(label)
 	countdown = Label.new()
-	countdown.add_theme_font_size_override("font_size",17)
+	countdown.add_theme_font_size_override("font_size",15 if compact_landscape else 17)
 	countdown.add_theme_color_override("font_color",SaloonTheme.GOLD)
 	countdown.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(countdown)

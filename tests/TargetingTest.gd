@@ -167,7 +167,7 @@ func _ready() -> void:
 		var top: Vector2 = camera.unproject_position(plate.global_position + camera.global_basis.y * 0.325 * plate.scale.x)
 		var extent := Vector2(absf(right.x - center.x), absf(top.y - center.y))
 		var rect := Rect2(center - extent, extent * 2)
-		check(rect.size.x >= 128 and rect.position.x >= 0 and rect.end.x <= get_viewport().get_visible_rect().size.x, "mobile nameplate stays readable and inside viewport")
+		check(rect.size.x >= 120 and rect.position.x >= 0 and rect.end.x <= get_viewport().get_visible_rect().size.x, "mobile nameplate stays readable and inside viewport")
 		for previous in plate_rects:
 			check(not rect.intersects(previous), "seven-player mobile nameplates do not overlap")
 		plate_rects.append(rect)

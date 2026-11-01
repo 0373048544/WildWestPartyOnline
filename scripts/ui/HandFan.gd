@@ -202,7 +202,10 @@ func card_spacing() -> float:
 	if cards.size() <= 1:
 		return width
 
-	var visible_target: int = 3 if layout.mobile_portrait(self) else 4
+	var visible_target: int = (
+		3 if layout.mobile_portrait(self)
+		else (5 if layout.mobile_landscape(self) else 4)
+	)
 
 	return clampf(
 		(size.x - width)
@@ -211,7 +214,7 @@ func card_spacing() -> float:
 			float(mini(visible_target, cards.size()) - 1)
 		),
 		minimum,
-		maxf(minimum, width * 0.78)
+		maxf(minimum, width * (0.90 if layout.mobile_landscape(self) else 0.78))
 	)
 
 
