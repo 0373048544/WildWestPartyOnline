@@ -44,6 +44,7 @@ func _ready() -> void:
 	backing.albedo_color = Color(0.08, 0.14, 0.17, 0.88)
 	backing.cull_mode = BaseMaterial3D.CULL_DISABLED
 	backing.render_priority = -10
+	backing.no_depth_test = true
 	panel.material_override = backing
 	add_child(panel)
 	label = Label3D.new()
@@ -85,6 +86,7 @@ func _ready() -> void:
 		var material := StandardMaterial3D.new()
 		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		material.no_depth_test = true
 		heart.material_override = material
 		heart.position = Vector3(-0.55 + index * 0.175, -0.14, 0.03)
 		add_child(heart)
@@ -95,6 +97,7 @@ func _ready() -> void:
 	card.mesh = card_mesh
 	var card_mat := backing.duplicate()
 	card_mat.albedo_color = SaloonTheme.GOLD
+	card_mat.no_depth_test = true
 	card.material_override = card_mat
 	card.position = Vector3(0.4, -0.15, 0.03)
 	card.rotation.z = 0.15
@@ -118,13 +121,26 @@ func modulate_plate(alive: bool) -> void:
 	if not alive:
 		backing.albedo_color = Color("#30383b")
 
+func flash_hit() -> void:
+	var old_backing: Color = backing.albedo_color
+	var old_label: Color = label.modulate
+	backing.albedo_color = Color("#8d2f26")
+	label.modulate = Color("#ffd1c2")
+	var pulse := create_tween()
+	pulse.tween_interval(0.13)
+	pulse.tween_callback(func():
+		if is_instance_valid(self):
+			backing.albedo_color = old_backing
+			label.modulate = old_label)
+
 func place(camera: Camera3D, anchor: Vector3) -> Rect2:
 	global_position = anchor + Vector3.UP * base_height
 	global_basis = camera.global_basis
 	var center: Vector2 = camera.unproject_position(global_position)
 	var edge: Vector2 = camera.unproject_position(global_position + camera.global_basis.x * 1.82)
 	var projected_width: float = maxf(1, center.distance_to(edge))
-	var size_factor: float = clampf(148 / projected_width, 1, 3.4)
+	var minimum_width: float = 165 if get_viewport().get_visible_rect().size.y > get_viewport().get_visible_rect().size.x else 148
+	var size_factor: float = clampf(minimum_width / projected_width, 1, 3.4)
 	scale = Vector3.ONE * size_factor
 	global_position.y += 0.325 * (size_factor - 1) + (0.12 if hovered else 0)
 	center = camera.unproject_position(global_position)

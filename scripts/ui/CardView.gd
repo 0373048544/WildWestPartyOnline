@@ -9,6 +9,7 @@ var accent: Color
 var effect: int = 0
 var selected_lift: float = 0.0
 var compact_mode: bool = false
+var touch_layout: bool = false
 var block_activation: bool = false
 var holding: bool = false
 var hold_time: float = 0.0
@@ -41,12 +42,12 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	band.size = Vector2(198, 31)
 	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visual.add_child(band)
-	add_text(definition.name, Rect2(10, 8, 190, 25), 17, SaloonTheme.CREAM)
+	add_text(definition.name, Rect2(10, 8, 190, 25), 17, SaloonTheme.CREAM).name = "CardName"
 	var corner := add_text(CardInstance.corner(card), Rect2(10, 39, 62, 32), 22, CardInstance.suit_color(card.suit))
 	corner.name = "RankSuitCorner"
 	corner.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	add_text(TextCatalog.text(CardData.CardType.keys()[definition.type]), Rect2(10, 98, 190, 18), 11, accent.darkened(0.3))
-	add_text(definition.description, Rect2(12, 115, 186, 72), 13, Color("#29333a"))
+	add_text(definition.description, Rect2(12, 115, 186, 72), 13, Color("#29333a")).name = "CardDescription"
 	var lower := add_text(CardInstance.corner(card), Rect2(145, 190, 54, 20), 14, CardInstance.suit_color(card.suit))
 	lower.name = "RankSuitLower"
 	lower.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -83,6 +84,8 @@ func _gui_input(event: InputEvent) -> void:
 			block_activation = false
 
 func hover(raised: bool) -> void:
+	if touch_layout:
+		return
 	if lift:
 		lift.kill()
 	lift = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -115,6 +118,16 @@ func _process(delta: float) -> void:
 		if hold_time >= 0.45 and not block_activation:
 			block_activation = true
 			preview_requested.emit()
+
+func touch_compact(width: float) -> void:
+	touch_layout = true
+	selected_lift = 0
+	custom_minimum_size = Vector2(width,width*214/210)
+	size = custom_minimum_size
+	visual.scale = Vector2.ONE * width/210
+	visual.position = Vector2.ZERO
+	visual.get_node("CardName").add_theme_font_size_override("font_size",19)
+	visual.get_node("CardDescription").add_theme_font_size_override("font_size",18)
 
 func draw_symbol(icon: Control) -> void:
 	var center := Vector2(105, 80)

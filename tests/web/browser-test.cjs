@@ -55,6 +55,10 @@ async function clickAt(page,x,y) {
 async function click(page,predicate) {
   const c=await wait(async()=>{const s=await snapshot(page); return s?.controls.find(predicate);},'control');
   await clickAt(page,c.x,c.y);
+  if(mobile&&c.needs_focus&&!c.focused){
+    const raised=await wait(async()=>{const s=await snapshot(page);return s?.controls.find(predicate)},'raised card');
+    await clickAt(page,raised.x,raised.y);
+  }
 }
 async function input(page,name,value) {
   await click(page,c=>c.kind==='input'&&(!name||c.name===name));
@@ -67,7 +71,7 @@ async function input(page,name,value) {
   await wait(async()=>{const s=await snapshot(page);return s?.controls.some(c=>c.kind==='input'&&(!name||c.name===name)&&c.text===value)},'text input '+name);
 }
 async function newPage(width=1440,height=900) {
-  if(mobile){width=844;height=390;}
+  if(mobile){width=Number(process.env.WWPO_MOBILE_WIDTH||844);height=Number(process.env.WWPO_MOBILE_HEIGHT||390);}
   const context=await command('Target.createBrowserContext');
   const target=await command('Target.createTarget',{url:'about:blank',browserContextId:context.browserContextId});
   const session=await command('Target.attachToTarget',{targetId:target.targetId,flatten:true});
@@ -163,8 +167,20 @@ async function save(page,name) {
   }
   const s=await snapshot(a);
   await wait(async()=>{const mix=(await snapshot(a)).profile;return !mix.music_allowed&&!mix.music_playing},'active match has no music');
-  assert.equal(s.public.current_player,s.public.players.find(p=>p.public_role==='SHERIFF').player_id);
+  assert.equal(s.public.players.filter(p=>p.public_role==='SHERIFF').length,0);
+  assert(s.public.players.some(p=>p.player_id===s.public.current_player));
   await save(a,'table');
+  if(mobile&&Number(process.env.WWPO_MOBILE_HEIGHT||390)>Number(process.env.WWPO_MOBILE_WIDTH||844)){
+    const identity=(await snapshot(a)).player_id;
+    for(const [width,height] of [[844,390],[Number(process.env.WWPO_MOBILE_WIDTH||390),Number(process.env.WWPO_MOBILE_HEIGHT||844)]]){
+      await command('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:true},a);
+      await wait(async()=>{const s=await snapshot(a);return s?.layout?.mobile&&s.layout.clip&&s.size.x===(width<height?600:960)},'responsive rotation');
+      const rotated=await snapshot(a),r=rotated.layout.hand;
+      assert.equal(rotated.player_id,identity,'orientation preserves network identity');
+      assert(r.x>=0&&r.x+r.w<=rotated.size.x+1,'hand clipped within screen after rotation');
+    }
+    await save(a,'rotated');
+  }
   // Refresh A's actual browser tab; sessionStorage should recover identity/hand.
   const before=await snapshot(a);
   await command('Page.reload',{},a);
@@ -210,7 +226,7 @@ async function save(page,name) {
   assert(targeted,'browser selects Shoot and clicks actual 3D avatar');
   await handleChoice(a);await handleChoice(b);
   assert.equal(errors.length,0,'Godot browser errors: '+errors.join('\n'));
-  console.log('PASS: two isolated '+(mobile?'touch/mobile-emulated':'desktop')+' browser clients create/join by code, ready, character selection, private hands, Sheriff starts, 3D Shoot targeting, refresh/reconnect; turns='+turns);
+  console.log('PASS: two isolated '+(mobile?'touch/mobile-emulated':'desktop')+' browser clients create/join by code, ready, private two-character selection, no-Sheriff starter, 3D Shoot targeting, refresh/reconnect; turns='+turns);
   await command('Browser.close');
 })().catch(async e=>{
   console.error(e.stack);process.exitCode=1;

@@ -19,6 +19,7 @@ var reticle: Node3D
 var info_hover: int = 0
 var hover_since: int = 0
 var shot_quiet_until: int = 0
+var hovered_object: Node3D
 
 func quiet_for_shot(duration: int = 230) -> void:
 	shot_quiet_until = Time.get_ticks_msec() + duration
@@ -170,6 +171,38 @@ func pick_at(screen_position: Vector2) -> int:
 	var result: Dictionary = table.get_world_3d().direct_space_state.intersect_ray(ray)
 	return int(result.collider.get_meta("player_id", 0)) if not result.is_empty() else 0
 
+func pick_touch_player(at: Vector2) -> int:
+	var best: float = load("res://scripts/ui/MatchLayout.gd").units(self,26)
+	var chosen: int = 0
+	# Nameplates are screen-space controls: resolve their full bounds before rays
+	# can hit a different model behind the visible panel.
+	for id in table.avatars:
+		if (selected_card < 0 or valid_target_ids.has(id)) and table.nameplates[id].screen_rect.has_point(at):
+			return id
+	for id in table.avatars:
+		if selected_card >= 0 and not valid_target_ids.has(id):
+			continue
+		var center: Vector2 = table.camera.unproject_position(table.avatars[id].global_position+Vector3.UP*1.6)
+		var distance: float = at.distance_to(center)
+		if distance < best:
+			best = distance
+			chosen = id
+	if chosen > 0:
+		return chosen
+	var exact: int = pick_at(at)
+	if exact > 0 and (selected_card < 0 or valid_target_ids.has(exact)):
+		return exact
+	for id in table.avatars:
+		if selected_card >= 0 and not valid_target_ids.has(id):
+			continue
+		var panel: Rect2 = table.nameplates[id].screen_rect
+		var closest := Vector2(clampf(at.x,panel.position.x,panel.end.x),clampf(at.y,panel.position.y,panel.end.y))
+		var distance: float = at.distance_to(closest)
+		if distance < best:
+			best = distance
+			chosen = id
+	return chosen
+
 func pick_object(screen_position: Vector2) -> Dictionary:
 	var ray := PhysicsRayQueryParameters3D.create(table.camera.project_ray_origin(screen_position),
 		table.camera.project_ray_origin(screen_position) + table.camera.project_ray_normal(screen_position) * 100, 2)
@@ -183,9 +216,7 @@ func pick_touch_object(at: Vector2) -> Dictionary:
 	if table.objects.token_allowed(exact):
 		return exact
 	# Presentation hit slop only: authority still validates the same physical ID.
-	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	var pixels: Vector2 = Vector2(get_window().size)
-	var radius: float = 22 * maxf(viewport_size.x/maxf(1,pixels.x),viewport_size.y/maxf(1,pixels.y))
+	var radius: float = load("res://scripts/ui/MatchLayout.gd").units(self,24)
 	var nearest: Dictionary = {}
 	for item in table.objects.objects.values():
 		if not table.objects.token_allowed(item.token):
@@ -204,6 +235,18 @@ func _input(event: InputEvent) -> void:
 		if selected_card >= 0:
 			update_hover_target(pick_at(event.position))
 		else:
+			var object_token := pick_object(event.position)
+			var next_object: Node3D = null
+			for item in table.objects.objects.values():
+				if item.token == object_token:
+					next_object = item
+					break
+			if hovered_object != next_object:
+				if is_instance_valid(hovered_object):
+					hovered_object.set_hovered(false)
+				hovered_object = next_object
+				if is_instance_valid(hovered_object):
+					hovered_object.set_hovered(true)
 			var id := pick_at(event.position)
 			if id != info_hover:
 				if table.avatars.has(info_hover):
@@ -231,7 +274,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			interact(event.position)
 	elif event is InputEventScreenTouch and event.pressed:
 		if selected_card >= 0:
-			var id := pick_at(event.position)
+			var id := pick_touch_player(event.position)
 			if id == selected_target and valid_target_ids.has(id):
 				confirm_target()
 			else:

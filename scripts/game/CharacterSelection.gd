@@ -60,6 +60,9 @@ func finish(game: Node) -> void:
 			sheriff = id
 	options.clear()
 	chosen.clear()
+	if sheriff == 0:
+		var candidates: Array = game.players.values().filter(func(p): return p.is_alive and p.is_connected)
+		sheriff = int(candidates.pick_random().player_id) if not candidates.is_empty() else 0
 	game.begin_turn(sheriff)
 
 func private_options(id: int) -> Array:

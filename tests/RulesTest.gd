@@ -204,7 +204,7 @@ func test_shoot() -> void:
 	respond()
 	check(p[2].current_hp == 4 and p[1].shoot_used_this_turn, "Dodge prevents hit but keeps Shoot limit")
 	var again := play(1, "shoot", 2)
-	check(p[1].hand.has(again) and last_error == "Bạn chỉ được dùng 1 lá BẮN trong mỗi lượt.", "second Shoot rejected with Vietnamese message")
+	check(p[1].hand.has(again) and last_error == "Bạn đã dùng BANG! trong lượt này.", "second Shoot rejected with Vietnamese message")
 	GameManager.begin_turn(1)
 	for _i in range(20):
 		if GameManager.reactions.active.is_empty():

@@ -36,6 +36,12 @@ func _process(delta: float) -> void:
 		snapshot["targeting"] = {"guide": app.table.targeting.targeting_arrow.visible,
 			"reticle": app.table.targeting.reticle.visible, "style": app.table.targeting.target_style,
 			"hover": app.table.targeting.hovered_target}
+	if is_instance_valid(app.match_hud) and is_instance_valid(app.match_hud.hand):
+		var fan: Control = app.match_hud.hand
+		var rect := fan.get_global_rect()
+		snapshot["layout"] = {"mobile":fan.mobile_mode,"clip":fan.clip_contents,
+			"hand": {"x":rect.position.x,"y":rect.position.y,"w":rect.size.x,"h":rect.size.y},
+			"safe":get_viewport().get_meta("match_safe_insets",Vector4.ZERO)}
 	var serialized := JSON.stringify(snapshot)
 	JavaScriptBridge.eval("window.__WWPO_TEST = JSON.parse(" + JSON.stringify(serialized) + ")")
 
@@ -54,6 +60,14 @@ func collect(node: Node, controls: Array) -> void:
 				item.x = at.x
 				item.y = at.y
 				item["card_index"] = node.get_index()
+				if node.get_parent().get("mobile_mode") == true:
+					item["needs_focus"] = true
+					item["focused"] = node.get_parent().focused_uid == int(node.get_meta("mobile_uid",-1))
+					var exposed: Rect2 = node.get_global_rect().intersection(node.get_parent().get_global_rect())
+					if not exposed.has_area():
+						return
+					item.x = exposed.position.x+minf(30,exposed.size.x/2)
+					item.y = exposed.position.y+minf(60,exposed.size.y/2)
 		controls.append(item)
 	for child in node.get_children():
 		collect(child, controls)

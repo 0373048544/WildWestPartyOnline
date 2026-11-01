@@ -45,10 +45,19 @@ async function match(count){
   if(!checked.has('turn')){checked.add('turn');await p.resume();await sync(group);}
   if(pub.phase==='DISCARD_PHASE'){await p.intent('DISCARD_CARD',{card_instance_id:p.state.private.hand[0].instance_id});continue;}
   assert.equal(pub.phase,'ACTION_PHASE');
+  const forbidden=p.state.private.hand.find(c=>c.card_data_id==='shoot'&&String(p.state.private.disabled_reasons?.[String(c.instance_id)]||'').includes('BANG'));
+  if(forbidden&&!checked.has('bang_reconnect')){
+    const uid=forbidden.instance_id,target=pub.players.find(row=>row.player_id!==p.session.player_id&&row.is_alive).player_id;
+    await p.resume();await sync(group);
+    assert.equal((p.state.private.targets[String(uid)]||[]).length,0,'resume cannot clear BANG restriction');
+    for(let spam=0;spam<3;spam++)await p.intent('PLAY_CARD',{card_instance_id:uid,target_player_id:target});
+    assert(p.state.private.hand.some(c=>c.instance_id===uid),'server rejects forged second BANG after reconnect');
+    checked.add('bang_reconnect');
+  }
   const legal=p.state.private.hand.filter(c=>p.state.private.targets[String(c.instance_id)]?.length);
   // Prefer attacks so the real-wire match finishes; exercise other legal cards too.
   const card=legal.find(c=>['shoot','gatling','indians','showdown'].includes(c.card_data_id))||legal[0];
-  if(card){coverage[card.card_data_id]=(coverage[card.card_data_id]||0)+1;const targets=p.state.private.targets[String(card.instance_id)];const sheriff=pub.players.find(x=>x.public_role==='SHERIFF');const target=targets.includes(sheriff.player_id)&&p.state.private.role==='OUTLAW'?sheriff.player_id:targets[0];await p.intent('PLAY_CARD',{card_instance_id:card.instance_id,target_player_id:target});}
+  if(card){coverage[card.card_data_id]=(coverage[card.card_data_id]||0)+1;const targets=p.state.private.targets[String(card.instance_id)];const sheriff=pub.players.find(x=>x.public_role==='SHERIFF');const target=sheriff&&targets.includes(sheriff.player_id)&&p.state.private.role==='OUTLAW'?sheriff.player_id:targets[0];await p.intent('PLAY_CARD',{card_instance_id:card.instance_id,target_player_id:target});}
   else await p.intent('END_TURN');
  }
  assert(host.state.public.winner,'complete game must finish');await sync(group);verify(group);
@@ -56,4 +65,4 @@ async function match(count){
  for(const p of group)p.send('LEAVE_ROOM');
  const result={players:count,actions,coverage,reconnectContexts:[...checked],rematch:true};console.log('PASS full WebSocket match '+JSON.stringify(result));return result;
 }
-(async()=>{const results=[];for(const count of [4,5,6,7])results.push(await match(count));fs.mkdirSync('tests/artifacts',{recursive:true});fs.writeFileSync('tests/artifacts/full-web-matches.json',JSON.stringify(results,null,2));})().catch(e=>{console.error(e.stack);process.exitCode=1;}).finally(()=>{for(const p of peers)p.ws?.close();setTimeout(()=>process.exit(process.exitCode||0),300);});
+(async()=>{const results=[];for(const count of [2,3,4,5,6,7])results.push(await match(count));fs.mkdirSync('tests/artifacts',{recursive:true});fs.writeFileSync('tests/artifacts/full-web-matches.json',JSON.stringify(results,null,2));})().catch(e=>{console.error(e.stack);process.exitCode=1;}).finally(()=>{for(const p of peers)p.ws?.close();setTimeout(()=>process.exit(process.exitCode||0),300);});

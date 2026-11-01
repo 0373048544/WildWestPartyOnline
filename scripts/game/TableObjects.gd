@@ -33,14 +33,25 @@ func sync(snapshot: Dictionary, owner: int, request: Dictionary) -> void:
 			var zone: Dictionary = zones[index]
 			var key: String = "%d:%s" % [p.player_id, zone.zone]
 			present[key] = true
+			if objects.has(key) and zone.kind == "weapon" and objects[key].weapon_id != str(zone.get("card",{}).get("card_data_id","")):
+				objects[key].play_remove()
+				objects.erase(key)
 			if not objects.has(key):
 				var item := TableObject.new()
 				add_child(item)
-				item.configure(zone.kind, {"name": zone.name}, {"kind": "zone", "player": p.player_id, "zone": zone.zone})
+				item.configure(zone.kind, {"name": zone.name,"card_data_id":zone.get("card",{}).get("card_data_id","")}, {"kind": "zone", "player": p.player_id, "zone": zone.zone})
+				item.weapon_id = str(zone.get("card",{}).get("card_data_id",""))
 				item.position = radial * 2.55 + tangent * ((index - (zones.size() - 1) / 2.0) * 0.7) + Vector3.UP * 1.43
 				item.rotation.y = atan2(radial.x, radial.z)
 				item.scale = Vector3.ONE * 0.82
 				objects[key] = item
+				item.play_spawn()
+			var column: int = index % 3
+			var row: int = index / 3
+			var columns: int = mini(3,zones.size())
+			var slot: Vector3 = radial*(2.55+row*0.7)+tangent*((column-(columns-1)/2.0)*0.7)+Vector3.UP*1.43
+			objects[key].position.x = slot.x
+			objects[key].position.z = slot.z
 			objects[key].title.text = zone.name
 			objects[key].token["card"] = int(zone.get("card", {}).get("instance_id", 0))
 			if not zone.get("card", {}).is_empty():
@@ -69,7 +80,7 @@ func sync(snapshot: Dictionary, owner: int, request: Dictionary) -> void:
 		objects[key].highlight(choice.get("reaction_type", "") == "store")
 	for key in objects.keys():
 		if not present.has(key):
-			objects[key].free()
+			objects[key].play_remove()
 			objects.erase(key)
 	# These are transparent pick zones over the physical piles in SaloonRoom.
 	for pile in ["deck", "discard"]:

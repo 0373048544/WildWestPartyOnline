@@ -13,6 +13,7 @@ var targeting: TargetingController
 var player_names: Dictionary = {}
 var status_labels: Dictionary = {}
 var nameplates: Dictionary = {}
+var plate_layout_key: String = ""
 var turn_marker: MeshInstance3D
 var objects: Node3D
 var player_rows: Dictionary = {}
@@ -70,7 +71,8 @@ func _process(delta: float) -> void:
 	camera_shake = maxf(0.0, camera_shake - delta * 0.25)
 	var offset := Vector3(sin(Time.get_ticks_msec() * 0.08), cos(Time.get_ticks_msec() * 0.1), 0) * camera_shake
 	camera.position = camera.position.lerp(camera_goal + offset, minf(1.0, delta * 12))
-	camera.look_at(duel_focus if Time.get_ticks_msec() < duel_until else Vector3(0, 1.0, 0))
+	var framing: Vector3 = Vector3(0,-1.1,0) if load("res://scripts/ui/MatchLayout.gd").portrait(self) else Vector3(0,1.0,0)
+	camera.look_at(duel_focus if Time.get_ticks_msec() < duel_until else framing)
 	layout_nameplates()
 	for ring in rings.values():
 		ring.rotation.y += delta * 0.5
@@ -82,32 +84,46 @@ func turns_player() -> int:
 	return int(NetworkManager.public_state.get("current_player", 0))
 
 func layout_nameplates() -> void:
+	var key: String = str(camera.global_transform)+str(get_viewport().get_visible_rect())+str(built_match)
+	for plate in nameplates.values():
+		key += str(plate.get_instance_id())+str(plate.hovered)
+	if key == plate_layout_key:
+		return
+	plate_layout_key = key
 	var placements: Array = []
 	for id in nameplates:
-		placements.append({"plate": nameplates[id], "rect": nameplates[id].place(camera, avatars[id].global_position)})
-	placements.sort_custom(func(a, b): return a.rect.position.y < b.rect.position.y if not is_equal_approx(a.rect.position.y,b.rect.position.y) else a.rect.position.x < b.rect.position.x)
+		placements.append({"id":id,"plate": nameplates[id], "rect": nameplates[id].place(camera, avatars[id].global_position)})
+	placements.sort_custom(func(a, b):
+		if a.id == local_player or b.id == local_player:
+			return a.id == local_player
+		return a.rect.position.y < b.rect.position.y if not is_equal_approx(a.rect.position.y,b.rect.position.y) else a.rect.position.x < b.rect.position.x)
 	var occupied: Array[Rect2] = []
 	var width: float = get_viewport().get_visible_rect().size.x
+	if load("res://scripts/ui/MatchLayout.gd").mobile(self):
+		var radius: float = load("res://scripts/ui/MatchLayout.gd").units(self,25)
+		for avatar in avatars.values():
+			var center: Vector2 = camera.unproject_position(avatar.global_position+Vector3.UP*1.6)
+			occupied.append(Rect2(center-Vector2.ONE*radius,Vector2.ONE*radius*2))
 	for item in placements:
 		var rect: Rect2 = item.rect
 		rect.position.x = clampf(rect.position.x, 8, maxf(8, width - rect.size.x - 8))
-		# Preserve font size and seat association: lift a colliding plate first.
-		for _attempt in range(8):
-			var collided := false
-			for previous in occupied:
-				if rect.grow(3).intersects(previous):
-					var above: float = previous.position.y - rect.size.y - 8
-					if above >= 62:
-						rect.position.y = above
-					else:
-						rect.position.x = clampf(previous.end.x + 8,8,maxf(8,width-rect.size.x-8))
-						if rect.intersects(previous):
-							rect.position.y = previous.end.y + 8
-					collided = true
-			if not collided:
-				break
+		var best: Rect2 = rect
+		var best_score: float = INF
+		for y in [0,-1,1,-2,2,-3,3,-4,4,-5,5,-6,6,-7,7,-8,8,-9,9,-10,10]:
+			for x in [0,-0.25,0.25,-0.5,0.5,-1,1]:
+				var candidate := Rect2(rect.position+Vector2(x*(rect.size.x+6),y*18),rect.size)
+				candidate.position.x = clampf(candidate.position.x,8,maxf(8,width-rect.size.x-8))
+				if candidate.position.y < 58:
+					continue
+				var overlaps: bool = occupied.any(func(previous): return candidate.grow(2).intersects(previous))
+				var score: float = candidate.position.distance_squared_to(rect.position)+(1000000 if overlaps else 0)
+				if score < best_score:
+					best_score = score
+					best = candidate
+		rect = best
 		var depth: float = -camera.to_local(item.plate.global_position).z
-		item.plate.global_position = camera.project_position(rect.get_center(), depth)
+		var old_center: Vector2 = camera.unproject_position(item.plate.global_position)
+		item.plate.global_position += camera.project_position(rect.get_center(), depth)-camera.project_position(old_center,depth)
 		item.plate.screen_rect = rect
 		occupied.append(rect)
 
@@ -181,6 +197,7 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 			status_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 			status_labels[id] = status_label
 		avatars[id].apply_character(str(p.get("character_id", "")))
+		avatars[id].apply_weapon_visual(str(p.get("weapon_id","")))
 		nameplates[id].update_info(p, local_id, int(state.current_player))
 		avatars[id].set_target_state(not targets.is_empty() and not targets.has(id) and id != local_id)
 		if targets.has(id):
@@ -196,9 +213,16 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 	turn_marker.visible = avatars.has(int(state.current_player)) and state.winner.is_empty() and state.phase != "CHARACTER_SELECTION"
 	var local_angle: float = TAU * float(local_seat) / count
 	camera_goal = Vector3(sin(local_angle) * 9.1, 7.7, cos(local_angle) * 9.1)
+	if load("res://scripts/ui/MatchLayout.gd").portrait(self):
+		camera_goal = Vector3(sin(local_angle)*11.0,10.8,cos(local_angle)*11.0)
+		camera.keep_aspect = Camera3D.KEEP_WIDTH
+		camera.v_offset = 0
+	else:
+		camera.keep_aspect = Camera3D.KEEP_HEIGHT
+		camera.v_offset = 0
 	if camera.position == Vector3.ZERO:
 		camera.position = camera_goal
-	camera.look_at(Vector3(0, 1.0, 0))
+	camera.look_at(Vector3(0,-1.1,0) if load("res://scripts/ui/MatchLayout.gd").portrait(self) else Vector3(0,1.0,0))
 	if context_player > 0:
 		show_context(context_player)
 
@@ -263,9 +287,12 @@ func present_event(event: Dictionary) -> void:
 	var at: Vector3 = avatars[id].position
 	match kind:
 		"draw":
+			avatars[id].act("draw")
 			for index in range(mini(8, int(event.get("count", 1)))):
 				effects.flying_card(Vector3(-0.45, 1.7, 0), at + Vector3.UP * 1.4, {}, index * 0.22)
 		"judge", "reveal":
+			if event.get("purpose","") in ["jail","dynamite"]:
+				avatars[id].act(str(event.purpose))
 			effects.judgement(at + Vector3.UP * 2.7, event.get("card", {}), kind == "reveal")
 			if kind == "reveal":
 				# Black Jack reveals a card that remains in hand, never in discard.
@@ -289,6 +316,8 @@ func present_event(event: Dictionary) -> void:
 			effects.floating(at + Vector3.UP * 2.7, TextCatalog.text(event.role), Color("#e7cf91"))
 		"damage":
 			effects.floating(at + Vector3.UP * 2.7, "−%d MÁU" % event.get("amount", 1), Color("#ff967c"))
+			if id == local_player and nameplates.has(id):
+				nameplates[id].flash_hit()
 			if int(event.get("amount", 1)) == 3:
 				effects.starburst(at + Vector3.UP * 1.9, 1.0)
 				effects.smoke(at + Vector3.UP * 1.3)
@@ -297,6 +326,9 @@ func present_event(event: Dictionary) -> void:
 				effects.floating(at + Vector3.UP * 3.4, "BOOM!", Color("#ffc269"))
 				effects.spark(at + Vector3.UP, Color("#d89a65"), 12, 1.2)
 		"transfer":
+			var receiver: int = int(event.get("to",0))
+			if avatars.has(receiver):
+				avatars[receiver].act("snatch" if event.get("steal",true) else "discard")
 			var destination: Vector3 = avatars.get(int(event.get("to", 0)), avatars[id]).position + Vector3.UP * 1.4
 			var origin: Vector3 = at + Vector3.UP * 1.4
 			if not event.get("hidden", true):
@@ -311,6 +343,7 @@ func present_event(event: Dictionary) -> void:
 			var origin: Vector3 = Vector3(0, 1.7, 0) if event.get("from_zone", "") == "market" else at + Vector3.UP * 1.4
 			effects.flying_card(origin, Vector3(0.45, 1.7, 0), event.get("card", {}))
 		"equip":
+			avatars[id].act("equip")
 			var from: Vector3 = avatars.get(int(event.get("from_player", id)), avatars[id]).position
 			effects.flying_card(from + Vector3.UP * 1.6, at.normalized() * 2.55 + Vector3.UP * 1.5, event.get("card", {}))
 		"reclaim":
@@ -322,8 +355,10 @@ func present_event(event: Dictionary) -> void:
 			effects.floating(at + Vector3.UP * 2.7, "THOÁT GIAM!" if event.get("escaped", false) else "BỊ GIAM", Color("#b5dbe2"))
 			effects.spark(at + Vector3.UP, Color("#b1babb"), 4)
 		"store_pick":
+			avatars[id].act("store")
 			effects.flying_card(Vector3(0, 1.7, 0), at + Vector3.UP * 1.4, event.get("card", {}))
 		"duel":
+			avatars[id].act("duel")
 			var target: int = int(event.get("target", 0))
 			if avatars.has(target):
 				duel_focus = (at + avatars[target].position) / 2 + Vector3.UP
@@ -354,7 +389,7 @@ func play_animation(actor: int, kind: String, target: int) -> void:
 			flash_timing.tween_interval(0.095)
 			flash_timing.tween_callback(func():
 				if is_instance_valid(shooting_avatar):
-					var muzzle: Vector3 = shooting_avatar.arm.to_global(Vector3(0, -0.5, -0.37))
+					var muzzle: Vector3 = shooting_avatar.muzzle_position()
 					effects.muzzle(muzzle)
 					effects.gun_smoke(muzzle)
 					if avatars.has(target):

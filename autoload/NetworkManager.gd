@@ -19,7 +19,9 @@ var audio_sequence: int = 0
 func stamp_audio(event: Dictionary) -> Dictionary:
 	audio_sequence += 1
 	var result := event.duplicate(true)
-	result["audio_event_id"] = "enet:%d:%d" % [GameManager.match_id, audio_sequence]
+	var id := "enet:%d:%d" % [GameManager.match_id, audio_sequence]
+	result["audio_event_id"] = id
+	result["event_id"] = id
 	return result
 
 func _ready() -> void:
@@ -45,7 +47,7 @@ func is_room_host(id: int) -> bool:
 	return id == host_player_id()
 
 func allow_two_players() -> bool:
-	return OS.is_debug_build()
+	return true
 
 func local_player_id() -> int:
 	return room_client.player_id if mode == "websocket" else multiplayer.get_unique_id()

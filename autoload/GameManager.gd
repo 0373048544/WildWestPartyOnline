@@ -56,11 +56,9 @@ func start_match(force: bool = false) -> void:
 	if not network.is_authority():
 		return
 	var connected: Array = players.values().filter(func(p): return p.is_connected)
-	var valid_count: bool = connected.size() >= 4 and connected.size() <= 7
-	if network.allow_two_players() and connected.size() == 2:
-		valid_count = true
+	var valid_count: bool = connected.size() >= 2 and connected.size() <= 7
 	if not valid_count or (not force and connected.any(func(p): return not p.ready)):
-		fail(network.host_player_id(), "Cần 4–7 người đã sẵn sàng; bản kiểm thử cho phép đúng 2 người.")
+		fail(network.host_player_id(), "Cần 2–7 người và tất cả phải sẵn sàng.")
 		return
 	if started and winner.is_empty():
 		return
@@ -212,6 +210,9 @@ func emit_event(event_type: String, id: int, details: Dictionary = {}) -> void:
 	var event: Dictionary = details.duplicate(true)
 	event["event_type"] = event_type
 	event["player"] = id
+	event["target_player_id"] = int(event.get("target_player_id", event.get("target", id)))
+	var source_fallback: int = id if event_type in ["BANG_FIRED", "CARD_PLAYED"] else int(event.get("source", event.get("to", 0)))
+	event["source_player_id"] = int(event.get("source_player_id", source_fallback))
 	event["match_id"] = match_id
 	network.broadcast_table_event(event)
 
@@ -313,11 +314,18 @@ func check_win() -> String:
 	if not started:
 		return ""
 	var survivors: Array = players.values().filter(func(p): return p.is_alive)
-	var sheriff_alive: bool = survivors.any(func(p): return p.role == PlayerState.Role.SHERIFF)
-	if not sheriff_alive:
-		winner = "RENEGADE WINS" if survivors.size() == 1 and survivors[0].role == PlayerState.Role.RENEGADE else "OUTLAWS WIN"
-	elif not survivors.any(func(p): return p.role == PlayerState.Role.OUTLAW or p.role == PlayerState.Role.RENEGADE):
-		winner = "SHERIFF TEAM WINS"
+	if players.size() <= 3:
+		# The small-table variant has no Sheriff. It ends only with one survivor,
+		# making every role outcome deterministic and independent of Sheriff rules.
+		if survivors.size() == 1:
+			winner = {PlayerState.Role.DEPUTY: "DEPUTY WINS", PlayerState.Role.OUTLAW: "OUTLAW WINS",
+				PlayerState.Role.RENEGADE: "RENEGADE WINS"}.get(survivors[0].role, "")
+	else:
+		var sheriff_alive: bool = survivors.any(func(p): return p.role == PlayerState.Role.SHERIFF)
+		if not sheriff_alive:
+			winner = "RENEGADE WINS" if survivors.size() == 1 and survivors[0].role == PlayerState.Role.RENEGADE else "OUTLAWS WIN"
+		elif not survivors.any(func(p): return p.role == PlayerState.Role.OUTLAW or p.role == PlayerState.Role.RENEGADE):
+			winner = "SHERIFF TEAM WINS"
 	if not winner.is_empty():
 		turns.phase = "GAME_OVER"
 		for reserved in reactions.active.get("context", {}).get("cards", []):
@@ -378,7 +386,7 @@ func public_snapshot() -> Dictionary:
 	for p in players.values():
 		rows.append(p.public_snapshot(not winner.is_empty(), not p.character_id.is_empty()))
 	return {"players": rows, "started": started, "match_id": match_id, "winner": winner,
-		"server_port": network.session_port, "host_player_id": network.host_player_id(), "minimum_players": 2 if network.allow_two_players() else 4, "max_players": 7,
+		"server_port": network.session_port, "host_player_id": network.host_player_id(), "minimum_players": 2, "max_players": 7,
 		"current_player": turns.current_player, "phase": turns.phase, "round": turns.round_number,
 		"draw_count": deck.draw_pile.size(), "discard_count": deck.discard_pile.size(),
 		"discard_top": deck.discard_pile.back() if not deck.discard_pile.is_empty() else {},

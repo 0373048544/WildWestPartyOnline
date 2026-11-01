@@ -20,7 +20,7 @@ func effective_effect(game: Node, sender: int, card: Dictionary) -> int:
 func valid_targets(game: Node, sender: int, card: Dictionary) -> Array:
 	var definition: Dictionary = CardData.data(card.get("card_data_id", ""))
 	var result: Array = []
-	if definition.is_empty() or not game.living(sender) or game.turns.phase != "ACTION_PHASE" or game.turns.current_player != sender:
+	if definition.is_empty() or not game.living(sender) or not game.reactions.active.is_empty() or game.turns.phase != "ACTION_PHASE" or game.turns.current_player != sender:
 		return result
 	var effect: int = effective_effect(game, sender, card)
 	var p: PlayerState = game.players[sender]
@@ -58,10 +58,13 @@ func play(game: Node, sender: int, uid: int, target: int) -> void:
 		return
 	var effect: int = effective_effect(game, sender, card)
 	if effect == CardData.EffectType.ATTACK and game.turns.phase == "ACTION_PHASE" and game.turns.current_player == sender and not game.abilities.can_shoot(game.players[sender]):
-		game.fail(sender, "Bạn chỉ được dùng 1 lá BẮN trong mỗi lượt.")
+		game.fail(sender, "Bạn đã dùng BANG! trong lượt này.")
 		return
 	if not valid_targets(game, sender, card).has(target):
-		game.fail(sender, "Lá bài, mục tiêu hoặc tầm hiện tại không hợp lệ.")
+		var reason: String = disabled_reason(game,sender,card)
+		if effect == CardData.EffectType.ATTACK and game.living(target) and game.turns.current_player == sender and game.turns.phase == "ACTION_PHASE" and not DistanceManager.in_range(game.players,sender,target):
+			reason = "Mục tiêu ngoài tầm bắn."
+		game.fail(sender, reason if not reason.is_empty() else "Lá bài, mục tiêu hoặc tầm hiện tại không hợp lệ.")
 		return
 	var definition: Dictionary = CardData.data(card.card_data_id)
 	if not handlers.has(effect):
@@ -91,7 +94,7 @@ func disabled_reason(game: Node, sender: int, card: Dictionary) -> String:
 	var p: PlayerState = game.players[sender]
 	var effect := effective_effect(game, sender, card)
 	if effect == CardData.EffectType.ATTACK and not game.abilities.can_shoot(p):
-		return "Bạn đã dùng BẮN trong lượt này."
+		return "Bạn đã dùng BANG! trong lượt này."
 	if effect == CardData.EffectType.HEAL:
 		if not game.beer_enabled():
 			return "Bia không có tác dụng khi chỉ còn 2 người chơi."
@@ -105,7 +108,7 @@ func disabled_reason(game: Node, sender: int, card: Dictionary) -> String:
 
 func attack(game: Node, sender: int, target: int, _card: Dictionary) -> void:
 	game.players[sender].shoot_used_this_turn = true
-	game.emit_event("BANG_FIRED", sender, {"kind": "bang", "target": target})
+	game.emit_event("BANG_FIRED", sender, {"kind": "bang", "target": target, "card_data_id": "shoot", "amount": 1, "result": "pending"})
 	game.network.broadcast_animation(sender, "shoot", target)
 	game.flow.push({"kind": "attack", "source": sender, "target": target, "required": 2 if game.players[sender].ability_id == "double_dodge" else 1})
 

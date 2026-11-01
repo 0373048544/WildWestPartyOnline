@@ -76,14 +76,14 @@ func test_host() -> void:
 	await until(func(): return count_players() == 2, "client rejoins")
 	require(snapshot().players[1].display_name == "Rejoined Cowboy" and not remote_ready(), "rejoin uses new name and resets ready")
 	await until(remote_ready, "rejoined player ready")
-	require(not app.content.get_node("StartButton").disabled, "two ready players enable Start in debug")
+	require(not app.content.get_node("StartButton").disabled, "two ready players enable production Start")
 	app.content.get_node("StartButton").pressed.emit()
 	require(snapshot().started and is_instance_valid(app.table), "host loads GameTable on Start")
 	await choose_character()
 	await get_tree().create_timer(1.0).timeout
 	NetworkManager.leave()
 	await get_tree().create_timer(1.0).timeout
-	print("PASS: Host -> Lobby; names, host badge, ready/unready, disconnect/rejoin; debug Start -> GameTable on 127.0.0.1:7000")
+	print("PASS: Host -> Lobby; names, host badge, ready/unready, disconnect/rejoin; production 2-player Start -> GameTable on 127.0.0.1:7000")
 
 func test_client() -> void:
 	join_from_form("Lobby Client")
@@ -121,5 +121,5 @@ func choose_character() -> void:
 	await until(func(): return NetworkManager.private_state.get("character_options", []).size() == 2, "private character choices")
 	NetworkManager.send_intent("character", {"character": NetworkManager.private_state.character_options[0].character_id})
 	await until(func(): return snapshot().phase != "CHARACTER_SELECTION", "all characters selected")
-	var sheriff: Dictionary = snapshot().players.filter(func(p): return p.public_role == "SHERIFF")[0]
-	require(snapshot().current_player == sheriff.player_id, "random Sheriff opens")
+	require(snapshot().players.all(func(p): return p.public_role != "SHERIFF"), "two-player mode has no Sheriff")
+	require(snapshot().players.any(func(p): return p.player_id == snapshot().current_player), "server randomly chooses a valid two-player opener")

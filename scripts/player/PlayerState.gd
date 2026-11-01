@@ -17,6 +17,12 @@ var equipment: Dictionary = {}
 var is_alive: bool = true
 var is_connected: bool = true
 var shoot_used_this_turn: bool = false
+# Descriptive alias over the existing authoritative flag, never separate state.
+var bang_played_this_turn: bool:
+	get:
+		return shoot_used_this_turn
+	set(value):
+		shoot_used_this_turn = value
 var ready: bool = false
 
 func _init(id: int = 1, title: String = "Cowboy", seat: int = 0) -> void:

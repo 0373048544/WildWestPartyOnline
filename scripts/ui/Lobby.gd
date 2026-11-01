@@ -8,7 +8,7 @@ func configure(app: Node, state: Dictionary) -> void:
 	if not code.is_empty():
 		app.button("SAO CHÉP MÃ", func(): DisplayServer.clipboard_set(code), self)
 	var minimum: int = state.minimum_players
-	app.label("Cần 4–7 người và tất cả sẵn sàng." + (" Kiểm thử: cho phép đúng 2 người." if state.debug else ""), 18, self)
+	app.label("2–7 người · Tất cả phải sẵn sàng.", 18, self)
 	app.label("Người chơi: %d / 7" % state.players.size(), 21, self)
 	var list := VBoxContainer.new()
 	list.name = "PlayerList"
@@ -33,7 +33,7 @@ func configure(app: Node, state: Dictionary) -> void:
 		func(): app.intent("ready"), self)
 	ready.name = "ReadyButton"
 	if app.local_id() == state.get("host_player_id", 1):
-		var can_start: bool = (state.players.size() >= 4 or (state.debug and state.players.size() == 2)) and state.players.all(func(p): return p.ready and p.is_connected)
+		var can_start: bool = state.players.size() >= 2 and state.players.size() <= 7 and state.players.all(func(p): return p.ready and p.is_connected)
 		var start: Button = app.button("START GAME", func(): app.intent("start"), self, not can_start)
 		start.name = "StartButton"
 		if not can_start:

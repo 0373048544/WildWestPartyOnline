@@ -81,6 +81,7 @@ func apply_weapon_visual(key: String, force: bool = false) -> void:
 	gun.mesh = load("res://scripts/player/WeaponVisuals.gd").mesh_for(key)
 	gun.material_override = null
 	gun.rotation.x = -PI/2
+	gun.scale = Vector3.ONE * (0.85 if load("res://scripts/player/WeaponVisuals.gd").profile(key).rifle else 1.0)
 
 func muzzle_position() -> Vector3:
 	var profile: Dictionary = load("res://scripts/player/WeaponVisuals.gd").profile(weapon_visual_id)

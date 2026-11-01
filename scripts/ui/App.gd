@@ -28,6 +28,8 @@ var noticed_turn: int = -1
 var turn_notice_until: int = 0
 var hud_match: int = -1
 var character_draft: String = ""
+var layout_refresh_queued: bool = false
+var personal_toasts: Control
 
 func _ready() -> void:
 	add_child(load("res://scripts/ui/WebLayout.gd").new())
@@ -39,6 +41,12 @@ func _ready() -> void:
 	root.theme = theme
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	canvas.add_child(root)
+	personal_toasts = load("res://scripts/ui/PersonalEventToast.gd").new()
+	canvas.add_child(personal_toasts)
+	root.resized.connect(func():
+		if NetworkManager.public_state.get("started",false) and not layout_refresh_queued:
+			layout_refresh_queued = true
+			call_deferred("refresh_layout"))
 	NetworkManager.updated.connect(refresh)
 	NetworkManager.error_received.connect(func(message): error_text = message; refresh())
 	NetworkManager.visual_event.connect(func(a, k, t):
@@ -46,7 +54,9 @@ func _ready() -> void:
 			table.animate(a, k, t))
 	NetworkManager.table_event.connect(func(event):
 		if is_instance_valid(table):
-			table.presentation(event))
+			table.presentation(event)
+		if is_instance_valid(personal_toasts):
+			personal_toasts.consume_event(event, local_id(), NetworkManager.public_state))
 	refresh()
 	if OS.has_feature("web") and OS.is_debug_build() and bool(JavaScriptBridge.eval("new URLSearchParams(location.search).get('e2e') === '1'")):
 		var test_bridge: Node = load("res://scripts/network/BrowserTestBridge.gd").new()
@@ -57,6 +67,11 @@ func _process(_delta: float) -> void:
 	if is_instance_valid(reaction_label):
 		var remaining: float = maxf(0, reaction_until - Time.get_ticks_msec() / 1000.0)
 		reaction_label.text = "Còn %.1f giây để chọn nhân vật" % remaining if NetworkManager.public_state.get("phase", "") == "CHARACTER_SELECTION" else TextCatalog.text("Respond in %.1f seconds") % remaining
+
+func refresh_layout() -> void:
+	layout_refresh_queued = false
+	if is_instance_valid(root):
+		refresh()
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
@@ -117,6 +132,7 @@ func refresh() -> void:
 	var backdrop: Control
 	if in_game and hud_match != int(state.match_id):
 		hud_match = state.match_id
+		personal_toasts.reset_for_match(hud_match)
 		selected = -1
 		sid_mode = false
 		sid_cards.clear()
@@ -248,12 +264,16 @@ func leave() -> void:
 	menu_open = false
 	sid_mode = false
 	sid_cards.clear()
+	if is_instance_valid(personal_toasts):
+		personal_toasts.reset_for_match(-1)
 	NetworkManager.leave()
 
 func build_game(state: Dictionary) -> void:
 	var own: Dictionary = NetworkManager.private_state
 	if own.get("match_id", state.match_id) != state.match_id:
 		own = {}
+	if is_instance_valid(personal_toasts):
+		personal_toasts.consume_reaction(own.get("reaction", {}), state)
 	match_hud = load("res://scripts/ui/MatchHUD.gd").new()
 	root.add_child(match_hud)
 	match_hud.initialize(self, state, own)
@@ -314,11 +334,16 @@ func show_role(role: String, match_number: int) -> void:
 	label("YOUR ROLE", 24, box)
 	var badge := label("✦  " + TextCatalog.text(role) + "  ✦", 40, box)
 	badge.add_theme_color_override("font_color", SaloonTheme.GOLD)
+	var small_table: bool = NetworkManager.public_state.get("players", []).size() <= 3
 	var goals := {"SHERIFF": "Eliminate every Outlaw and the Renegade.",
 		"DEPUTY": "Protect the Sheriff and eliminate the enemies.",
 		"OUTLAW": "Eliminate the Sheriff.", "RENEGADE": "Be the last living player."}
+	if small_table:
+		goals = {"DEPUTY": "Loại mọi đối thủ và là người sống sót cuối cùng.",
+			"OUTLAW": "Loại mọi đối thủ và là người sống sót cuối cùng.",
+			"RENEGADE": "Trở thành người sống sót cuối cùng."}
 	label(goals.get(role, ""), 21, box)
-	label("The Sheriff is public. Keep your allegiance secret.", 17, box)
+	label("Không có Cảnh sát trưởng trong chế độ 2–3 người. Vai trò vẫn được giữ kín." if small_table else "The Sheriff is public. Keep your allegiance secret.", 17, box)
 	button("CONTINUE", func(): seen_role = match_number; refresh(), box)
 
 func show_reaction(request: Dictionary) -> void:

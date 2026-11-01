@@ -239,14 +239,14 @@ func admit(connection_id: int, kind: String, payload: Dictionary) -> void:
 	else:
 		var code := str(payload.get("room_code", "")).strip_edges().to_upper()
 		if not rooms.has(code):
-			reject(connection_id, "MÃ£ phÃ²ng khÃ´ng tá»“n táº¡i.")
+			reject(connection_id, "Mã phòng không tồn tại.")
 			return
 		room = rooms[code]
 		if room.game.started:
-			reject(connection_id, "Tráº­n Ä‘áº¥u Ä‘Ã£ báº¯t Ä‘áº§u.")
+			reject(connection_id, "Trận đấu đã bắt đầu.")
 			return
 		if room.members.size() >= 7:
-			reject(connection_id, "PhÃ²ng Ä‘Ã£ Ä‘áº§y.")
+			reject(connection_id, "Phòng đã đầy.")
 			return
 	var id := next_player
 	next_player += 1

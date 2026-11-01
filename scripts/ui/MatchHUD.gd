@@ -8,6 +8,7 @@ var hand: Control
 var preview: Control
 var timer_label: Label
 var deadline: float = 0
+var layout: Script = preload("res://scripts/ui/MatchLayout.gd")
 
 func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> void:
 	app = owner_app
@@ -61,6 +62,9 @@ func action(value: String, callback: Callable, parent: Node, disabled: bool = fa
 	var item: Button = app.button(value, callback, parent, disabled)
 	item.add_theme_font_size_override("font_size", 14)
 	item.custom_minimum_size.y = 42
+	if load("res://scripts/ui/MatchLayout.gd").mobile(self):
+		item.custom_minimum_size.y = layout.action_height(self)
+		item.custom_minimum_size.x = layout.units(self,48)
 	return item
 
 func build_top() -> void:
@@ -85,13 +89,24 @@ func build_top() -> void:
 	var menu := action("MENU", func(): app.menu_open = true; app.refresh(), bar)
 	menu.position = Vector2(size.x-86,8)
 	menu.size = Vector2(74,42)
+	if load("res://scripts/ui/MatchLayout.gd").portrait(self):
+		menu.size.y = 68
 	menu.name = "PauseButton"
 	menu.tooltip_text = "Menu · Luật chơi · Rời trận"
+	if layout.mobile(self):
+		var safe: Vector4 = layout.safe_insets(self)
+		strip.position.y += safe.y
+		strip.custom_minimum_size.x = maxf(180,strip_width-safe.x-safe.z)
+		menu.position.x -= safe.z
+		menu.position.y += safe.y
 
 func build_log() -> void:
 	var holder := VBoxContainer.new()
 	add_child(holder)
 	holder.position = Vector2(12, 8)
+	if layout.mobile(self):
+		var safe: Vector4 = layout.safe_insets(self)
+		holder.position += Vector2(safe.x,safe.y)
 	holder.size.x = minf(320, size.x * 0.28) if app.log_expanded else 105
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var toggle := action("NHẬT KÝ  +" if not app.log_expanded else "NHẬT KÝ  −",
@@ -127,6 +142,15 @@ func build_hand() -> void:
 	footer.offset_right = -18
 	footer.offset_top = -224
 	footer.offset_bottom = -182
+	var mobile_layout: bool = load("res://scripts/ui/MatchLayout.gd").mobile(self)
+	var visible_hand: float = load("res://scripts/ui/MatchLayout.gd").hand_height(self,app.selected >= 0)
+	var safe: Vector4 = layout.safe_insets(self) if mobile_layout else Vector4.ZERO
+	if mobile_layout:
+		footer.offset_left = safe.x+12
+		footer.offset_right = -safe.z-12
+		footer.offset_top = -safe.w-visible_hand-layout.action_height(self)-4
+		footer.offset_bottom = -safe.w-visible_hand-4
+		footer.z_index = 200
 	footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var message := "BÀI CỦA BẠN"
 	if not local.get("is_alive", false):
@@ -134,7 +158,7 @@ func build_hand() -> void:
 	elif app.sid_mode:
 		message = "SID · CHỌN 2 LÁ ĐỂ BỎ (%d/2)" % app.sid_cards.size()
 	elif not request.is_empty():
-		message = str(request.get("title", "CHỌN TRÊN BÀN"))
+		message = reaction_message(request)
 		if request.reaction_type == "transfer":
 			message = "CHẠM VÙNG TAY KÍN / TRANG BỊ ĐƯỢC ĐÁNH DẤU"
 		elif request.reaction_type == "store":
@@ -142,7 +166,7 @@ func build_hand() -> void:
 	elif state.phase == "DISCARD_PHASE" and state.current_player == app.local_id():
 		message = "BỎ %d LÁ · CHẠM BÀI ĐỂ BỎ" % maxi(0, own.get("hand", []).size() - int(local.get("current_hp", 0)))
 	elif app.selected >= 0:
-		message = "CHẠM CAO BỒI ĐƯỢC ĐÁNH DẤU"
+		message = "CHẠM MỤC TIÊU"
 	var prompt := text(message, 14, footer)
 	prompt.name = "HandPrompt"
 	prompt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -185,6 +209,12 @@ func build_hand() -> void:
 	hand.offset_right = -18
 	hand.offset_top = -182
 	hand.offset_bottom = -4
+	if mobile_layout:
+		hand.offset_left = safe.x+12
+		hand.offset_right = -safe.z-12
+		hand.offset_top = -safe.w-visible_hand-layout.hand_lift(self,app.selected>=0)
+		hand.offset_bottom = -safe.w
+		hand.set_meta("target_mode",app.selected>=0)
 	hand.configure(own.get("hand", []), usable, selected_ids, reacting, own.get("disabled_reasons", {}))
 	hand.card_clicked.connect(handle_card)
 	hand.preview_requested.connect(show_preview)
@@ -259,6 +289,20 @@ func show_preview(card: Dictionary) -> void:
 		text(reason, 15, column).add_theme_color_override("font_color", Color("#ffb995"))
 	preview.position = Vector2(clampf(get_viewport().get_mouse_position().x - 130, 12, size.x - 304), size.y - 370)
 	preview.size.x = 290
+
+func reaction_message(active: Dictionary) -> String:
+	var actor := ""
+	var source_id := int(active.get("source_player_id", 0))
+	for row in state.players:
+		if int(row.player_id) == source_id:
+			actor = str(row.display_name)
+			break
+	match str(active.get("reaction_type", "")):
+		"dodge": return (actor + " ĐANG BẮN BẠN · DÙNG NÉ HOẶC CHỊU 1 SÁT THƯƠNG") if not actor.is_empty() else "BẠN ĐANG BỊ BẮN · DÙNG NÉ HOẶC CHỊU 1 SÁT THƯƠNG"
+		"duel": return (actor + " THÁCH ĐẤU BẠN · DÙNG BANG! HOẶC CHỊU 1 SÁT THƯƠNG") if not actor.is_empty() else "ĐẤU SÚNG · DÙNG BANG! HOẶC CHỊU 1 SÁT THƯƠNG"
+		"indians": return "THỔ DÂN TẤN CÔNG · DÙNG BANG! HOẶC CHỊU 1 SÁT THƯƠNG"
+		"survive": return "BẠN SẮP BỊ LOẠI · DÙNG BIA ĐỂ SỐNG SÓT?"
+	return str(active.get("title", "CHỌN TRÊN BÀN"))
 
 func close_preview() -> void:
 	if is_instance_valid(preview):

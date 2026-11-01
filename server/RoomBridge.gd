@@ -9,7 +9,9 @@ var audio_sequence: int = 0
 func stamp_audio(event: Dictionary) -> Dictionary:
 	audio_sequence += 1
 	var result := event.duplicate(true)
-	result["audio_event_id"] = "%s:%d" % [room.room_code, audio_sequence]
+	var id := "%s:%d" % [room.room_code, audio_sequence]
+	result["audio_event_id"] = id
+	result["event_id"] = id
 	return result
 
 func is_authority() -> bool:
@@ -22,7 +24,7 @@ func is_room_host(id: int) -> bool:
 	return id == host_player_id()
 
 func allow_two_players() -> bool:
-	return OS.is_debug_build() and server.development
+	return true
 
 func send_notice(id: int, message: String) -> void:
 	server.send_player(id, "ERROR", {"message": message})

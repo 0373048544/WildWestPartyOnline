@@ -3,7 +3,8 @@ extends RefCounted
 
 static func pool(count: int) -> Array:
 	match count:
-		2: return [0, 2] # Development duel only.
+		2: return [1, 2]
+		3: return [1, 2, 3]
 		4: return [0, 2, 2, 3]
 		5: return [0, 1, 2, 2, 3]
 		6: return [0, 1, 2, 2, 2, 3]
