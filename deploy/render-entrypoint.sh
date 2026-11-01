@@ -3,6 +3,7 @@ set -euo pipefail
 
 PUBLIC_PORT="${PORT:-10000}"
 GAME_PORT="7000"
+export WWPO_BIND=127.0.0.1
 
 test -f /app/build/web/index.html || { echo "ERROR: build/web/index.html missing"; exit 1; }
 
@@ -11,8 +12,9 @@ if [ -f /app/web/network-config.js ]; then
 fi
 
 sed "s/__PORT__/${PUBLIC_PORT}/g" /app/deploy/nginx.conf.template > /tmp/nginx.conf
+nginx -t -c /tmp/nginx.conf
 
-echo "Starting Godot server on 0.0.0.0:${GAME_PORT}"
+echo "Starting Godot WebSocket server on 127.0.0.1:${GAME_PORT}"
 godot --headless --path /app server/DedicatedServer.tscn -- --port="${GAME_PORT}" &
 GODOT_PID=$!
 
