@@ -4,7 +4,9 @@
 tests/network-*.log
 tests/network-*.err
 tests/ux-*.log
-build/
+build/*
+!build/web/
+!build/web/**
 tests/web/*.log
 tests/web/*.err
 tests/web/browser-profile/

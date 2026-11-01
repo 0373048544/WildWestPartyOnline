@@ -2,8 +2,9 @@
 .github
 .godot/editor
 .godot/mono
-build
+build/templates
 tests/artifacts
+tests/web/browser-profile
 *.log
 *.tmp
 .DS_Store
