@@ -75,8 +75,11 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	visual.add_child(icon)
 	if not mouse_entered.is_connected(_hover_entered):
 		mouse_entered.connect(_hover_entered)
+	if not mouse_exited.is_connected(_hover_exited):
 		mouse_exited.connect(_hover_exited)
+	if not button_down.is_connected(_press_started):
 		button_down.connect(_press_started)
+	if not button_up.is_connected(_press_ended):
 		button_up.connect(_press_ended)
 	visual.modulate = Color("#fff0bd") if chosen else Color.WHITE
 
@@ -164,10 +167,20 @@ func touch_compact(width: float) -> void:
 	selected_lift = 0
 	custom_minimum_size = Vector2(width,width*214/210)
 	size = custom_minimum_size
-	visual.scale = Vector2.ONE * width/210
+	var touch_scale: float = width / 210.0
+	visual.scale = Vector2.ONE * touch_scale
 	visual.position = Vector2.ZERO
-	visual.get_node("CardName").add_theme_font_size_override("font_size",19)
-	visual.get_node("CardDescription").add_theme_font_size_override("font_size",18)
+	# Compensate the source font before scaling so landscape text remains at
+	# least ~13 logical pixels even though the whole card becomes narrower.
+	visual.get_node("CardName").add_theme_font_size_override(
+		"font_size",
+		mini(26, maxi(19, int(round(15.0 / touch_scale))))
+	)
+	visual.get_node("CardDescription").add_theme_font_size_override(
+		"font_size",
+		mini(28, maxi(18, int(round(15.0 / touch_scale))))
+	)
+	mouse_filter = Control.MOUSE_FILTER_STOP
 
 func draw_symbol(icon: Control) -> void:
 	var center := Vector2(105, 80)

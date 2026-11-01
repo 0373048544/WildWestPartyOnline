@@ -3,59 +3,109 @@ extends Control
 signal card_clicked(uid: int)
 signal preview_requested(card: Dictionary)
 signal preview_closed
+
 var cards: Array[Button] = []
 var mobile_mode: bool = false
 var focused_uid: int = -1
-var scroll_offset: float = 0
+var scroll_offset: float = 0.0
 var drag_origin := Vector2.ZERO
 var dragging: bool = false
-var drag_distance: float = 0
-var mobile_lift: float = 0
+var drag_distance: float = 0.0
+var mobile_lift: float = 0.0
 var scroller: HScrollBar
 var configured_size := Vector2.ZERO
+
+var layout: Script = preload("res://scripts/ui/MatchLayout.gd")
+
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	resized.connect(arrange)
 
-func configure(hand: Array, usable: Array, selected: Array, reactions: bool = false, reasons: Dictionary = {}) -> void:
-	var current_css_size: Vector2 = Vector2(get_window().size)
+
+func configure(
+	hand: Array,
+	usable: Array,
+	selected: Array,
+	reactions: bool = false,
+	reasons: Dictionary = {}
+) -> void:
+	var current_css_size: Vector2 = layout.css_size(self)
+
 	if not configured_size.is_equal_approx(current_css_size):
 		focused_uid = -1
+		scroll_offset = 0.0
 		configured_size = current_css_size
-	mobile_mode = load("res://scripts/ui/MatchLayout.gd").mobile(self)
+
+	mobile_mode = bool(layout.mobile(self))
+
 	var existing: Dictionary = {}
+
 	for old_view in cards:
 		if is_instance_valid(old_view):
 			existing[int(old_view.get_meta("mobile_uid", -1))] = old_view
+
 	cards.clear()
 
 	if mobile_mode:
 		clip_contents = true
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
-		mobile_lift = load("res://scripts/ui/MatchLayout.gd").hand_lift(self,get_meta("target_mode",false))
+		mobile_lift = float(
+			layout.hand_lift(
+				self,
+				bool(get_meta("target_mode", false))
+			)
+		)
 	else:
 		clip_contents = false
-		mobile_lift = 0
+		mobile_lift = 0.0
 
 	for card in hand:
 		var uid: int = int(card.instance_id)
 		var view: Button = existing.get(uid)
+
 		if is_instance_valid(view):
 			existing.erase(uid)
 		else:
 			view = load("res://scenes/ui/CardUI.tscn").instantiate()
 			add_child(view)
-			view.pressed.connect(_on_view_pressed.bind(view))
-			view.preview_requested.connect(_on_view_preview.bind(view))
-			view.preview_closed.connect(func(): preview_closed.emit())
 
-		view.set_meta("mobile_uid",uid)
-		view.set_meta("preview_card",card)
-		view.configure(card, CardData.data(card.card_data_id), usable.has(card.instance_id), selected.has(card.instance_id), str(reasons.get(card.instance_id, "")))
-		view.compact(selected.has(card.instance_id), reactions and usable.has(card.instance_id))
+			view.pressed.connect(
+				_on_view_pressed.bind(view)
+			)
+
+			view.preview_requested.connect(
+				_on_view_preview.bind(view)
+			)
+
+			view.preview_closed.connect(
+				func():
+					preview_closed.emit()
+			)
+
+		view.set_meta("mobile_uid", uid)
+		view.set_meta("preview_card", card)
+
+		view.configure(
+			card,
+			CardData.data(card.card_data_id),
+			usable.has(card.instance_id),
+			selected.has(card.instance_id),
+			str(reasons.get(card.instance_id, ""))
+		)
+
+		view.compact(
+			selected.has(card.instance_id),
+			reactions and usable.has(card.instance_id)
+		)
+
 		if mobile_mode:
-			view.touch_compact(minf(size.x,load("res://scripts/ui/MatchLayout.gd").units(self,144)))
+			var touch_width: float = minf(
+				size.x,
+				float(layout.touch_card_width(self))
+			)
+			view.touch_compact(touch_width)
+
 		cards.append(view)
 
 	for stale in existing.values():
@@ -63,86 +113,282 @@ func configure(hand: Array, usable: Array, selected: Array, reactions: bool = fa
 			stale.queue_free()
 
 	arrange()
+	_configure_scrollbar()
+
+
+func _configure_scrollbar() -> void:
 	if mobile_mode:
 		if not is_instance_valid(scroller):
 			scroller = HScrollBar.new()
 			scroller.name = "HandScroll"
-			scroller.value_changed.connect(func(value): scroll_offset = value; arrange())
+
+			scroller.value_changed.connect(
+				func(value):
+					scroll_offset = float(value)
+					arrange()
+			)
+
 			add_child(scroller)
 			scroller.z_index = 300
-		scroller.position = Vector2(0,size.y-18)
-		scroller.size = Vector2(size.x,18)
-		scroller.max_value = maxf(size.x,content_width())
+
+		var bar_height: float = float(
+			layout.hand_scrollbar_height(self)
+		)
+
+		scroller.position = Vector2(
+			0.0,
+			maxf(0.0, size.y - bar_height)
+		)
+
+		scroller.size = Vector2(
+			size.x,
+			bar_height
+		)
+
+		scroller.max_value = maxf(
+			size.x,
+			content_width()
+		)
+
 		scroller.page = size.x
-		scroller.visible = scroller.max_value > size.x
-	elif is_instance_valid(scroller):
-		scroller.visible = false
+		scroller.visible = scroller.max_value > size.x + 1.0
+	else:
+		if is_instance_valid(scroller):
+			scroller.visible = false
+
 
 func _on_view_pressed(view: Button) -> void:
-	var pressed_uid := int(view.get_meta("mobile_uid", -1))
+	var pressed_uid: int = int(
+		view.get_meta("mobile_uid", -1)
+	)
+
 	if view.block_activation:
+		# Long press was used to inspect the card.
 		return
-	if mobile_mode and drag_distance > 12:
-		return
-	if mobile_mode and focused_uid != pressed_uid:
+
+	if mobile_mode:
+		# A horizontal drag scrolls the hand and must never play a card.
+		if drag_distance > float(layout.drag_threshold(self)):
+			return
+
+		# Mobile interaction is intentionally one-tap:
+		# tap = select/play, hold = preview, drag = scroll.
 		focused_uid = pressed_uid
-		arrange()
-	else:
 		card_clicked.emit(pressed_uid)
+		return
+
+	card_clicked.emit(pressed_uid)
+
 
 func _on_view_preview(view: Button) -> void:
-	preview_requested.emit(view.get_meta("preview_card", {}))
+	preview_requested.emit(
+		view.get_meta("preview_card", {})
+	)
+
 
 func card_spacing() -> float:
-	var width: float = cards[0].size.x if not cards.is_empty() else 158
-	var minimum: float = load("res://scripts/ui/MatchLayout.gd").units(self,48)
-	return clampf((size.x-width)/maxf(1,mini(4,cards.size())-1),minimum,maxf(minimum,width*0.74))
+	var width: float = (
+		cards[0].size.x
+		if not cards.is_empty()
+		else 158.0
+	)
+
+	var minimum: float = (
+		float(layout.units(self, 42.0))
+		if mobile_mode
+		else 48.0
+	)
+
+	if cards.size() <= 1:
+		return width
+
+	var visible_target: int = 3 if layout.mobile_portrait(self) else 4
+
+	return clampf(
+		(size.x - width)
+		/ maxf(
+			1.0,
+			float(mini(visible_target, cards.size()) - 1)
+		),
+		minimum,
+		maxf(minimum, width * 0.78)
+	)
+
 
 func content_width() -> float:
-	return (cards[0].size.x if not cards.is_empty() else 158) + card_spacing()*(cards.size()-1)
+	if cards.is_empty():
+		return 0.0
+
+	return cards[0].size.x + card_spacing() * float(cards.size() - 1)
+
 
 func arrange() -> void:
 	if cards.is_empty():
+		if is_instance_valid(scroller):
+			scroller.visible = false
 		return
+
 	if mobile_mode:
 		var spacing: float = card_spacing()
 		var total: float = content_width()
-		scroll_offset = clampf(scroll_offset,0,maxf(0,total-size.x))
+
+		scroll_offset = clampf(
+			scroll_offset,
+			0.0,
+			maxf(0.0, total - size.x)
+		)
+
+		var start_x: float = maxf(
+			0.0,
+			(size.x - total) / 2.0
+		)
+
 		for index in range(cards.size()):
 			var card: Button = cards[index]
-			var focused: bool = card.get_meta("chosen_card",false) or focused_uid == int(card.get_meta("mobile_uid",-2))
-			card.position = Vector2(maxf(0,(size.x-total)/2)+index*spacing-scroll_offset, 0 if focused else mobile_lift+3)
-			card.rotation = 0
-			card.z_index = 100 if focused else index
-			card.visible = card.position.x+card.size.x > 0 and card.position.x < size.x
+
+			var selected_card: bool = bool(
+				card.get_meta("chosen_card", false)
+			)
+
+			var card_y: float = (
+				0.0
+				if selected_card
+				else mobile_lift
+			)
+
+			card.position = Vector2(
+				start_x
+				+ float(index) * spacing
+				- scroll_offset,
+				card_y
+			)
+
+			card.rotation = 0.0
+			card.z_index = 100 if selected_card else index
+
+			# Keep a small margin so cards remain touchable near both edges.
+			card.visible = (
+				card.position.x + card.size.x > -8.0
+				and card.position.x < size.x + 8.0
+			)
+
 		if is_instance_valid(scroller):
-			scroller.position = Vector2(0,size.y-18)
-			scroller.size.x = size.x
-			scroller.max_value = maxf(size.x,total)
+			var bar_height: float = float(
+				layout.hand_scrollbar_height(self)
+			)
+
+			scroller.position = Vector2(
+				0.0,
+				maxf(0.0, size.y - bar_height)
+			)
+
+			scroller.size = Vector2(
+				size.x,
+				bar_height
+			)
+
+			scroller.max_value = maxf(
+				size.x,
+				total
+			)
+
 			scroller.page = size.x
 			scroller.set_value_no_signal(scroll_offset)
+			scroller.visible = total > size.x + 1.0
+
+		# Clip only when the allocated hand really contains the full card and the
+		# thin scrollbar. If browser scaling briefly reports a smaller height,
+		# showing the complete card is preferable to cutting its interaction area.
+		var tallest_card: float = 0.0
+		for card_view in cards:
+			tallest_card = maxf(tallest_card, card_view.size.y)
+		var required_height: float = (
+			tallest_card
+			+ mobile_lift
+			+ float(layout.hand_scrollbar_height(self))
+		)
+		clip_contents = size.y + 0.5 >= required_height
+
 		return
-	var gap: float = minf(136, maxf(18, (size.x - 158) / maxf(1, cards.size() - 1)))
-	var width: float = 158 + gap * (cards.size() - 1)
+
+	var gap: float = minf(
+		136.0,
+		maxf(
+			18.0,
+			(size.x - 158.0)
+			/ maxf(
+				1.0,
+				float(cards.size() - 1)
+			)
+		)
+	)
+
+	var width: float = (
+		158.0
+		+ gap * float(cards.size() - 1)
+	)
+
 	for index in range(cards.size()):
 		var view: Button = cards[index]
-		var fraction: float = float(index) / maxf(1, cards.size() - 1) - 0.5
-		view.position = Vector2((size.x - width) / 2 + index * gap, absf(fraction) * 7 + 16)
-		view.rotation = fraction * 0.055 - (0.06 if view.get_meta("chosen_card", false) else 0.0)
-		view.pivot_offset = Vector2(79, 158)
+
+		var fraction: float = (
+			float(index)
+			/ maxf(
+				1.0,
+				float(cards.size() - 1)
+			)
+			- 0.5
+		)
+
+		view.position = Vector2(
+			(size.x - width) / 2.0
+			+ float(index) * gap,
+			absf(fraction) * 7.0 + 16.0
+		)
+
+		view.rotation = (
+			fraction * 0.055
+			- (
+				0.06
+				if bool(
+					view.get_meta(
+						"chosen_card",
+						false
+					)
+				)
+				else 0.0
+			)
+		)
+
+		view.pivot_offset = Vector2(
+			79.0,
+			158.0
+		)
+
 		view.z_index = index
+
 
 func _input(event: InputEvent) -> void:
 	if not mobile_mode:
 		return
+
 	if event is InputEventScreenTouch:
-		if event.pressed and get_global_rect().has_point(event.position):
-			drag_origin = event.position
-			dragging = true
-			drag_distance = 0
-		elif not event.pressed:
+		if event.pressed:
+			if get_global_rect().has_point(event.position):
+				drag_origin = event.position
+				dragging = true
+				drag_distance = 0.0
+		else:
 			dragging = false
+
 	elif event is InputEventScreenDrag and dragging:
-		drag_distance = maxf(drag_distance,absf(event.position.x-drag_origin.x))
+		drag_distance = maxf(
+			drag_distance,
+			absf(
+				event.position.x
+				- drag_origin.x
+			)
+		)
+
 		scroll_offset -= event.relative.x
 		arrange()

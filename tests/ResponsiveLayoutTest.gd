@@ -84,14 +84,18 @@ func _ready() -> void:
 			check(fan.clip_contents,"cards clipped at left/right safe bounds")
 			check(fan.global_position.x>=safe.x and fan.global_position.x+fan.size.x<=logical.x-safe.z,"hand respects side safe areas")
 			check(fan.global_position.y+fan.size.y<=logical.y-safe.w+0.5,"hand clears home indicator")
-			check((fan.size.y-fan.mobile_lift)/sy<=125,"resting hand height bounded in CSS pixels")
+			var expected_hand_height: float = LAYOUT.hand_height(app, false) / sy
+			check(absf((fan.size.y-fan.mobile_lift)/sy-expected_hand_height)<=2,"resting hand uses the orientation-specific full-card height")
 			check(app.match_hud.get_node("TopBar/MatchStrip").position.y>=safe.y,"phase strip clears top notch")
 			var footer: Control = app.match_hud.get_node("HandActions")
-			check(footer.size.y/sy>=36 and footer.size.y/sy<=44,"action bar is 36-44 CSS pixels high")
+			var expected_action_height: float = LAYOUT.action_height(app) / sy
+			check(absf(footer.size.y/sy-expected_action_height)<=2,"action bar uses the mobile orientation height")
 			var first: Button = fan.cards[0]
-			check(first.size.x/sx>=140 and first.visual.get_node("CardDescription").get_theme_font_size("font_size")*first.visual.scale.y/sy>=12,"mobile card width and body text stay readable")
+			var minimum_card_width: float = 140.0 if css.y>css.x else 116.0
+			var rendered_body_size: float = first.visual.get_node("CardDescription").get_theme_font_size("font_size")*first.visual.scale.y/sy
+			check(first.size.x/sx>=minimum_card_width and rendered_body_size>=12,"orientation-specific mobile card and body text stay readable width=%s body=%s css=%s" % [first.size.x/sx,rendered_body_size,css])
 			var visible_ratio: float = (fan.size.y-first.position.y)/first.size.y
-			check(visible_ratio>=0.40 and visible_ratio<=0.55,"resting hand reveals 40-55 percent of each card")
+			check(visible_ratio>=1.0,"resting hand shows the complete card body")
 			check(is_equal_approx(app.table.camera.fov,59.0 if css.y>css.x else 58.0),"mobile camera uses orientation-specific framing")
 			app.match_hud.show_preview(NetworkManager.private_state.hand[0])
 			var card_preview: Control = app.match_hud.preview
@@ -103,8 +107,9 @@ func _ready() -> void:
 			check(not is_instance_valid(app.match_hud.preview),"tap outside closes touch preview")
 			fan.scroller.value = fan.scroller.max_value-fan.scroller.page
 			check(fan.cards.back().visible and not fan.cards[0].visible,"horizontal scroll reaches last card and hides offscreen cards")
+			var tapped_uid: int = int(fan.cards.back().get_meta("mobile_uid", -1))
 			fan.cards.back().pressed.emit()
-			check(fan.cards.back().position.y==0 and app.selected<0,"card focus raises without submitting action")
+			check(app.selected==tapped_uid,"first mobile tap selects the card without a focus-only tap")
 		else:
 			check(not fan.mobile_mode and not fan.clip_contents and fan.size.y>=170,"desktop retains full fan")
 			check(is_equal_approx(app.table.camera.fov,57) and app.table.camera_goal.is_equal_approx(Vector3(0,7.7,9.1)),"desktop camera unchanged")
@@ -120,16 +125,17 @@ func _ready() -> void:
 		var controller: TargetingController = app.table.targeting
 		check(controller.valid_target_ids.size()==6,"six valid opponents exposed in target mode")
 		if compact:
-			check((fan.size.y-fan.mobile_lift)/sy>=40 and (fan.size.y-fan.mobile_lift)/sy<=60,"targeting collapses hand to 40-60 viewport units / practical CSS strip")
+			var expected_target_hand: float = LAYOUT.hand_height(app, true) / sy
+			check(absf((fan.size.y-fan.mobile_lift)/sy-expected_target_hand)<=2,"targeting preserves a full touchable card in the orientation-specific hand")
 			var cancel: Control = app.match_hud.get_node("HandActions/CancelSelection")
-			check(cancel.size.y/sy>=36 and cancel.get_global_rect().end.y<=fan.global_position.y+fan.mobile_lift,"cancel stays reachable above resting hand")
+			check(cancel.size.y/sy>=42 and cancel.get_global_rect().end.y<=fan.global_position.y+fan.mobile_lift,"cancel stays reachable above the full-card hand")
 		for id in range(2,8):
 			var target: Vector2 = app.table.camera.unproject_position(app.table.avatars[id].global_position+Vector3.UP*1.6)
 			check(app.table.rings[id].visible,"valid target ring visible")
 			if compact:
 				var radius: float = LAYOUT.units(app,28)
 				var hit := Rect2(target-Vector2.ONE*radius,Vector2.ONE*radius*2)
-				check(not hit.intersects(fan.get_global_rect()) and not hit.intersects(app.match_hud.get_node("HandActions").get_global_rect()),"48px target hit area clear of hand and actions "+str(css)+":"+str(id))
+				check(not hit.intersects(fan.get_global_rect()) and not hit.intersects(app.match_hud.get_node("HandActions").get_global_rect()),"48px target hit clear %s:%s hit=%s hand=%s actions=%s" % [css,id,hit,fan.get_global_rect(),app.match_hud.get_node("HandActions").get_global_rect()])
 				check(controller.pick_touch_player(target+Vector2(radius*0.85,0))==id,"forgiving avatar touch "+str(css)+":"+str(id)+" got "+str(controller.pick_touch_player(target+Vector2(radius*0.85,0)))+" at "+str(target))
 				var panel: Rect2 = app.table.nameplates[id].screen_rect
 				check(controller.pick_touch_player(Vector2(panel.position.x+4,panel.get_center().y))==id,"entire name/HP panel selects player "+str(id))

@@ -113,12 +113,20 @@ func _ready() -> void:
 		await get_tree().create_timer(0.3).timeout
 		check(app.table.avatars.size()==7,"seven players present "+str(dimensions))
 		if dimensions.x<1000:
-			check(app.match_hud.hand.size.y-app.match_hud.hand.mobile_lift<=load("res://scripts/ui/MatchLayout.gd").units(self,125),"mobile hand is a compact bottom strip")
+			var expected_hand: float = load("res://scripts/ui/MatchLayout.gd").hand_height(app, false)
+			check(absf(app.match_hud.hand.size.y-app.match_hud.hand.mobile_lift-expected_hand)<=2,"mobile hand reserves the orientation-specific full-card height")
 			var fan: Control = app.match_hud.hand
 			check(fan.get_node("HandScroll").visible,"large hand has horizontal scroll control")
-			var focused: Button = fan.cards[1]
-			focused.pressed.emit()
-			check(focused.position.y==0 and fan.cards[0].position.y>focused.position.y and app.selected<0,"first card tap raises it for reading without playing")
+			var tapped: Button = fan.cards[1]
+			var tapped_uid: int = int(tapped.get_meta("mobile_uid", -1))
+			fan.drag_distance = load("res://scripts/ui/MatchLayout.gd").drag_threshold(app) + 1.0
+			tapped.pressed.emit()
+			check(app.selected<0,"horizontal drag release never selects or plays a card")
+			fan.drag_distance = 0.0
+			tapped.pressed.emit()
+			check(app.selected==tapped_uid,"first card tap selects it immediately without a focus-only tap")
+			app.selected = -1
+			app.refresh()
 		else:
 			check(app.match_hud.hand.size.y>=170,"desktop fan retains original height")
 		var bounds: Vector2 = get_viewport().get_visible_rect().size
@@ -126,7 +134,9 @@ func _ready() -> void:
 		for id in app.table.avatars:
 			var at: Vector2 = app.table.camera.unproject_position(app.table.avatars[id].global_position+Vector3.UP*1.6)
 			var resting_top: float = app.match_hud.hand.global_position.y + (app.match_hud.hand.mobile_lift if dimensions.x<1000 else 0)
-			check(at.x>0 and at.x<bounds.x and at.y>50 and at.y<resting_top,"avatar visible above resting cards "+str(dimensions)+":"+str(id))
+			# The local bottom seat may sit behind its own full-card hand in short
+			# landscape; every opponent and the center table must remain unobscured.
+			check(at.x>0 and at.x<bounds.x and at.y>50 and (id==1 or at.y<resting_top),"opponent visible above full-card hand %s:%s at=%s hand_top=%s" % [dimensions,id,at,resting_top])
 			check(app.table.nameplates[id].screen_rect.get_center().distance_to(at)<maxf(bounds.x*0.3,bounds.y*0.22),"nameplate remains near its player "+str(dimensions)+":"+str(id))
 			var rect: Rect2 = app.table.nameplates[id].screen_rect
 			for other in occupied_plates:

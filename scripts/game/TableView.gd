@@ -28,6 +28,7 @@ var seen_presentation: Dictionary = {}
 var reaction_source: int = 0
 var reaction_target: int = 0
 var state_signature: String = ""
+var targeting_frame: bool = false
 
 func _ready() -> void:
 	AudioManager.table = self
@@ -75,7 +76,12 @@ func _process(delta: float) -> void:
 	var offset := Vector3(sin(Time.get_ticks_msec() * 0.08), cos(Time.get_ticks_msec() * 0.1), 0) * camera_shake
 	var previous_camera: Vector3 = camera.position
 	camera.position = camera.position.lerp(camera_goal + offset, minf(1.0, delta * 12))
-	var framing: Vector3 = Vector3(0,-1.1,0) if load("res://scripts/ui/MatchLayout.gd").portrait(self) else Vector3(0,1.0,0)
+	var frame_layout: Script = load("res://scripts/ui/MatchLayout.gd")
+	var framing: Vector3 = (
+		Vector3(0, -1.1, 0)
+		if frame_layout.portrait(self)
+		else (Vector3(0, -3.25, 0) if targeting_frame and frame_layout.mobile_landscape(self) else Vector3(0, 1.0, 0))
+	)
 	camera.look_at(duel_focus if Time.get_ticks_msec() < duel_until else framing)
 	if previous_camera.distance_squared_to(camera.position) > 0.000001:
 		plate_layout_key = ""
@@ -146,6 +152,7 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 		return
 	state_signature = next_signature
 	plate_layout_key = ""
+	targeting_frame = not targets.is_empty()
 	local_player = local_id
 	if built_match != int(state.match_id):
 		for avatar in avatars.values():
@@ -245,7 +252,7 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 	elif layout_mode == match_layout.MOBILE_LANDSCAPE:
 		camera_radius = 9.4 + extra_seats * 0.12
 		camera_height = 7.9 + extra_seats * 0.08
-		camera.fov = 58.0
+		camera.fov = 68.0 if targeting_frame else 58.0
 		camera.keep_aspect = Camera3D.KEEP_HEIGHT
 		camera.v_offset = 0
 	else:
@@ -254,7 +261,12 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 	camera_goal = Vector3(sin(local_angle) * camera_radius, camera_height, cos(local_angle) * camera_radius)
 	if camera.position == Vector3.ZERO:
 		camera.position = camera_goal
-	camera.look_at(Vector3(0,-1.1,0) if load("res://scripts/ui/MatchLayout.gd").portrait(self) else Vector3(0,1.0,0))
+	var initial_framing: Vector3 = (
+		Vector3(0, -1.1, 0)
+		if match_layout.portrait(self)
+		else (Vector3(0, -3.25, 0) if targeting_frame and layout_mode == match_layout.MOBILE_LANDSCAPE else Vector3(0, 1.0, 0))
+	)
+	camera.look_at(initial_framing)
 	if context_player > 0:
 		show_context(context_player)
 
