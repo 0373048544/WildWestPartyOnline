@@ -158,9 +158,10 @@ func signboard(at: Vector3, yaw: float) -> void:
 	text.outline_size = 3
 	sign.add_child(text)
 	text.position = Vector3(0, -0.45, 0.12)
-	var swing := sign.create_tween().set_loops().set_trans(Tween.TRANS_SINE)
-	swing.tween_property(sign, "rotation:z", 0.025, 2.8)
-	swing.tween_property(sign, "rotation:z", -0.025, 2.8)
+	if VisualSettings.decorative_motion():
+		var swing := sign.create_tween().set_loops().set_trans(Tween.TRANS_SINE)
+		swing.tween_property(sign, "rotation:z", 0.025, 2.8)
+		swing.tween_property(sign, "rotation:z", -0.025, 2.8)
 	# A low-poly horseshoe assembled from nine small metal segments.
 	for index in range(9):
 		var angle: float = PI + PI * index / 8.0

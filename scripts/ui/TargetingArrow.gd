@@ -49,6 +49,8 @@ func _ready() -> void:
 	surface.material_override = material
 	add_child(surface)
 	visible = false
+	visibility_changed.connect(func(): set_process(visible))
+	set_process(false)
 
 func _process(_delta: float) -> void:
 	if visible:

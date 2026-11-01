@@ -114,6 +114,21 @@ func _ready() -> void:
 	var spare := give(1, "dodge")
 	GameManager.publish()
 	await settle()
+	var persistent_hud: Control = app.match_hud
+	var persistent_hand: Control = app.match_hud.hand
+	var persistent_card: Button = persistent_hand.cards[0]
+	app.refresh()
+	check(app.match_hud == persistent_hud and app.match_hud.hand == persistent_hand, "duplicate network refresh keeps HUD and hand nodes")
+	app.sid_mode = true
+	app.refresh()
+	check(app.match_hud.hand.cards[0] == persistent_card, "hand state update reuses CardView instance")
+	app.sid_mode = false
+	app.refresh()
+	var refresh_started := Time.get_ticks_usec()
+	for _index in range(100):
+		app.refresh()
+	var refresh_average_us := (Time.get_ticks_usec() - refresh_started) / 100.0
+	print("PROFILE: unchanged in-match refresh average %.1f usec; HUD/card identity preserved" % refresh_average_us)
 	check(buttons(app.match_hud).filter(func(b): return b.disabled and b.text.contains("Cao bồi")).is_empty(), "no permanent player button panels")
 	check(not buttons(app.match_hud).any(func(b): return b.text in ["RỜI BÀN", "HỦY CHỌN MỤC TIÊU", "Hiện tất cả vai trò"]), "no leave/cancel/debug toolbar")
 	check(app.match_hud.has_node("HandActions/EndTurn"), "End Turn accessible near hand")

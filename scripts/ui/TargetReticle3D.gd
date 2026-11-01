@@ -27,6 +27,8 @@ func _ready() -> void:
 	mark.material_override = material
 	add_child(mark)
 	visible = false
+	visibility_changed.connect(func(): set_process(visible))
+	set_process(false)
 
 func line(a: Vector2, b: Vector2, width: float = 0.024) -> void:
 	for outline in [true, false]:

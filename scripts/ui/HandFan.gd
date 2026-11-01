@@ -12,50 +12,86 @@ var dragging: bool = false
 var drag_distance: float = 0
 var mobile_lift: float = 0
 var scroller: HScrollBar
+var configured_size := Vector2.ZERO
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	resized.connect(arrange)
 
 func configure(hand: Array, usable: Array, selected: Array, reactions: bool = false, reasons: Dictionary = {}) -> void:
+	var current_css_size: Vector2 = Vector2(get_window().size)
+	if not configured_size.is_equal_approx(current_css_size):
+		focused_uid = -1
+		configured_size = current_css_size
 	mobile_mode = load("res://scripts/ui/MatchLayout.gd").mobile(self)
+	var existing: Dictionary = {}
+	for old_view in cards:
+		if is_instance_valid(old_view):
+			existing[int(old_view.get_meta("mobile_uid", -1))] = old_view
+	cards.clear()
+
 	if mobile_mode:
 		clip_contents = true
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		mobile_lift = load("res://scripts/ui/MatchLayout.gd").hand_lift(self,get_meta("target_mode",false))
+	else:
+		clip_contents = false
+		mobile_lift = 0
+
 	for card in hand:
-		var view: Button = load("res://scenes/ui/CardUI.tscn").instantiate()
-		add_child(view)
+		var uid: int = int(card.instance_id)
+		var view: Button = existing.get(uid)
+		if is_instance_valid(view):
+			existing.erase(uid)
+		else:
+			view = load("res://scenes/ui/CardUI.tscn").instantiate()
+			add_child(view)
+			view.pressed.connect(_on_view_pressed.bind(view))
+			view.preview_requested.connect(_on_view_preview.bind(view))
+			view.preview_closed.connect(func(): preview_closed.emit())
+
+		view.set_meta("mobile_uid",uid)
+		view.set_meta("preview_card",card)
 		view.configure(card, CardData.data(card.card_data_id), usable.has(card.instance_id), selected.has(card.instance_id), str(reasons.get(card.instance_id, "")))
 		view.compact(selected.has(card.instance_id), reactions and usable.has(card.instance_id))
 		if mobile_mode:
 			view.touch_compact(minf(size.x,load("res://scripts/ui/MatchLayout.gd").units(self,144)))
-		var uid: int = card.instance_id
-		view.set_meta("mobile_uid",uid)
-		view.pressed.connect(func():
-			if not view.block_activation:
-				if mobile_mode and drag_distance > 12:
-					return
-				if mobile_mode and focused_uid != uid:
-					focused_uid = uid
-					arrange()
-				else:
-					card_clicked.emit(uid))
-		view.preview_requested.connect(func(): preview_requested.emit(card))
-		view.preview_closed.connect(func(): preview_closed.emit())
 		cards.append(view)
+
+	for stale in existing.values():
+		if is_instance_valid(stale):
+			stale.queue_free()
+
 	arrange()
 	if mobile_mode:
-		scroller = HScrollBar.new()
-		scroller.name = "HandScroll"
+		if not is_instance_valid(scroller):
+			scroller = HScrollBar.new()
+			scroller.name = "HandScroll"
+			scroller.value_changed.connect(func(value): scroll_offset = value; arrange())
+			add_child(scroller)
+			scroller.z_index = 300
 		scroller.position = Vector2(0,size.y-18)
 		scroller.size = Vector2(size.x,18)
 		scroller.max_value = maxf(size.x,content_width())
 		scroller.page = size.x
 		scroller.visible = scroller.max_value > size.x
-		scroller.value_changed.connect(func(value): scroll_offset = value; arrange())
-		add_child(scroller)
-		scroller.z_index = 300
+	elif is_instance_valid(scroller):
+		scroller.visible = false
+
+func _on_view_pressed(view: Button) -> void:
+	var pressed_uid := int(view.get_meta("mobile_uid", -1))
+	if view.block_activation:
+		return
+	if mobile_mode and drag_distance > 12:
+		return
+	if mobile_mode and focused_uid != pressed_uid:
+		focused_uid = pressed_uid
+		arrange()
+	else:
+		card_clicked.emit(pressed_uid)
+
+func _on_view_preview(view: Button) -> void:
+	preview_requested.emit(view.get_meta("preview_card", {}))
 
 func card_spacing() -> float:
 	var width: float = cards[0].size.x if not cards.is_empty() else 158

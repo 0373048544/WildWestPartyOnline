@@ -27,6 +27,7 @@ var presentation_wait: float = 0
 var seen_presentation: Dictionary = {}
 var reaction_source: int = 0
 var reaction_target: int = 0
+var state_signature: String = ""
 
 func _ready() -> void:
 	AudioManager.table = self
@@ -72,10 +73,14 @@ func _process(delta: float) -> void:
 		return
 	camera_shake = maxf(0.0, camera_shake - delta * 0.25)
 	var offset := Vector3(sin(Time.get_ticks_msec() * 0.08), cos(Time.get_ticks_msec() * 0.1), 0) * camera_shake
+	var previous_camera: Vector3 = camera.position
 	camera.position = camera.position.lerp(camera_goal + offset, minf(1.0, delta * 12))
 	var framing: Vector3 = Vector3(0,-1.1,0) if load("res://scripts/ui/MatchLayout.gd").portrait(self) else Vector3(0,1.0,0)
 	camera.look_at(duel_focus if Time.get_ticks_msec() < duel_until else framing)
-	layout_nameplates()
+	if previous_camera.distance_squared_to(camera.position) > 0.000001:
+		plate_layout_key = ""
+	if plate_layout_key.is_empty():
+		layout_nameplates()
 	for ring in rings.values():
 		ring.rotation.y += delta * 0.5
 		ring.scale = Vector3.ONE * (1.0 + 0.025 * sin(Time.get_ticks_msec() * 0.005))
@@ -133,6 +138,14 @@ func layout_nameplates() -> void:
 		occupied.append(rect)
 
 func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
+	var next_signature := JSON.stringify([
+		state.get("match_id", 0), state.get("players", []),
+		state.get("current_player", 0), local_id, targets
+	]) + str(get_viewport().get_visible_rect().size)
+	if next_signature == state_signature:
+		return
+	state_signature = next_signature
+	plate_layout_key = ""
 	local_player = local_id
 	if built_match != int(state.match_id):
 		for avatar in avatars.values():

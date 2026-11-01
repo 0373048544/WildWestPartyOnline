@@ -25,6 +25,7 @@ var expression_until: int = 0
 var hat_rest_y: float = 2.08
 var target_dimmed: bool = false
 var idle_phase: float = 0
+var mobile_process_accumulator: float = 0.0
 var weapon_visual_id: String = ""
 static var mesh_cache: Dictionary = {}
 
@@ -284,7 +285,12 @@ func set_hover_state(value: bool) -> void:
 		var base: Color = Color(color).darkened(0.48) if target_dimmed else color
 		materials[color].albedo_color = base.lightened(0.12) if value else base
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if VisualSettings.constrained_device():
+		mobile_process_accumulator += delta
+		if mobile_process_accumulator < 1.0 / 30.0:
+			return
+		mobile_process_accumulator = 0.0
 	if rig == null or dead:
 		return
 	if expression != "idle" and Time.get_ticks_msec() > expression_until:

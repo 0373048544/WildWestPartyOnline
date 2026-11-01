@@ -33,6 +33,7 @@ var personal_toasts: Control
 var reaction_banner: Control
 
 func _ready() -> void:
+	set_process(false)
 	add_child(load("res://scripts/ui/WebLayout.gd").new())
 	var theme := SaloonTheme.create()
 	canvas = CanvasLayer.new()
@@ -111,6 +112,19 @@ func button(text: String, callback: Callable, parent: Node = content, disabled: 
 	return node
 
 func refresh() -> void:
+	var state: Dictionary = NetworkManager.public_state
+	var in_game: bool = not state.is_empty() and state.get("started", false)
+	# Network snapshots are frequent. Keep the table and HUD alive for the whole
+	# match; MatchHUD invalidates only the sections whose input changed.
+	if (
+		in_game
+		and is_instance_valid(table)
+		and is_instance_valid(match_hud)
+		and hud_match == int(state.get("match_id", -1))
+	):
+		build_game(state)
+		return
+
 	for child in root.get_children():
 		if child.name == "PlayerInfoCard" and NetworkManager.public_state.get("started", false):
 			continue
@@ -118,9 +132,9 @@ func refresh() -> void:
 		# Detach the old screen now and destroy it after signal delivery completes.
 		root.remove_child(child)
 		child.queue_free()
+		if child == match_hud:
+			match_hud = null
 	reaction_label = null
-	var state: Dictionary = NetworkManager.public_state
-	var in_game: bool = not state.is_empty() and state.get("started", false)
 	if in_game and not is_instance_valid(table):
 		table = load("res://scenes/game/GameTable.tscn").instantiate()
 		add_child(table)
@@ -209,9 +223,10 @@ func build_menu() -> void:
 	title.add_theme_color_override("font_color", SaloonTheme.GOLD)
 	title.add_theme_color_override("font_shadow_color", Color("#080f17"))
 	title.add_theme_constant_override("shadow_offset_y", 4)
-	var pulse := title.create_tween().set_loops()
-	pulse.tween_property(title, "modulate", Color("#f5c879"), 1.8).set_trans(Tween.TRANS_SINE)
-	pulse.tween_property(title, "modulate", Color.WHITE, 1.8).set_trans(Tween.TRANS_SINE)
+	if VisualSettings.decorative_motion():
+		var pulse := title.create_tween().set_loops()
+		pulse.tween_property(title, "modulate", Color("#f5c879"), 1.8).set_trans(Tween.TRANS_SINE)
+		pulse.tween_property(title, "modulate", Color.WHITE, 1.8).set_trans(Tween.TRANS_SINE)
 	var subtitle := label("A private saloon. A hidden allegiance. One last card.", 16)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(HSeparator.new())
@@ -282,8 +297,9 @@ func build_game(state: Dictionary) -> void:
 		own = {}
 	if is_instance_valid(reaction_banner):
 		reaction_banner.present(self, own.get("reaction", {}), state)
-	match_hud = load("res://scripts/ui/MatchHUD.gd").new()
-	root.add_child(match_hud)
+	if not is_instance_valid(match_hud):
+		match_hud = load("res://scripts/ui/MatchHUD.gd").new()
+		root.add_child(match_hud)
 	match_hud.initialize(self, state, own)
 	if NetworkManager.mode == "websocket" and NetworkManager.room_client.reconnecting:
 		table.targeting.blocked = true
@@ -318,6 +334,7 @@ func play_selected(target: int) -> void:
 
 func modal() -> VBoxContainer:
 	overlay = ColorRect.new()
+	overlay.name = "GameModal"
 	overlay.color = Color(0.025, 0.03, 0.05, 0.96)
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.add_child(overlay)
@@ -335,6 +352,15 @@ func modal() -> VBoxContainer:
 	frame.modulate = Color(1, 1, 1, 0.75)
 	enter.tween_property(frame, "modulate", Color.WHITE, 0.18)
 	return box
+
+func clear_game_modal() -> void:
+	var current: Node = root.get_node_or_null("GameModal")
+	if current:
+		root.remove_child(current)
+		current.queue_free()
+	overlay = null
+	reaction_label = null
+	set_process(false)
 
 func show_role(role: String, match_number: int) -> void:
 	AudioManager.play_once("role:%d" % match_number, "role")
@@ -359,6 +385,7 @@ func show_reaction(request: Dictionary) -> void:
 	var kind: String = request.reaction_type
 	label(request.get("title", {"dodge": "YOU ARE BEING SHOT", "survive": "USE DRINK TO SURVIVE?", "duel": "SHOWDOWN • RESPOND WITH SHOOT"}.get(kind, "CHỌN HÀNH ĐỘNG")), 25, box)
 	reaction_label = label("", 22, box)
+	set_process(true)
 	reaction_until = Time.get_ticks_msec() / 1000.0 + float(request.remaining)
 	var request_id: int = request.request_id
 	if request.has("cards"):
@@ -391,6 +418,7 @@ func show_character_selection(own: Dictionary) -> void:
 	label("CHỌN NHÂN VẬT", 26, box)
 	label("Hai lựa chọn riêng của bạn. Chọn một thẻ rồi xác nhận. Hết giờ: máy chủ chọn một trong hai.", 15, box)
 	reaction_label = label("", 18, box)
+	set_process(true)
 	reaction_until = Time.get_ticks_msec() / 1000.0 + float(own.get("character_remaining", 25))
 	if own.get("character_chosen", false):
 		label("Bạn đã chọn %s" % own.get("selected_character", {}).get("display_name", ""), 24, box)

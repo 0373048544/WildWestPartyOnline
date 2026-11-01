@@ -31,9 +31,13 @@ func configure(title: String, phase: String, remaining: float) -> void:
 	row.add_child(countdown)
 	deadline = Time.get_ticks_msec()/1000.0 + remaining
 	countdown.visible = remaining > 0
+	set_process(countdown.visible)
 	modulate.a = 0.6
 	create_tween().tween_property(self,"modulate:a",1.0,0.12)
 
 func _process(_delta: float) -> void:
 	if countdown and countdown.visible:
-		countdown.text = "%.1f s" % maxf(0,deadline-Time.get_ticks_msec()/1000.0)
+		var remaining := maxf(0,deadline-Time.get_ticks_msec()/1000.0)
+		countdown.text = "%.1f s" % remaining
+		if remaining <= 0:
+			set_process(false)

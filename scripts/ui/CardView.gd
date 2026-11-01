@@ -13,8 +13,23 @@ var touch_layout: bool = false
 var block_activation: bool = false
 var holding: bool = false
 var hold_time: float = 0.0
+var glow: Tween
+
+func _ready() -> void:
+	set_process(false)
 
 func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: bool, reason: String = "") -> void:
+	if lift:
+		lift.kill()
+	if glow:
+		glow.kill()
+	if is_instance_valid(visual):
+		visual.free()
+	compact_mode = false
+	touch_layout = false
+	selected_lift = 0.0
+	holding = false
+	set_process(false)
 	custom_minimum_size = Vector2(210, 214)
 	disabled = not usable
 	# MatchHUD owns the single compact preview on both desktop and touch.
@@ -58,10 +73,11 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon.draw.connect(func(): draw_symbol(icon))
 	visual.add_child(icon)
-	mouse_entered.connect(func(): hover(true))
-	mouse_exited.connect(func(): hover(false))
-	button_down.connect(func(): holding = true; hold_time = 0; block_activation = false)
-	button_up.connect(func(): holding = false)
+	if not mouse_entered.is_connected(_hover_entered):
+		mouse_entered.connect(_hover_entered)
+		mouse_exited.connect(_hover_exited)
+		button_down.connect(_press_started)
+		button_up.connect(_press_ended)
 	visual.modulate = Color("#fff0bd") if chosen else Color.WHITE
 
 func add_text(value: String, bounds: Rect2, font_size: int, color: Color) -> Label:
@@ -82,6 +98,7 @@ func _gui_input(event: InputEvent) -> void:
 	# Disabled cards remain inspectable by touch/long press.
 	if event is InputEventScreenTouch or (event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT):
 		holding = event.pressed
+		set_process(holding)
 		if event.pressed:
 			hold_time = 0
 			block_activation = false
@@ -111,9 +128,12 @@ func compact(chosen: bool, reaction: bool) -> void:
 	selected_lift = -30 if chosen else 0
 	visual.position.y = selected_lift
 	if reaction:
-		var glow := create_tween().set_loops()
-		glow.tween_property(visual, "modulate", Color("#fff0b5"), 0.55)
-		glow.tween_property(visual, "modulate", Color.WHITE, 0.55)
+		if VisualSettings.decorative_motion():
+			glow = create_tween().set_loops()
+			glow.tween_property(visual, "modulate", Color("#fff0b5"), 0.55)
+			glow.tween_property(visual, "modulate", Color.WHITE, 0.55)
+		else:
+			visual.modulate = Color("#fff0c8")
 
 func _process(delta: float) -> void:
 	if holding:
@@ -121,6 +141,23 @@ func _process(delta: float) -> void:
 		if hold_time >= 0.45 and not block_activation:
 			block_activation = true
 			preview_requested.emit()
+			set_process(false)
+
+func _hover_entered() -> void:
+	hover(true)
+
+func _hover_exited() -> void:
+	hover(false)
+
+func _press_started() -> void:
+	holding = true
+	hold_time = 0.0
+	block_activation = false
+	set_process(true)
+
+func _press_ended() -> void:
+	holding = false
+	set_process(false)
 
 func touch_compact(width: float) -> void:
 	touch_layout = true

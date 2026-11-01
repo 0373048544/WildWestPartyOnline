@@ -17,7 +17,7 @@ static func panel(color: Color = INK, border: Color = GOLD, padding: float = 14.
 	style.content_margin_top = 10
 	style.content_margin_bottom = 10
 	style.shadow_color = Color(0, 0, 0, 0.25)
-	style.shadow_size = 5
+	style.shadow_size = VisualSettings.ui_shadow_size(5)
 	style.shadow_offset = Vector2(0, 4)
 	return style
 

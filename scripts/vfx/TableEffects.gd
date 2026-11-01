@@ -5,6 +5,13 @@ static var gun_puff_mesh: QuadMesh
 static var gun_puff_material: StandardMaterial3D
 static var fleck_mesh: BoxMesh
 static var fleck_material: StandardMaterial3D
+static var spark_mesh: SphereMesh
+static var spark_materials: Dictionary = {}
+static var smoke_mesh: SphereMesh
+static var smoke_materials: Array[StandardMaterial3D] = []
+var floating_pool: Array[Label3D] = []
+var bullet_pool: Array[MeshInstance3D] = []
+var puff_pool: Array[MeshInstance3D] = []
 
 func gun_smoke(at: Vector3) -> void:
 	if not gun_puff_mesh:
@@ -21,17 +28,22 @@ func gun_smoke(at: Vector3) -> void:
 		gun_puff_material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 		gun_puff_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	for index in range(2):
-		var puff := MeshInstance3D.new()
+		var puff: MeshInstance3D = puff_pool.pop_back() if not puff_pool.is_empty() else MeshInstance3D.new()
 		puff.mesh = gun_puff_mesh
 		puff.material_override = gun_puff_material
-		add_child(puff)
+		if not puff.is_inside_tree():
+			add_child(puff)
+		elif puff.get_parent() != self:
+			puff.reparent(self)
+		puff.visible = true
+		puff.transparency = 0.0
 		puff.position = at
 		puff.scale = Vector3.ONE * 0.22
 		var tween := puff.create_tween().set_parallel()
 		tween.tween_property(puff,"position",at+Vector3(0.08*index,0.35+0.12*index,0),0.55)
 		tween.tween_property(puff,"scale",Vector3.ONE*0.65,0.55)
 		tween.tween_property(puff,"transparency",1.0,0.55)
-		tween.chain().tween_callback(puff.queue_free)
+		tween.chain().tween_callback(_release_puff.bind(puff))
 
 var judgement_cards: Dictionary = {}
 
@@ -39,17 +51,21 @@ func spark(at: Vector3, color: Color, count: int = 6, radius: float = 0.65) -> v
 	count = VisualSettings.particle_count(count)
 	for i in range(count):
 		var piece := MeshInstance3D.new()
-		var mesh := SphereMesh.new()
-		mesh.radius = 0.045
-		mesh.height = 0.09
-		mesh.radial_segments = 6
-		mesh.rings = 3
-		piece.mesh = mesh
-		var material := StandardMaterial3D.new()
-		material.albedo_color = color
-		material.emission_enabled = true
-		material.emission = color
-		piece.material_override = material
+		if not spark_mesh:
+			spark_mesh = SphereMesh.new()
+			spark_mesh.radius = 0.045
+			spark_mesh.height = 0.09
+			spark_mesh.radial_segments = 6
+			spark_mesh.rings = 3
+		piece.mesh = spark_mesh
+		var material_key := str(color)
+		if not spark_materials.has(material_key):
+			var material := StandardMaterial3D.new()
+			material.albedo_color = color
+			material.emission_enabled = true
+			material.emission = color
+			spark_materials[material_key] = material
+		piece.material_override = spark_materials[material_key]
 		add_child(piece)
 		piece.position = at
 		var angle: float = TAU * i / count
@@ -60,15 +76,19 @@ func spark(at: Vector3, color: Color, count: int = 6, radius: float = 0.65) -> v
 		tween.chain().tween_callback(piece.queue_free)
 
 func floating(at: Vector3, value: String, color: Color) -> void:
-	var label: Label3D = load("res://scenes/vfx/FloatingText.tscn").instantiate()
-	add_child(label)
+	var label: Label3D = floating_pool.pop_back() if not floating_pool.is_empty() else load("res://scenes/vfx/FloatingText.tscn").instantiate()
+	if not label.is_inside_tree():
+		add_child(label)
+	elif label.get_parent() != self:
+		label.reparent(self)
+	label.visible = true
 	label.text = value
 	label.modulate = color
 	label.position = at
 	var tween := label.create_tween().set_parallel()
 	tween.tween_property(label, "position:y", at.y + 1.1, 0.95).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tween.tween_property(label, "modulate:a", 0.0, 0.4).set_delay(0.55)
-	tween.chain().tween_callback(label.queue_free)
+	tween.chain().tween_callback(_release_floating.bind(label))
 
 func starburst(at: Vector3, size: float = 0.5, duration: float = 0.33) -> void:
 	var shape := ImmediateMesh.new()
@@ -100,17 +120,20 @@ func starburst(at: Vector3, size: float = 0.5, duration: float = 0.33) -> void:
 	tween.tween_callback(node.queue_free)
 
 func smoke(at: Vector3) -> void:
+	if not smoke_mesh:
+		smoke_mesh = SphereMesh.new()
+		smoke_mesh.radius = 0.3
+		smoke_mesh.height = 0.55
+		smoke_mesh.radial_segments = 7
+		smoke_mesh.rings = 4
+		for color in [Color("#b9b6a3"), Color("#e0cfae")]:
+			var material := StandardMaterial3D.new()
+			material.albedo_color = color
+			smoke_materials.append(material)
 	for index in range(VisualSettings.particle_count(6)):
 		var puff := MeshInstance3D.new()
-		var mesh := SphereMesh.new()
-		mesh.radius = 0.3
-		mesh.height = 0.55
-		mesh.radial_segments = 7
-		mesh.rings = 4
-		puff.mesh = mesh
-		var material := StandardMaterial3D.new()
-		material.albedo_color = Color("#b9b6a3") if index % 2 == 0 else Color("#e0cfae")
-		puff.material_override = material
+		puff.mesh = smoke_mesh
+		puff.material_override = smoke_materials[index % 2]
 		add_child(puff)
 		puff.position = at
 		var angle: float = index * TAU / 6
@@ -135,7 +158,7 @@ func muzzle(at: Vector3) -> void:
 
 func bullet(origin: Vector3, target: Vector3, delay: float = 0) -> void:
 	# No collision, damage or authority. A short moving fleck, never a laser.
-	var node := MeshInstance3D.new()
+	var node: MeshInstance3D = bullet_pool.pop_back() if not bullet_pool.is_empty() else MeshInstance3D.new()
 	if not fleck_mesh:
 		fleck_mesh = BoxMesh.new()
 		fleck_mesh.size = Vector3(0.028, 0.028, 0.22)
@@ -144,7 +167,11 @@ func bullet(origin: Vector3, target: Vector3, delay: float = 0) -> void:
 		fleck_material.albedo_color = Color("#ffeab0")
 	node.mesh = fleck_mesh
 	node.material_override = fleck_material
-	add_child(node)
+	if not node.is_inside_tree():
+		add_child(node)
+	elif node.get_parent() != self:
+		node.reparent(self)
+	node.visible = true
 	node.position = origin
 	if origin.distance_to(target) > 0.01:
 		node.look_at(target)
@@ -154,7 +181,37 @@ func bullet(origin: Vector3, target: Vector3, delay: float = 0) -> void:
 		tween.tween_interval(delay)
 		tween.tween_callback(func(): node.visible = true)
 	tween.tween_property(node, "position", target, 0.08)
-	tween.tween_callback(node.queue_free)
+	tween.tween_callback(_release_bullet.bind(node))
+
+func _release_floating(label: Label3D) -> void:
+	if not is_instance_valid(label):
+		return
+	label.visible = false
+	if floating_pool.size() < 12:
+		label.reparent(get_parent())
+		floating_pool.append(label)
+	else:
+		label.queue_free()
+
+func _release_bullet(node: MeshInstance3D) -> void:
+	if not is_instance_valid(node):
+		return
+	node.visible = false
+	if bullet_pool.size() < 16:
+		node.reparent(get_parent())
+		bullet_pool.append(node)
+	else:
+		node.queue_free()
+
+func _release_puff(node: MeshInstance3D) -> void:
+	if not is_instance_valid(node):
+		return
+	node.visible = false
+	if puff_pool.size() < 12:
+		node.reparent(get_parent())
+		puff_pool.append(node)
+	else:
+		node.queue_free()
 
 func flying_card(origin: Vector3, destination: Vector3, face: Dictionary = {}, delay: float = 0.0, hidden: bool = false) -> void:
 	var card := TableObject.new()

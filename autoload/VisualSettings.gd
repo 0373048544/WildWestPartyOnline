@@ -21,4 +21,17 @@ func set_quality(value: String, persist: bool = true) -> void:
 	changed.emit()
 
 func particle_count(count: int) -> int:
-	return maxi(2, int(count * {"LOW": 0.4, "MEDIUM": 0.7, "HIGH": 1.0}[level]))
+	return maxi(1, int(count * {"LOW": 0.3, "MEDIUM": 0.6, "HIGH": 1.0}[level]))
+
+func constrained_device() -> bool:
+	return OS.has_feature("web") or OS.has_feature("mobile")
+
+func decorative_motion() -> bool:
+	return level == "HIGH" and not constrained_device()
+
+func ui_shadow_size(requested: int) -> int:
+	if level == "LOW":
+		return mini(2, requested)
+	if constrained_device() or level == "MEDIUM":
+		return mini(4, requested)
+	return requested

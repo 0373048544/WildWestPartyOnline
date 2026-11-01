@@ -114,7 +114,7 @@ func _style_banner(kind: String) -> void:
 	banner.add_theme_stylebox_override("panel", SaloonTheme.panel(Color(0.055, 0.075, 0.075, 0.97), border, 18))
 	var main := SaloonTheme.panel(Color("#76502d"), Color("#f2c471"), 12)
 	main.shadow_color = Color(0.95, 0.63, 0.2, 0.28)
-	main.shadow_size = 8
+	main.shadow_size = VisualSettings.ui_shadow_size(8)
 	primary_button.add_theme_stylebox_override("normal", main)
 	primary_button.add_theme_stylebox_override("hover", SaloonTheme.panel(Color("#8d6135"), Color("#ffe0a0"), 12))
 	primary_button.add_theme_stylebox_override("disabled", SaloonTheme.panel(Color("#2c3232"), Color("#555c5b"), 12))

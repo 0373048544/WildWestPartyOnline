@@ -90,6 +90,7 @@ func cancel_targeting(emit_event: bool = true) -> void:
 	targeting_arrow.visible = false
 	reticle.visible = false
 	tooltip.visible = false
+	table.plate_layout_key = ""
 	if emit_event:
 		cancelled.emit()
 
@@ -107,11 +108,13 @@ func update_hover_target(id: int) -> void:
 		targeting_arrow.visible = false
 		reticle.visible = false
 		tooltip.visible = false
+		table.plate_layout_key = ""
 		return
 	hovered_target = id
 	for player_id in table.nameplates:
 		table.nameplates[player_id].hovered = player_id == id
 		table.avatars[player_id].set_hover_state(player_id == id)
+	table.plate_layout_key = ""
 	var valid: bool = valid_target_ids.has(id)
 	var from: Vector3 = table.avatars[local_player].global_position + Vector3(0, 1.85, 0)
 	var to: Vector3 = table.avatars[id].global_position + Vector3(0, 1.5, 0)

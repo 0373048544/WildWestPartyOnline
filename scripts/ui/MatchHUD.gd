@@ -6,9 +6,11 @@ var own: Dictionary
 var request: Dictionary
 var hand: Control
 var preview: Control
-var timer_label: Label
-var deadline: float = 0
 var layout: Script = preload("res://scripts/ui/MatchLayout.gd")
+var top_signature: String = ""
+var log_signature: String = ""
+var hand_signature: String = ""
+var flow_signature: String = ""
 
 
 func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> void:
@@ -16,6 +18,40 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 	state = snapshot
 	own = private
 	request = own.get("reaction", {})
+	var request_identity: Dictionary = request.duplicate(true)
+	# Remaining time is rendered locally. It must not invalidate the UI tree on
+	# every authoritative countdown snapshot.
+	request_identity.erase("remaining")
+	var next_top_signature := JSON.stringify([
+		state.get("current_player", 0),
+		state.get("phase", ""),
+		request.get("request_id", 0),
+		state.get("players", []).map(func(row): return [row.get("player_id", 0), row.get("display_name", "")])
+	]) + str(get_window().size)
+	var next_log_signature := JSON.stringify(state.get("log", [])) + str(app.log_expanded)
+	var next_hand_signature := JSON.stringify([
+		own.get("hand", []), own.get("targets", {}), own.get("disabled_reasons", {}),
+		request_identity, state.get("phase", ""), state.get("current_player", 0),
+		state.get("players", []), app.selected, app.sid_mode, app.sid_cards
+	]) + str(get_window().size)
+	var next_flow_signature := JSON.stringify([
+		state.get("phase", ""), state.get("winner", ""), request_identity,
+		app.menu_open, app.seen_role, state.get("match_id", 0),
+		own.get("role", ""), own.get("character_chosen", false),
+		own.get("character_options", []),
+		NetworkManager.mode == "websocket" and NetworkManager.room_client.reconnecting
+	])
+	var top_changed := next_top_signature != top_signature
+	var log_changed := next_log_signature != log_signature
+	var hand_changed := next_hand_signature != hand_signature
+	var flow_changed := next_flow_signature != flow_signature
+	top_signature = next_top_signature
+	log_signature = next_log_signature
+	hand_signature = next_hand_signature
+	flow_signature = next_flow_signature
+
+	if flow_changed:
+		app.clear_game_modal()
 
 	if app.sid_mode:
 		app.sid_cards = app.sid_cards.filter(
@@ -90,29 +126,45 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 	else:
 		app.table.targeting.cancel_targeting(false)
 
-	build_top()
-	build_log()
+	if top_changed:
+		_free_named("TopBar")
+		build_top()
+
+	if log_changed:
+		_free_named("MatchLog")
+		build_log()
 
 	if state.phase == "CHARACTER_SELECTION":
 		app.table.targeting.blocked = true
-		app.show_character_selection(own)
+		if is_instance_valid(hand):
+			hand.visible = false
+		if flow_changed:
+			app.show_character_selection(own)
 		return
 
 	if not state.winner.is_empty():
-		build_result()
+		if is_instance_valid(hand):
+			hand.visible = false
+		if flow_changed:
+			build_result()
 		return
 
-	build_hand()
+	if hand_changed or not is_instance_valid(hand):
+		build_hand()
+	elif is_instance_valid(hand):
+		hand.visible = true
 
 	if app.menu_open:
-		build_pause()
+		if flow_changed:
+			build_pause()
 
 	elif own.has("role") and app.seen_role != int(state.match_id):
 		app.table.targeting.blocked = true
-		app.show_role(
-			own.role,
-			state.match_id
-		)
+		if flow_changed:
+			app.show_role(
+				own.role,
+				state.match_id
+			)
 
 	elif not request.is_empty() and not [
 		"dodge",
@@ -139,7 +191,7 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 
 			app.table.targeting.blocked = false
 
-			if is_instance_valid(app.personal_toasts):
+			if flow_changed and is_instance_valid(app.personal_toasts):
 				app.personal_toasts.show_notice(
 					str(request.get("title", "Thông báo")),
 					str(request.get("detail", "")),
@@ -148,9 +200,16 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 					2.0
 				)
 
-		else:
+		elif flow_changed:
 			app.table.targeting.blocked = true
 			app.show_reaction(request)
+
+
+func _free_named(node_name: String) -> void:
+	var old: Node = get_node_or_null(node_name)
+	if old:
+		remove_child(old)
+		old.queue_free()
 
 
 func text(
@@ -302,6 +361,7 @@ func build_top() -> void:
 
 func build_log() -> void:
 	var holder := VBoxContainer.new()
+	holder.name = "MatchLog"
 
 	add_child(holder)
 
@@ -381,6 +441,7 @@ func build_log() -> void:
 
 
 func build_hand() -> void:
+	_free_named("HandActions")
 	var local: Dictionary = {}
 
 	for player in state.players:
@@ -540,17 +601,6 @@ func build_hand() -> void:
 		)
 	]
 
-	if not request.is_empty():
-		deadline = (
-			Time.get_ticks_msec() / 1000.0
-			+ float(
-				request.get(
-					"remaining",
-					0
-				)
-			)
-		)
-
 	if app.sid_mode:
 		action(
 			"HỒI 1 MÁU",
@@ -680,13 +730,17 @@ func build_hand() -> void:
 				card.instance_id
 			)
 
-	hand = load(
-		"res://scripts/ui/HandFan.gd"
-	).new()
+	if not is_instance_valid(hand):
+		hand = load(
+			"res://scripts/ui/HandFan.gd"
+		).new()
+		hand.name = "HandFan"
+		add_child(hand)
+		hand.card_clicked.connect(handle_card)
+		hand.preview_requested.connect(show_preview)
+		hand.preview_closed.connect(close_preview)
 
-	hand.name = "HandFan"
-
-	add_child(hand)
+	hand.visible = true
 
 	hand.set_anchors_and_offsets_preset(
 		Control.PRESET_BOTTOM_WIDE
@@ -730,27 +784,6 @@ func build_hand() -> void:
 		)
 	)
 
-	hand.card_clicked.connect(
-		handle_card
-	)
-
-	hand.preview_requested.connect(
-		show_preview
-	)
-
-	hand.preview_closed.connect(
-		close_preview
-	)
-
-
-func _process(_delta: float) -> void:
-	if is_instance_valid(timer_label):
-		timer_label.text = "%.1f s" % maxf(
-			0.0,
-			deadline
-			- Time.get_ticks_msec()
-			/ 1000.0
-		)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -915,7 +948,7 @@ func show_preview(card: Dictionary) -> void:
 	)
 	style.set_corner_radius_all(int(15.0 * unit))
 	style.shadow_color = Color(0, 0, 0, 0.35)
-	style.shadow_size = int(7.0 * unit)
+	style.shadow_size = VisualSettings.ui_shadow_size(int(7.0 * unit))
 	style.shadow_offset = Vector2(0, 3.0 * unit)
 	preview.add_theme_stylebox_override("panel", style)
 
