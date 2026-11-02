@@ -231,10 +231,12 @@ func refresh() -> void:
 		button("Dismiss", func(): error_text = ""; refresh(), notice)
 
 func build_menu() -> void:
+	var short_landscape := root.size.y < 520.0 and root.size.x > root.size.y
 	var ornament := label("✦  SALOON NIGHTS  ✦", 16)
 	ornament.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ornament.add_theme_color_override("font_color", SaloonTheme.GOLD)
-	var title := label("WILD WEST\nPARTY ONLINE", 30 if root.size.x < 900 else 40)
+	ornament.visible = not short_landscape
+	var title := label("WILD WEST\nPARTY ONLINE", 24 if short_landscape else (30 if root.size.x < 900 else 40))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_color_override("font_color", SaloonTheme.GOLD)
 	title.add_theme_color_override("font_shadow_color", Color("#080f17"))
@@ -245,13 +247,14 @@ func build_menu() -> void:
 		pulse.tween_property(title, "modulate", Color.WHITE, 1.8).set_trans(Tween.TRANS_SINE)
 	var subtitle := label("A private saloon. A hidden allegiance. One last card.", 16)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle.visible = not short_landscape
 	content.add_child(HSeparator.new())
 	if NetworkManager.connecting:
 		label("Đang kết nối đến máy chủ phòng...", 24)
 		button("CANCEL", leave)
 		return
 	var space := Control.new()
-	space.custom_minimum_size.y = 12
+	space.custom_minimum_size.y = 0 if short_landscape else 12
 	content.add_child(space)
 	if screen == "main":
 		button("HOST GAME", func(): screen = "host"; refresh())
@@ -261,7 +264,7 @@ func build_menu() -> void:
 		if not OS.has_feature("web"):
 			button("QUIT", func(): get_tree().quit())
 		return
-	label("HOST A SALOON" if screen == "host" else "JOIN A SALOON", 26)
+	label("HOST A SALOON" if screen == "host" else "JOIN A SALOON", 20 if short_landscape else 26)
 	label("Player name")
 	name_field = LineEdit.new()
 	name_field.text = NetworkManager.local_name
@@ -274,8 +277,17 @@ func build_menu() -> void:
 		room_field.placeholder_text = "AB7KQ2"
 		room_field.max_length = 6
 		content.add_child(room_field)
-	button("HOST" if screen == "host" else "JOIN", connect_game)
-	button("BACK", func(): screen = "main"; refresh())
+	if short_landscape:
+		var actions := HBoxContainer.new()
+		actions.add_theme_constant_override("separation", 10)
+		content.add_child(actions)
+		var submit := button("HOST" if screen == "host" else "JOIN", connect_game, actions)
+		var back := button("BACK", func(): screen = "main"; refresh(), actions)
+		submit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	else:
+		button("HOST" if screen == "host" else "JOIN", connect_game)
+		button("BACK", func(): screen = "main"; refresh())
 
 func connect_game() -> void:
 	error_text = ""
@@ -313,6 +325,11 @@ func build_game(state: Dictionary) -> void:
 		own = {}
 	if is_instance_valid(reaction_banner):
 		reaction_banner.present(self, own.get("reaction", {}), state)
+	if is_instance_valid(personal_toasts):
+		var reaction_kind: String = str(own.get("reaction", {}).get("reaction_type", ""))
+		# A toast that began before an urgent reaction must never cover its title or
+		# buttons. Its own lifetime continues invisibly and the queue resumes after.
+		personal_toasts.visible = reaction_kind not in ["dodge", "duel", "indians", "survive"] and not is_instance_valid(overlay)
 	if not is_instance_valid(match_hud):
 		match_hud = load("res://scripts/ui/MatchHUD.gd").new()
 		root.add_child(match_hud)
@@ -409,7 +426,8 @@ func clear_game_modal() -> void:
 	if is_instance_valid(match_hud):
 		match_hud.set_modal_blocked(false)
 	if is_instance_valid(personal_toasts):
-		personal_toasts.visible = true
+		var reaction_kind: String = str(NetworkManager.private_state.get("reaction", {}).get("reaction_type", ""))
+		personal_toasts.visible = reaction_kind not in ["dodge", "duel", "indians", "survive"]
 
 func show_role(role: String, match_number: int) -> void:
 	AudioManager.play_once("role:%d" % match_number, "role")
@@ -432,7 +450,21 @@ func show_role(role: String, match_number: int) -> void:
 func show_reaction(request: Dictionary) -> void:
 	var box := modal()
 	var kind: String = request.reaction_type
+	if kind in ["department_store_give", "store"]:
+		overlay.color = Color(0.02, 0.025, 0.03, 0.62)
+		var choice_layout: Script = load("res://scripts/ui/MatchLayout.gd")
+		var available: Rect2 = choice_layout.modal_rect(root)
+		var frame: PanelContainer = overlay.get_node("ModalFrame")
+		var width_ratio: float = 0.90 if choice_layout.mobile_portrait(root) else (0.84 if choice_layout.mobile_landscape(root) else 0.78)
+		var height_ratio: float = 0.90 if choice_layout.mobile_portrait(root) else (0.82 if choice_layout.mobile_landscape(root) else 0.78)
+		var choice_size := Vector2(minf(860, available.size.x * width_ratio), available.size.y * height_ratio)
+		frame.custom_minimum_size = choice_size
+		frame.size = choice_size
+		frame.position = available.get_center() - frame.size * 0.5
 	label(request.get("title", {"dodge": "YOU ARE BEING SHOT", "survive": "USE DRINK TO SURVIVE?", "duel": "SHOWDOWN • RESPOND WITH SHOOT"}.get(kind, "CHỌN HÀNH ĐỘNG")), 25, box)
+	if not str(request.get("detail", "")).is_empty():
+		var detail := label(str(request.detail), 18, box)
+		detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	reaction_label = label("", 22, box)
 	set_process(true)
 	reaction_until = Time.get_ticks_msec() / 1000.0 + float(request.remaining)
@@ -440,8 +472,15 @@ func show_reaction(request: Dictionary) -> void:
 	if request.has("cards"):
 		var choices: Node = load("res://scripts/ui/ChoicePanel.gd").new()
 		box.add_child(choices)
-		choices.configure(self, request.cards, int(request.get("pick_count", 1)), func(ids):
-			intent("reaction", {"request": request_id, "accept": true, "cards": ids}))
+		choices.configure(
+			self,
+			request.cards,
+			int(request.get("pick_count", 1)),
+			func(ids): intent("reaction", {"request": request_id, "accept": true, "cards": ids}),
+			str(request.get("confirm_label", "XÁC NHẬN LỰA CHỌN")),
+			str(request.get("reset_label", "")),
+			str(request.get("confirm_question", ""))
+		)
 	elif request.has("choices"):
 		for choice in request.choices:
 			var option: String = str(choice.id)

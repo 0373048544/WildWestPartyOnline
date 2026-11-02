@@ -68,7 +68,7 @@ func set_expression(value: String, duration: int = 600) -> void:
 	for index in range(brows.size()):
 		brows[index].rotation.z = (-1 if index == 0 else 1) * (0.4 if value == "shoot" else (-0.3 if value in ["dodge", "targeted"] else 0.14))
 	if is_instance_valid(mouth):
-		mouth.scale = Vector3(0.8, 4.0, 1) if value in ["panic", "dodge", "targeted"] else (Vector3(1.4, 0.7, 1) if value in ["drink","shoot"] else Vector3.ONE)
+		mouth.scale = Vector3(0.8, 4.0, 1) if value in ["panic", "dodge", "targeted"] else (Vector3(1.4, 0.7, 1) if value in ["drink","shoot","laugh"] else Vector3.ONE)
 		mouth.rotation.z = 0.24 if value == "death" else 0.0
 	for hand in hands:
 		hand.scale = Vector3(1.18,0.85,1.05) if value in ["shoot","panic"] else Vector3.ONE

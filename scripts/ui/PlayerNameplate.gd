@@ -103,16 +103,16 @@ func _ready() -> void:
 	card.rotation.z = 0.15
 	add_child(card)
 
-func update_info(row: Dictionary, local: int, active: int) -> void:
+func update_info(row: Dictionary, local: int, active: int, choosing: bool = false) -> void:
 	sheriff_badge.visible = row.public_role == "SHERIFF"
-	var badges: String = "BẠN · " if int(row.player_id) == local else ""
+	var badges: String = "⌛ " if choosing else ("BẠN · " if int(row.player_id) == local else "")
 	label.text = badges + str(row.display_name).left(12)
 	label.font_size = 40 if label.text.length() > 16 else 48
 	stats.text = str(row.hand_count)
 	for index in range(hearts.size()):
 		hearts[index].visible = index < int(row.max_hp)
 		hearts[index].material_override.albedo_color = Color("#ec8d79") if index < int(row.current_hp) else Color("#57616a")
-	backing.albedo_color = Color("#59472a") if int(row.player_id) == active else Color("#192c35")
+	backing.albedo_color = Color("#725321") if choosing else (Color("#59472a") if int(row.player_id) == active else Color("#192c35"))
 	modulate_plate(row.is_alive)
 
 func modulate_plate(alive: bool) -> void:

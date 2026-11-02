@@ -6,9 +6,10 @@ var discard_pile: Array = []
 var next_id: int = 1
 
 func validate_definition(definition: Variant) -> String:
-	if not definition is Dictionary or not definition.get("cards") is Array or definition.get("expected_count") != 80 or definition.cards.size() != 80:
-		return "Deck manifest expected 80 cards."
 	var manifest: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://resources/cards/base_manifest.json"))
+	var expected_count: int = int(manifest.get("expected_count", 0))
+	if not definition is Dictionary or not definition.get("cards") is Array or definition.get("expected_count") != expected_count or definition.cards.size() != expected_count:
+		return "Deck manifest expected %d cards." % expected_count
 	var expected: Dictionary = {}
 	for id in manifest.cards:
 		for pair in manifest.cards[id]:

@@ -34,6 +34,14 @@ var local_threat: bool = false
 var next_detail: int = 0
 var tension_deadline: int = 0
 
+const SPECIAL_CUES := {
+	"beer_drink": "beer",
+	"beer_burp": "beer_burp",
+	"iced_tea_drink": "iced_tea_drink",
+	"iced_tea_fart": "iced_tea_fart",
+	"mischievous_laugh": "mischievous_laugh"
+}
+
 func update_mix_policy(state: Dictionary) -> void:
 	music_allowed = not bool(state.get("started", false)) or not str(state.get("winner", "")).is_empty() or state.get("phase", "") == "CHARACTER_SELECTION"
 	if music_allowed:
@@ -181,6 +189,18 @@ func play_world(key: String, position: Vector3) -> void:
 func play_character(key: String, player_id: int) -> void:
 	play_sound(key, "Character", position_for(player_id))
 
+func play_special(key: String, player_id: int = 0, delay: float = 0.0, gain: float = 0.0) -> void:
+	# A single safe lookup keeps optional comedy assets out of gameplay scripts.
+	# Missing/empty manifest entries intentionally resolve to silence.
+	var cue: String = str(SPECIAL_CUES.get(key, ""))
+	if cue.is_empty():
+		return
+	var at: Variant = position_for(player_id) if player_id > 0 else null
+	if delay > 0.0:
+		schedule(cue, delay, "Character", at, gain)
+	else:
+		play_sound(cue, "Character", at, gain)
+
 func position_for(id: int) -> Variant:
 	return table.avatars[id].global_position + Vector3.UP if is_instance_valid(table) and table.avatars.has(id) else null
 
@@ -253,7 +273,9 @@ func consume_event(event: Dictionary) -> void:
 		"discard":
 			play_card("play")
 			schedule("discard", 0.35, "SFX", null, -7)
-			var special: String = {"drink": "beer", "saloon": "glass", "supply": "wagon", "wells_fargo": "coins", "general_store": "fan", "panic": "snatch", "cat_balou": "discard", "indians": "danger"}.get(card.get("card_data_id", ""), "")
+			# Drink audio belongs to the successful HEAL event, not card removal;
+			# otherwise Beer would play twice and rejected/failed heals could sound valid.
+			var special: String = {"saloon": "glass", "supply": "wagon", "wells_fargo": "coins", "general_store": "fan", "panic": "snatch", "cat_balou": "discard", "indians": "danger"}.get(card.get("card_data_id", ""), "")
 			if event.get("event_type", "") == "CARD_PLAYED" and not special.is_empty():
 				play_sound(special)
 		"transfer":
@@ -282,7 +304,17 @@ func consume_event(event: Dictionary) -> void:
 			dynamite_active = false
 			duel_active = false
 			play_sound("explosion" if explosion else "hit", "Weapons" if explosion else "Character", at)
-		"heal": play_sound("heal", "Character", at, -8)
+		"heal":
+			var healing_card: String = str(event.get("card_data_id", ""))
+			if healing_card == "drink":
+				play_special("beer_drink", id)
+				play_special("beer_burp", id, 0.42, 1.0)
+			elif healing_card == "iced_tea":
+				play_special("iced_tea_drink", id)
+				play_special("iced_tea_fart", id, 0.42, -1.5)
+			play_sound("heal", "Character", at, -8)
+		"store_started", "department_store":
+			play_special("mischievous_laugh", id, 0.24, -1.0)
 		"duel":
 			duel_active = true
 			tension_deadline = Time.get_ticks_msec() + 18000

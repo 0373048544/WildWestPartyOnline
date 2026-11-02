@@ -146,7 +146,7 @@
   "general_store": {
     "id": "general_store",
     "name": "CỬA HÀNG",
-    "description": "Lật bài theo số người sống. Mỗi người chọn 1, bắt đầu từ bạn.",
+    "description": "Lật bài theo số người sống. Mỗi người chọn 1, bắt đầu từ bạn. Mỗi người chỉ dùng 1 lần trong ván.",
     "type": 0,
     "target": 0,
     "effect": 10,
@@ -260,6 +260,30 @@
     "effect": 3,
     "amount": 3,
     "count": 1,
+    "range_rule": "none",
+    "weapon_range": 1
+  },
+  "department_store": {
+    "id": "department_store",
+    "name": "BÁCH HÓA",
+    "description": "Mỗi người chơi khác tự chọn 1 lá trên tay để đưa cho bạn. Mỗi người chỉ được dùng BÁCH HÓA 1 lần trong ván.",
+    "type": 0,
+    "target": 3,
+    "effect": 15,
+    "amount": 1,
+    "count": 2,
+    "range_rule": "none",
+    "weapon_range": 1
+  },
+  "iced_tea": {
+    "id": "iced_tea",
+    "name": "TRÀ ĐÁ",
+    "description": "Hồi 1 máu. Có thể cứu bạn khi hấp hối, kể cả khi chỉ còn 2 người.",
+    "type": 0,
+    "target": 0,
+    "effect": 2,
+    "amount": 1,
+    "count": 4,
     "range_rule": "none",
     "weapon_range": 1
   }

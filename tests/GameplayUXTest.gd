@@ -241,8 +241,16 @@ func _ready() -> void:
 	check(app.table.objects.objects.has("market:%d" % chosen.instance_id), "Store cards physically on table")
 	check(app.table.objects.objects["market:%d" % chosen.instance_id].attention, "Store row stays visibly emphasized while a chooser is active")
 	await capture("store")
-	await world_tap(app.table.objects.objects["market:%d" % chosen.instance_id])
-	check(GameManager.players[1].hand.has(chosen) and GameManager.reactions.active.target_player_id == 2, "tap Store card advances chooser server-side")
+	var store_choice: Button
+	for candidate in app.overlay.find_children("*", "Button", true, false):
+		var card_name: Node = candidate.find_child("CardName", true, false)
+		if card_name and str(card_name.text) == str(CardData.data(chosen.card_data_id).name):
+			store_choice = candidate
+			break
+	check(is_instance_valid(store_choice), "Store CenterChoicePanel contains the public market card")
+	store_choice.pressed.emit()
+	await settle()
+	check(GameManager.players[1].hand.has(chosen) and GameManager.reactions.active.target_player_id == 2, "tap Store panel card advances chooser server-side")
 	GameManager.publish()
 	await settle()
 	check(not app.table.objects.token_allowed({"kind": "market", "card": GameManager.flow.market[0].instance_id}), "other player's store pick cannot be clicked")

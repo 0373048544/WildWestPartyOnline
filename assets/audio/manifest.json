@@ -135,6 +135,12 @@
   "beer": [
     "res://assets/audio/characters/beer_1.wav"
   ],
+  "beer_burp": [],
+  "iced_tea_drink": [
+    "res://assets/audio/equipment/glass_1.wav"
+  ],
+  "iced_tea_fart": [],
+  "mischievous_laugh": [],
   "barrel": [
     "res://assets/audio/equipment/barrel_1.wav"
   ],

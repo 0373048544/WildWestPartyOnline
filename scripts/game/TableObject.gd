@@ -172,10 +172,14 @@ func set_hovered(value: bool) -> void:
 	spawn_tween.tween_property(self,"position:y",position.y-lift+(0.08 if value else 0),0.1)
 	lift = 0.08 if value else 0
 
-func play_spawn() -> void:
+func play_spawn(delay: float = 0.0) -> void:
 	var resting: Vector3 = scale
 	scale = resting*0.7
 	spawn_tween = create_tween()
+	if delay > 0.0:
+		visible = false
+		spawn_tween.tween_interval(delay)
+		spawn_tween.tween_callback(func(): visible = true)
 	spawn_tween.tween_property(self,"scale",resting,0.18).set_trans(Tween.TRANS_BACK)
 
 func play_remove() -> void:

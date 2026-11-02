@@ -26,6 +26,12 @@ func _ready() -> void:
 		for path in AudioManager.manifest[key]:
 			var stream := AudioStreamWAV.load_from_file(path)
 			check(stream != null and stream.get_length() > 0, "valid audible PCM " + path)
+	for optional_cue in ["beer_burp", "iced_tea_drink", "iced_tea_fart", "mischievous_laugh"]:
+		check(AudioManager.manifest.has(optional_cue), "central special-card cue is registered: " + optional_cue)
+	# Optional empty cues must safely remain silent instead of loading a broken path.
+	check(not AudioManager.play_sound("beer_burp") and not AudioManager.play_sound("iced_tea_fart")
+		and not AudioManager.play_sound("mischievous_laugh"),
+		"missing comedy assets fail silently without creating invalid resources")
 	AudioManager.consume_event({"audio_event_id": "test:1", "kind": "animation", "animation": "shoot"})
 	await wait_for(func(): return played.has("bang"))
 	AudioManager.consume_event({"audio_event_id": "test:1", "kind": "animation", "animation": "shoot"})

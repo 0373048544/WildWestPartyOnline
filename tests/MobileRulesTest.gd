@@ -57,7 +57,7 @@ func _ready() -> void:
 	for _spam in range(20):
 		GameManager.resolver.play(GameManager,1,second.instance_id,2)
 	check(GameManager.players[2].current_hp==hp and not GameManager.find_card(1,second.instance_id).is_empty(),"server rejects repeated second BANG before consuming it")
-	check(GameManager.resolver.disabled_reason(GameManager,1,second).contains("BANG"),"private reason explains BANG restriction")
+	check(GameManager.resolver.disabled_reason(GameManager,1,second).contains("BẮN"),"private reason explains BANG restriction")
 	GameManager.players[1].is_connected = false
 	GameManager.players[1].is_connected = true
 	check(GameManager.players[1].shoot_used_this_turn and GameManager.resolver.valid_targets(GameManager,1,second).is_empty(),"reconnect leaves authoritative turn restriction intact")

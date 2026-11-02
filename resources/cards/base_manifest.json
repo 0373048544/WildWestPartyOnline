@@ -1,6 +1,6 @@
 {
   "source": "https://bang.dvgiochi.com/cardslist.php?id=1&lang=en",
-  "expected_count": 80,
+  "expected_count": 86,
   "cards": {
     "barrel": ["Q:SPADE", "K:SPADE"],
     "dynamite": ["2:HEART"],
@@ -23,6 +23,8 @@
     "panic": ["J:HEART", "Q:HEART", "A:HEART", "8:DIAMOND"],
     "saloon": ["5:HEART"],
     "supply": ["9:SPADE", "9:SPADE"],
-    "wells_fargo": ["3:HEART"]
+    "wells_fargo": ["3:HEART"],
+    "department_store": ["5:CLUB", "7:CLUB"],
+    "iced_tea": ["2:HEART", "3:HEART", "4:HEART", "5:DIAMOND"]
   }
 }

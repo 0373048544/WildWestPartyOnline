@@ -13,7 +13,9 @@ func _init(owner_game: Node = null) -> void:
 	game = owner_game
 	handlers = {"attack": attack, "duel": duel, "indians": indians, "damage": damage_job,
 		"judged": judged, "dynamite": dynamite, "jail": jail, "draw": draw_job,
-		"action": action_job, "store_pick": store_pick, "transfer": transfer}
+		"action": action_job, "store_pick": store_pick, "transfer": transfer,
+		"department_store_give": department_store_give,
+		"department_store_finish": department_store_finish}
 
 func push(job: Dictionary, front: bool = false) -> void:
 	if front:
@@ -37,7 +39,7 @@ func run() -> void:
 		market.clear()
 	elif jobs.is_empty() and game.reactions.active.is_empty():
 		# A chooser may have disconnected/died after Store cards were revealed.
-		# Leftovers still belong to the 80-card deck and cannot be silently cleared.
+		# Leftovers still belong to the physical deck and cannot be silently cleared.
 		for leftover in market:
 			game.deck.discard(leftover)
 			game.emit_event("CARD_DISCARDED", game.turns.current_player, {"kind": "discard", "card": leftover.duplicate(), "from_zone": "market"})
@@ -185,7 +187,44 @@ func store_pick(job: Dictionary) -> void:
 	if not game.living(job.target) or market.is_empty():
 		return
 	prompt(job.target, "store", {"source": job.source}, {"cards": market.duplicate(true),
-		"pick_count": 1, "title": "CỬA HÀNG • CHỌN 1 LÁ BÀI"})
+		"pick_count": 1, "title": "CỬA HÀNG",
+		"detail": "ĐẾN LƯỢT BẠN CHỌN • Mỗi người lần lượt chọn 1 lá."})
+
+func department_store_give(job: Dictionary) -> void:
+	var giver: int = int(job.giver)
+	var receiver: int = int(job.receiver)
+	if not game.living(receiver):
+		return
+	if not game.living(giver):
+		return
+	if game.players[giver].hand.is_empty():
+		game.emit_event("DEPARTMENT_STORE_SKIPPED", giver, {
+			"kind": "department_store_skip", "receiver": receiver
+		})
+		return
+	var receiver_name: String = game.players[receiver].display_name
+	prompt(giver, "department_store_give", {
+		"source": receiver, "receiver": receiver, "giver": giver,
+		"batch": job.batch
+	}, {
+		"cards": game.players[giver].hand.duplicate(true),
+		"pick_count": 1,
+		"title": "BÁCH HÓA",
+		"detail": "Chọn 1 lá để đưa cho %s." % receiver_name,
+		"confirm_label": "ĐƯA",
+		"reset_label": "CHỌN LẠI",
+		"confirm_question": "Đưa {card} cho %s?" % receiver_name,
+		"timeout_seconds": 8.0
+	})
+
+func department_store_finish(job: Dictionary) -> void:
+	var receiver: int = int(job.receiver)
+	var count: int = int(job.batch.get("count", 0))
+	game.emit_event("DEPARTMENT_STORE_RESOLVED", receiver, {
+		"kind": "department_store_result", "count": count, "receiver": receiver
+	})
+	if game.players.has(receiver):
+		game.record("%s nhận %d lá bằng BÁCH HÓA." % [game.players[receiver].display_name, count])
 
 func transfer(job: Dictionary) -> void:
 	if not game.living(job.target) or not game.living(job.source):
@@ -219,13 +258,34 @@ func resolve(args: Dictionary) -> bool:
 	var option: String = str(args.get("option", ""))
 	var payload: Dictionary = r.payload
 	var card: Dictionary = {}
+	if kind == "department_store_give" and not accept:
+		# Timeout/AFK is the only path that chooses randomly for the giver.
+		var timeout_cards: Array = game.players[id].hand.duplicate(true) if game.living(id) else []
+		if timeout_cards.is_empty():
+			game.reactions.active = {}
+			run()
+			return true
+		payload["cards"] = timeout_cards
+		selected = [timeout_cards.pick_random().instance_id]
+		accept = true
 	if ["dodge", "duel", "indians", "survive"].has(kind) and accept:
-		var required: String = "dodge" if kind == "dodge" else ("drink" if kind == "survive" else "shoot")
-		var allowed: Array = game.abilities.response_cards(game, id, required)
-		var uid: int = int(args.get("card", allowed[0].instance_id if not allowed.is_empty() else -1))
-		card = game.find_card(id, uid)
-		if card.is_empty() or not allowed.has(card):
-			return false
+		if kind == "survive":
+			var allowed_ids: Array = payload.get("allowed_cards", [])
+			var uid: int = int(args.get("card", allowed_ids[0] if not allowed_ids.is_empty() else -1))
+			card = game.find_card(id, uid)
+			if card.is_empty() or not allowed_ids.has(uid):
+				return false
+			if card.card_data_id == "drink" and not game.beer_enabled():
+				return false
+			if not ["drink", "iced_tea"].has(str(card.card_data_id)):
+				return false
+		else:
+			var required: String = "dodge" if kind == "dodge" else "shoot"
+			var allowed: Array = game.abilities.response_cards(game, id, required)
+			var uid: int = int(args.get("card", allowed[0].instance_id if not allowed.is_empty() else -1))
+			card = game.find_card(id, uid)
+			if card.is_empty() or not allowed.has(card):
+				return false
 	if payload.has("choices"):
 		var choices: Array = payload.choices
 		if option.is_empty() and not accept:
@@ -258,6 +318,10 @@ func resolve(args: Dictionary) -> bool:
 			if not uid is int or seen.has(uid) or not cards.any(func(c): return c.instance_id == uid):
 				return false
 			seen[uid] = true
+		if kind == "department_store_give":
+			var physical: Dictionary = game.find_card(id, int(selected[0]))
+			if physical.is_empty():
+				return false
 	# All validation finishes before consuming the request or mutating any cards.
 	game.reactions.active = {}
 	match kind:
@@ -279,9 +343,10 @@ func resolve(args: Dictionary) -> bool:
 			else:
 				push({"kind": "damage", "target": id, "source": context.source, "amount": 1}, true)
 		"survive":
-			if accept and game.beer_enabled():
+			var valid_heal: bool = accept and (card.card_data_id == "iced_tea" or (card.card_data_id == "drink" and game.beer_enabled()))
+			if valid_heal:
 				game.consume(id, card)
-				game.heal(id, 1)
+				game.heal(id, 1, str(card.get("card_data_id", "")))
 				if game.players[id].current_hp <= 0:
 					game.offer_survival(id, context.source)
 			else:
@@ -326,10 +391,41 @@ func resolve(args: Dictionary) -> bool:
 					market.erase(offered)
 					game.players[id].hand.append(offered)
 					game.network.broadcast_table_event({"kind": "store_pick", "player": id, "card": offered.duplicate()})
+		"department_store_give":
+			complete_department_store_give(id, context, int(selected[0]))
 		"transfer":
 			complete_transfer(id, context, option)
 	run()
 	return true
+
+func complete_department_store_give(giver: int, context: Dictionary, uid: int) -> void:
+	var receiver: int = int(context.receiver)
+	if not game.living(giver) or not game.living(receiver):
+		return
+	var card: Dictionary = game.find_card(giver, uid)
+	if card.is_empty():
+		return
+	game.players[giver].hand.erase(card)
+	game.players[receiver].hand.append(card)
+	context.batch["count"] = int(context.batch.get("count", 0)) + 1
+	game.abilities.hand_changed(game, giver)
+	game.abilities.hand_changed(game, receiver)
+	# Public payload contains only player IDs. Hidden card identity never enters
+	# the broadcast event, animation payload, public snapshot or match log.
+	game.emit_event("DEPARTMENT_STORE_TRANSFER", giver, {
+		"kind": "transfer", "source": giver, "receiver": receiver,
+		"hidden": true, "department_store": true, "from_zone": "hand"
+	})
+	var private_base := {
+		"kind": "department_store_private", "player": giver, "giver": giver,
+		"receiver": receiver, "card": card.duplicate(true)
+	}
+	var giver_event: Dictionary = private_base.duplicate(true)
+	giver_event["role"] = "giver"
+	game.emit_private_event(giver, giver_event)
+	var receiver_event: Dictionary = private_base.duplicate(true)
+	receiver_event["role"] = "receiver"
+	game.emit_private_event(receiver, receiver_event)
 
 func complete_transfer(id: int, context: Dictionary, option: String) -> void:
 	var target: int = context.target

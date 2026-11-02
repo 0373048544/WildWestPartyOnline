@@ -52,6 +52,38 @@ async function clickAt(page,x,y) {
   }
   await delay(250);
 }
+async function dragAt(page,x1,y1,x2,y2) {
+  await command('Page.bringToFront',{},page);
+  const s=await snapshot(page);
+  const rect=JSON.parse(await evaluate(page,"JSON.stringify((()=>{let r=document.querySelector('canvas').getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height}})())"));
+  const point=(x,y)=>({x:rect.x+x*rect.w/s.size.x,y:rect.y+y*rect.h/s.size.y,id:0});
+  const start=point(x1,y1),end=point(x2,y2);
+  if(touchPages.has(page)){
+    await command('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[start]},page);
+    for(let step=1;step<=5;step++){
+      const t=step/5;
+      await command('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[point(x1+(x2-x1)*t,y1+(y2-y1)*t)]},page);
+      await delay(35);
+    }
+    await command('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]},page);
+  }else{
+    await command('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,x:start.x,y:start.y},page);
+    await command('Input.dispatchMouseEvent',{type:'mouseMoved',button:'left',buttons:1,x:end.x,y:end.y},page);
+    await command('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,x:end.x,y:end.y},page);
+  }
+  await delay(250);
+}
+async function clickCard(page,index) {
+  for(let attempt=0;attempt<6;attempt++){
+    const s=await snapshot(page);
+    const card=s?.controls.find(c=>c.card_index===index&&!c.disabled);
+    if(card){await clickAt(page,card.x,card.y);return;}
+    const hand=s?.layout?.hand;
+    if(!hand)break;
+    await dragAt(page,hand.x+hand.w*0.82,hand.y+hand.h*0.45,hand.x+hand.w*0.18,hand.y+hand.h*0.45);
+  }
+  throw Error('Browser timeout visible card '+index);
+}
 async function click(page,predicate) {
   const c=await wait(async()=>{const s=await snapshot(page); return s?.controls.find(predicate);},'control');
   await clickAt(page,c.x,c.y);
@@ -91,7 +123,10 @@ async function choose(page) {
 }
 async function handleChoice(page) {
 	const initial = await snapshot(page);
-	if(initial?.controls.some(c=>c.text==='TIẾP TỤC')) await click(page,c=>c.text==='TIẾP TỤC');
+	// This transient panel may expire between two CDP snapshots. Click the
+	// exact control just observed instead of waiting for a vanished button.
+	const continueButton=initial?.controls.find(c=>c.text==='TIẾP TỤC');
+	if(continueButton) await clickAt(page,continueButton.x,continueButton.y);
   const s=await snapshot(page), r=s?.private.reaction;
   if(!r?.request_id) return;
   if(r.cards) {
@@ -205,7 +240,7 @@ async function save(page,name) {
     if(index>=0){
       const card=current.private.hand[index];
       const target=current.private.targets[String(card.instance_id)][0];
-      await click(page,c=>c.card_index===index&&!c.disabled);
+      await clickCard(page,index);
       await wait(async()=>(await snapshot(page)).selected===card.instance_id,'Shoot selection');
       const aim=(await snapshot(page)).avatars[String(target)];
       await clickAt(page,aim.x,aim.y);

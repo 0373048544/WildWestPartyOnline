@@ -8,7 +8,8 @@ var handlers: Dictionary = {
 	CardData.EffectType.STEAL: steal, CardData.EffectType.DISCARD: discard_target,
 	CardData.EffectType.GROUP_HEAL: saloon, CardData.EffectType.STORE: store,
 	CardData.EffectType.GATLING: gatling, CardData.EffectType.INDIANS: indians,
-	CardData.EffectType.JAIL: jail, CardData.EffectType.DYNAMITE: passive
+	CardData.EffectType.JAIL: jail, CardData.EffectType.DYNAMITE: passive,
+	CardData.EffectType.DEPARTMENT_STORE: department_store
 }
 
 func effective_effect(game: Node, sender: int, card: Dictionary) -> int:
@@ -28,7 +29,11 @@ func valid_targets(game: Node, sender: int, card: Dictionary) -> Array:
 		return result
 	if effect == CardData.EffectType.ATTACK and not game.abilities.can_shoot(p):
 		return result
-	if effect == CardData.EffectType.HEAL and (p.current_hp >= p.max_hp or not game.beer_enabled()):
+	if effect == CardData.EffectType.HEAL and (p.current_hp >= p.max_hp or (card.card_data_id == "drink" and not game.beer_enabled())):
+		return result
+	if effect == CardData.EffectType.DEPARTMENT_STORE and p.department_store_used_this_game:
+		return result
+	if effect == CardData.EffectType.STORE and p.general_store_used_this_game:
 		return result
 	if [CardData.EffectType.EQUIP_PASSIVE, CardData.EffectType.DYNAMITE].has(effect) and p.equipment.has(card.card_data_id):
 		return result
@@ -58,7 +63,7 @@ func play(game: Node, sender: int, uid: int, target: int) -> void:
 		return
 	var effect: int = effective_effect(game, sender, card)
 	if effect == CardData.EffectType.ATTACK and game.turns.phase == "ACTION_PHASE" and game.turns.current_player == sender and not game.abilities.can_shoot(game.players[sender]):
-		game.fail(sender, "Bạn đã dùng BANG! trong lượt này.")
+		game.fail(sender, "Bạn đã dùng BẮN trong lượt này.")
 		return
 	if not valid_targets(game, sender, card).has(target):
 		var reason: String = disabled_reason(game,sender,card)
@@ -94,12 +99,16 @@ func disabled_reason(game: Node, sender: int, card: Dictionary) -> String:
 	var p: PlayerState = game.players[sender]
 	var effect := effective_effect(game, sender, card)
 	if effect == CardData.EffectType.ATTACK and not game.abilities.can_shoot(p):
-		return "Bạn đã dùng BANG! trong lượt này."
+		return "Bạn đã dùng BẮN trong lượt này."
 	if effect == CardData.EffectType.HEAL:
-		if not game.beer_enabled():
+		if card.card_data_id == "drink" and not game.beer_enabled():
 			return "Bia không có tác dụng khi chỉ còn 2 người chơi."
 		if p.current_hp >= p.max_hp:
 			return "Bạn đã đầy máu."
+	if effect == CardData.EffectType.DEPARTMENT_STORE and p.department_store_used_this_game:
+		return "Bạn đã dùng BÁCH HÓA trong ván này."
+	if effect == CardData.EffectType.STORE and p.general_store_used_this_game:
+		return "Bạn đã dùng CỬA HÀNG trong ván này."
 	if effect == CardData.EffectType.DODGE:
 		return "Chỉ dùng lá Né khi đáp trả hiệu ứng Bắn."
 	if effect in [CardData.EffectType.EQUIP_PASSIVE, CardData.EffectType.DYNAMITE] and p.equipment.has(card.card_data_id):
@@ -112,8 +121,10 @@ func attack(game: Node, sender: int, target: int, _card: Dictionary) -> void:
 	game.network.broadcast_animation(sender, "shoot", target)
 	game.flow.push({"kind": "attack", "source": sender, "target": target, "required": 2 if game.players[sender].ability_id == "double_dodge" else 1})
 
-func heal(game: Node, sender: int, _target: int, _card: Dictionary) -> void:
-	game.heal(sender, 1)
+func heal(game: Node, sender: int, _target: int, card: Dictionary) -> void:
+	# The optional card id is presentation metadata only. Healing remains entirely
+	# authoritative and keeps the same amount and validation path.
+	game.heal(sender, 1, str(card.get("card_data_id", "")))
 
 func supply(game: Node, sender: int, _target: int, card: Dictionary) -> void:
 	game.draw_cards(sender, CardData.data(card.card_data_id).amount)
@@ -150,6 +161,10 @@ func saloon(game: Node, _sender: int, _target: int, _card: Dictionary) -> void:
 			game.heal(id, 1)
 
 func store(game: Node, sender: int, _target: int, _card: Dictionary) -> void:
+	game.players[sender].general_store_used_this_game = true
+	game.emit_event("GENERAL_STORE_STARTED", sender, {
+		"kind": "store_started", "message": "Mỗi người lần lượt chọn 1 lá."
+	})
 	game.flow.start_store(sender)
 
 func gatling(game: Node, sender: int, _target: int, _card: Dictionary) -> void:
@@ -160,5 +175,17 @@ func gatling(game: Node, sender: int, _target: int, _card: Dictionary) -> void:
 func indians(game: Node, sender: int, _target: int, _card: Dictionary) -> void:
 	for id in game.living_order(sender, false):
 		game.flow.push({"kind": "indians", "source": sender, "target": id})
+
+func department_store(game: Node, sender: int, _target: int, _card: Dictionary) -> void:
+	game.players[sender].department_store_used_this_game = true
+	var batch := {"receiver": sender, "count": 0}
+	game.emit_event("DEPARTMENT_STORE_STARTED", sender, {
+		"kind": "department_store", "receiver": sender,
+		"message": "%s yêu cầu mỗi người đưa 1 lá." % game.players[sender].display_name
+	})
+	for giver in game.living_order(sender, false):
+		game.flow.push({"kind": "department_store_give", "giver": giver,
+			"receiver": sender, "batch": batch})
+	game.flow.push({"kind": "department_store_finish", "receiver": sender, "batch": batch})
 
 

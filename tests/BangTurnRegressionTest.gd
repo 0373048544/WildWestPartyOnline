@@ -73,7 +73,7 @@ func _ready() -> void:
 	for _spam in range(8):
 		GameManager.rate_limits.clear()
 		GameManager.handle_intent(1,"play",{"card":second.instance_id,"target":2})
-	check(error_text=="Bạn đã dùng BANG! trong lượt này.","server returns exact disabled reason")
+	check(error_text=="Bạn đã dùng BẮN trong lượt này.","server returns exact disabled reason")
 	check(not GameManager.find_card(1,second.instance_id).is_empty() and GameManager.players[2].current_hp==4,"forged repeated BANG retains card and HP")
 	check(GameManager.log_lines==before_log and events.size()==before_events and GameManager.deck.discard_pile.size()==before_discard,"rejected BANG has no extra log, animation, event or discard")
 	check(GameManager.private_snapshot(1).targets[second.instance_id].is_empty() and GameManager.private_snapshot(1).disabled_reasons[second.instance_id]==error_text,"owner private snapshot disables remaining BANG")

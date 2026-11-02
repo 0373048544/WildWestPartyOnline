@@ -106,6 +106,39 @@ func _event_item(event: Dictionary, local_id: int, state: Dictionary) -> Diction
 	)
 
 	match kind:
+		"department_store_private":
+			var giver: int = int(event.get("giver", 0))
+			var receiver: int = int(event.get("receiver", 0))
+			var card: Dictionary = event.get("card", {})
+			var card_name: String = str(CardData.data(str(card.get("card_data_id", ""))).get("name", "lá bài"))
+			if str(event.get("role", "")) == "giver":
+				return _item(
+					"Bạn đã đưa %s cho %s" % [card_name, _player_name(receiver, state)],
+					"", "warning", "◆", 2.0
+				)
+			return _item(
+				"%s đã đưa cho bạn: %s" % [_player_name(giver, state), card_name],
+				"", "positive", "◆", 2.0
+			)
+
+		"department_store_result":
+			var count: int = int(event.get("count", 0))
+			if event_owner == local_id:
+				return _item(
+					"Bạn nhận được %d lá từ BÁCH HÓA" % count,
+					"Mỗi lá đến từ một đối thủ còn sống có bài",
+					"positive",
+					"◆",
+					2.1
+				)
+			return _item(
+				"%s đã dùng BÁCH HÓA" % _player_name(event_owner, state),
+				"Đã lấy %d lá bài" % count,
+				"warning",
+				"◆",
+				2.0
+			)
+
 		"bang":
 			var target: int = int(
 				event.get("target", event.get("target_player_id", 0))
@@ -149,6 +182,8 @@ func _event_item(event: Dictionary, local_id: int, state: Dictionary) -> Diction
 				)
 
 		"transfer":
+			if bool(event.get("department_store", false)):
+				return {}
 			if event_owner == local_id:
 				var actor: int = int(
 					event.get("to", event.get("source_player_id", 0))

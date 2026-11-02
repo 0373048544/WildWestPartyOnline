@@ -81,7 +81,7 @@ func _ready() -> void:
 func test_deck() -> void:
 	var deck := DeckManager.new()
 	deck.reset()
-	check(deck.draw_pile.size() == 80, "80-card base deck")
+	check(deck.draw_pile.size() == 86, "86-card deck including custom cards")
 	var counts: Dictionary = {}
 	var ids: Dictionary = {}
 	var fixed: Dictionary = {}
@@ -94,7 +94,7 @@ func test_deck() -> void:
 		deck.discard(card)
 	for key in CardData.definitions():
 		check(counts.get(key, 0) == CardData.data(key).count, "base quantity " + key)
-	check(not deck.draw().is_empty() and deck.draw_pile.size() == 79, "reshuffle")
+	check(not deck.draw().is_empty() and deck.draw_pile.size() == 85, "reshuffle")
 	deck.reset()
 	for card in deck.draw_pile:
 		check(fixed[card.instance_id] == [card.card_data_id, card.suit, card.rank], "fixed configured suit/rank")
@@ -204,7 +204,7 @@ func test_shoot() -> void:
 	respond()
 	check(p[2].current_hp == 4 and p[1].shoot_used_this_turn, "Dodge prevents hit but keeps Shoot limit")
 	var again := play(1, "shoot", 2)
-	check(p[1].hand.has(again) and last_error == "Bạn đã dùng BANG! trong lượt này.", "second Shoot rejected with Vietnamese message")
+	check(p[1].hand.has(again) and last_error == "Bạn đã dùng BẮN trong lượt này.", "second Shoot rejected with Vietnamese message")
 	GameManager.begin_turn(1)
 	for _i in range(20):
 		if GameManager.reactions.active.is_empty():

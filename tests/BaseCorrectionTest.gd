@@ -9,7 +9,8 @@ const EXPECTED := {
 	"drink": "6H 7H 8H 9H 10H JH", "cat_balou": "KH 9D 10D JD", "showdown": "QD JS 8C",
 	"gatling": "10H", "general_store": "9C QS", "indians": "KD AD",
 	"dodge": "10C JC QC KC AC 2S 3S 4S 5S 6S 7S 8S", "panic": "JH QH AH 8D",
-	"saloon": "5H", "supply": "9S 9S", "wells_fargo": "3H"
+	"saloon": "5H", "supply": "9S 9S", "wells_fargo": "3H",
+	"department_store": "5C 7C", "iced_tea": "2H 3H 4H 5D"
 }
 var checks: int = 0
 var public_events: Array = []
@@ -40,7 +41,7 @@ func _ready() -> void:
 		expected.sort()
 		actual[id].sort()
 		check(actual[id] == expected, "every physical tuple exactly matches official list: " + id)
-	check(actual.size() == EXPECTED.size() and deck.draw_pile.size() == 80, "exactly 22 card names and 80 physical cards")
+	check(actual.size() == EXPECTED.size() and deck.draw_pile.size() == 86, "exactly 24 card names and 86 physical cards")
 	var definition: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://resources/cards/base_deck.json"))
 	for field in ["rank", "suit", "card_data_id"]:
 		var wrong := definition.duplicate(true)
@@ -48,7 +49,7 @@ func _ready() -> void:
 		check(not deck.validate_definition(wrong).is_empty(), "reject corrupt " + field)
 	var missing := definition.duplicate(true)
 	missing.cards.pop_back()
-	check(not deck.validate_definition(missing).is_empty(), "reject 79-card manifest")
+	check(not deck.validate_definition(missing).is_empty(), "reject 85-card manifest")
 	var duplicate := definition.duplicate(true)
 	duplicate.cards[0] = duplicate.cards[1].duplicate()
 	check(not deck.validate_definition(duplicate).is_empty(), "reject duplicate tuple quantity")
@@ -62,7 +63,7 @@ func _ready() -> void:
 		check(corner.get_theme_color("font_color") == CardInstance.suit_color(sample[1]), "red/dark suit rendering")
 		check(view.tooltip_text.is_empty() and str(view.get_meta("disabled_reason", "")).contains("Không phải lượt") and CardData.data("schofield").weapon_range == 2, "custom preview owns disabled inspection; weapon range separate from rank")
 		view.free()
-	# Full legal matches, with all 80 physical cards conserved at every server step.
+	# Full legal matches, with all 86 physical cards conserved at every server step.
 	seed(20261101)
 	for count in [4, 5, 6, 7]:
 		for trial in range(4):
@@ -137,4 +138,4 @@ func conserved() -> void:
 	var ids: Dictionary = {}
 	for card in all_cards:
 		ids[card.instance_id] = true
-	check(all_cards.size() == 80 and ids.size() == 80, "80 unique cards across deck/discard/hands/in-play/market/reserved choices")
+	check(all_cards.size() == 86 and ids.size() == 86, "86 unique cards across deck/discard/hands/in-play/market/reserved choices")

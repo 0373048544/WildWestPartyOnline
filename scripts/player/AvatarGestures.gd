@@ -40,4 +40,13 @@ func play(a: PlayerAvatar, kind: String) -> bool:
 		t.parallel().tween_property(a.rig,"scale",Vector3.ONE,0.22)
 		t.parallel().tween_property(a.hat,"rotation:z",float(a.visual_preset.get("tilt",0)),0.22)
 		return true
+	if kind == "laugh":
+		a.set_expression("laugh", 900)
+		t.tween_property(a.rig, "scale", Vector3.ONE * 1.045, 0.10).set_trans(Tween.TRANS_BACK)
+		t.parallel().tween_property(a.rig, "rotation:z", -0.055, 0.10)
+		t.tween_property(a.rig, "rotation:z", 0.065, 0.13)
+		t.tween_property(a.rig, "rotation:z", -0.04, 0.13)
+		t.tween_property(a.rig, "rotation:z", 0.0, 0.13)
+		t.parallel().tween_property(a.rig, "scale", Vector3.ONE, 0.13)
+		return true
 	return false

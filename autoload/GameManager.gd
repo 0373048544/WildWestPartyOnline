@@ -192,6 +192,9 @@ func handle_intent(sender: int, action: String, args: Dictionary) -> void:
 				if not reactions.active.is_empty() and reactions.active.target_player_id == sender and reactions.active.request_id == int(args.get("request", -1)):
 					flow.resolve(args)
 			"ability":
+				if not reactions.active.is_empty() and reactions.active.reaction_type != "survive":
+					fail(sender, "Bạn phải hoàn tất lựa chọn hiện tại trước.")
+					return
 				var survival_source: int = int(reactions.active.get("context", {}).get("source", 0))
 				if abilities.heal_with_discards(self, sender, args.get("cards", [])):
 					if not reactions.active.is_empty() and reactions.active.target_player_id == sender and reactions.active.reaction_type == "survive":
@@ -215,6 +218,11 @@ func emit_event(event_type: String, id: int, details: Dictionary = {}) -> void:
 	event["source_player_id"] = int(event.get("source_player_id", source_fallback))
 	event["match_id"] = match_id
 	network.broadcast_table_event(event)
+
+func emit_private_event(id: int, details: Dictionary) -> void:
+	var event := details.duplicate(true)
+	event["match_id"] = match_id
+	network.send_private_event(id, event)
 
 func find_card(id: int, uid: int) -> Dictionary:
 	if players.has(id):
@@ -242,14 +250,17 @@ func beer_enabled() -> bool:
 func offer_survival(id: int, source: int) -> void:
 	var p: PlayerState = players[id]
 	var beer: Array = abilities.response_cards(self, id, "drink") if beer_enabled() else []
+	var iced_tea: Array = abilities.response_cards(self, id, "iced_tea")
 	var sid: bool = p.ability_id == "discard_heal" and p.hand.size() >= 2
-	if beer.is_empty() and not sid:
+	if beer.is_empty() and iced_tea.is_empty() and not sid:
 		kill_player(id, source)
 		return
+	var survival_cards: Array = beer + iced_tea
 	flow.prompt(id, "survive", {"source": source, "required": 1 - p.current_hp}, {
 		"title": "HẤP HỐI • CẦN HỒI %d MÁU ĐỂ SỐNG SÓT" % (1 - p.current_hp),
-		"allowed_cards": beer.map(func(c): return c.instance_id),
-		"allowed_actions": ["beer", "sid", "pass"] if sid else ["beer", "pass"], "sid": sid})
+		"allowed_cards": survival_cards.map(func(c): return c.instance_id),
+		"survival_options": survival_cards.map(func(c): return {"instance_id": c.instance_id, "card_data_id": c.card_data_id}),
+		"allowed_actions": ["card", "sid", "pass"] if sid else ["card", "pass"], "sid": sid})
 
 func resolve_reaction(accept: bool) -> void:
 	flow.resolve({"accept": accept})
@@ -265,11 +276,18 @@ func damage(target: int, source: int, amount: int = 1) -> void:
 	if players[target].current_hp <= 0:
 		offer_survival(target, source)
 
-func heal(id: int, amount: int) -> void:
+func heal(id: int, amount: int, presentation_card_id: String = "") -> void:
 	var before: int = players[id].current_hp
 	players[id].current_hp = mini(players[id].max_hp, before + amount)
 	if players[id].current_hp > before:
-		emit_event("HEAL", id, {"kind": "heal", "amount": players[id].current_hp - before})
+		var details := {
+			"kind": "heal",
+			"amount": players[id].current_hp - before,
+			"rescued": before <= 0 and players[id].current_hp > 0
+		}
+		if not presentation_card_id.is_empty():
+			details["card_data_id"] = presentation_card_id
+		emit_event("HEAL", id, details)
 		network.broadcast_animation(id, "drink", id)
 
 func discard_all(p: PlayerState) -> void:
@@ -391,6 +409,7 @@ func public_snapshot() -> Dictionary:
 		"draw_count": deck.draw_pile.size(), "discard_count": deck.discard_pile.size(),
 		"discard_top": deck.discard_pile.back() if not deck.discard_pile.is_empty() else {},
 		"market": flow.market.duplicate(true), "choice_player": reactions.active.get("target_player_id", 0),
+		"choice_type": reactions.active.get("reaction_type", ""),
 		"log": log_lines.duplicate(), "debug": OS.is_debug_build()}
 
 func private_snapshot(id: int) -> Dictionary:

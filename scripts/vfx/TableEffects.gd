@@ -90,6 +90,33 @@ func floating(at: Vector3, value: String, color: Color) -> void:
 	tween.tween_property(label, "modulate:a", 0.0, 0.4).set_delay(0.55)
 	tween.chain().tween_callback(_release_floating.bind(label))
 
+func quiet_floating() -> void:
+	# A new full-table choice takes visual priority over short-lived feedback from
+	# the previous action. The existing tweens still return these labels to the
+	# pool, so this does not allocate or interrupt gameplay presentation queues.
+	for child in get_children():
+		if child is Label3D:
+			child.visible = false
+
+func comic(at: Vector3, value: String, color: Color, duration: float = 0.8) -> void:
+	var label: Label3D = floating_pool.pop_back() if not floating_pool.is_empty() else load("res://scenes/vfx/FloatingText.tscn").instantiate()
+	if not label.is_inside_tree():
+		add_child(label)
+	elif label.get_parent() != self:
+		label.reparent(self)
+	label.visible = true
+	label.text = value
+	label.modulate = color
+	label.position = at
+	label.scale = Vector3.ONE * 0.38
+	var tween := label.create_tween()
+	tween.tween_property(label, "scale", Vector3.ONE * 0.62, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_property(label, "scale", Vector3.ONE * 0.52, 0.10)
+	tween.parallel().tween_property(label, "position:y", at.y + 0.55, duration)
+	tween.tween_interval(maxf(0.08, duration - 0.42))
+	tween.tween_property(label, "modulate:a", 0.0, 0.20)
+	tween.tween_callback(_release_floating.bind(label))
+
 func starburst(at: Vector3, size: float = 0.5, duration: float = 0.33) -> void:
 	var shape := ImmediateMesh.new()
 	shape.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -239,6 +266,29 @@ func flying_card(origin: Vector3, destination: Vector3, face: Dictionary = {}, d
 			card.area.collision_layer = 0
 			card.scale = Vector3.ONE * 0.65)
 		tween.tween_interval(0.35)
+	tween.tween_callback(card.queue_free)
+
+func special_card_intro(origin: Vector3, face: Dictionary, hold: float = 0.45) -> void:
+	# A readable, short presentation copy. The physical card was already consumed
+	# by authority; this object never participates in input or game state.
+	var card := TableObject.new()
+	add_child(card)
+	var data: Dictionary = CardData.data(str(face.get("card_data_id", ""))).duplicate()
+	data["suit"] = str(face.get("suit", ""))
+	data["rank_label"] = str(face.get("rank", ""))
+	card.configure("card", data, {})
+	card.area.collision_layer = 0
+	card.position = origin
+	card.scale = Vector3.ONE * 0.58
+	card.rotation = Vector3(0.12, -0.18, 0.08)
+	var center := Vector3(0, 2.35, 0)
+	var tween := card.create_tween()
+	tween.tween_property(card, "position", center, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.parallel().tween_property(card, "scale", Vector3.ONE * 0.82, 0.22)
+	tween.parallel().tween_property(card, "rotation", Vector3.ZERO, 0.22)
+	tween.tween_interval(clampf(hold, 0.2, 0.65))
+	tween.tween_property(card, "position", Vector3(0.45, 1.7, 0), 0.18).set_trans(Tween.TRANS_SINE)
+	tween.parallel().tween_property(card, "scale", Vector3.ONE * 0.18, 0.18)
 	tween.tween_callback(card.queue_free)
 
 func judgement(at: Vector3, face: Dictionary, from_hand: bool = false) -> void:

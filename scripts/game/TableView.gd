@@ -7,6 +7,7 @@ var camera: Camera3D
 var seats: Node3D
 var built_match: int = -1
 var effects: TableEffects
+var special_presenter: SpecialCardPresenter
 var camera_goal := Vector3.ZERO
 var camera_shake: float = 0.0
 var targeting: TargetingController
@@ -36,6 +37,9 @@ func _ready() -> void:
 	add_child(room)
 	effects = TableEffects.new()
 	add_child(effects)
+	special_presenter = SpecialCardPresenter.new()
+	add_child(special_presenter)
+	special_presenter.setup(self)
 	seats = Node3D.new()
 	seats.name = "Seats"
 	add_child(seats)
@@ -69,7 +73,14 @@ func _process(delta: float) -> void:
 		var event: Dictionary = presentation_queue.pop_front()
 		present_event(event)
 		var kind: String = event.get("kind", "")
-		presentation_wait = 1.4 if kind in ["judge", "reveal"] else (0.45 + 0.22 * (mini(8, int(event.get("count", 1))) - 1) if kind in ["draw", "transfer"] else 0.42)
+		if kind in ["judge", "reveal"]:
+			presentation_wait = 1.4
+		elif kind == "transfer" and bool(event.get("department_store", false)):
+			presentation_wait = 0.22
+		elif kind in ["draw", "transfer"]:
+			presentation_wait = 0.45 + 0.22 * (mini(8, int(event.get("count", 1))) - 1)
+		else:
+			presentation_wait = 0.42
 	if camera_goal == Vector3.ZERO:
 		return
 	camera_shake = maxf(0.0, camera_shake - delta * 0.25)
@@ -146,7 +157,8 @@ func layout_nameplates() -> void:
 func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 	var next_signature := JSON.stringify([
 		state.get("match_id", 0), state.get("players", []),
-		state.get("current_player", 0), local_id, targets
+		state.get("current_player", 0), state.get("choice_player", 0),
+		state.get("choice_type", ""), state.get("market", []), local_id, targets
 	]) + str(get_viewport().get_visible_rect().size)
 	if next_signature == state_signature:
 		return
@@ -223,13 +235,14 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 			status_labels[id] = status_label
 		avatars[id].apply_character(str(p.get("character_id", "")))
 		avatars[id].apply_weapon_visual(str(p.get("weapon_id","")))
-		nameplates[id].update_info(p, local_id, int(state.current_player))
+		var choosing: bool = int(state.get("choice_player", 0)) == id
+		nameplates[id].update_info(p, local_id, int(state.current_player), choosing)
 		avatars[id].set_target_state(not targets.is_empty() and not targets.has(id) and id != local_id)
 		if targets.has(id):
 			avatars[id].set_expression("targeted", 1000)
-		rings[id].visible = targets.has(id) or int(state.current_player) == id
-		rings[id].material_override.albedo_color = Color("#ffda7b") if targets.has(id) else seat_color
-		rings[id].material_override.emission_enabled = targets.has(id)
+		rings[id].visible = targets.has(id) or int(state.current_player) == id or choosing
+		rings[id].material_override.albedo_color = Color("#ffda7b") if targets.has(id) or choosing else seat_color
+		rings[id].material_override.emission_enabled = targets.has(id) or choosing
 		rings[id].material_override.emission = Color("#ffc775")
 		if not p.is_alive and not avatars[id].dead:
 			avatars[id].act("death")
@@ -323,6 +336,11 @@ func hide_context() -> void:
 func presentation(event: Dictionary) -> void:
 	if event.has("match_id") and int(event.match_id) != built_match:
 		return
+	# Choice overlays are shown from synchronized state immediately, while the
+	# cinematic queue may still be finishing the previous action. Clear only
+	# transient floating labels now so they cannot overlap the new choice UI.
+	if str(event.get("kind", "")) in ["store_started", "department_store"]:
+		effects.quiet_floating()
 	var event_id: String = str(event.get("audio_event_id", ""))
 	if not event_id.is_empty():
 		if seen_presentation.has(event_id):
@@ -351,6 +369,27 @@ func present_event(event: Dictionary) -> void:
 		return
 	var at: Vector3 = avatars[id].position
 	match kind:
+		"store_started":
+			effects.quiet_floating()
+			special_presenter.show_special_start(id, "general_store")
+		"department_store":
+			effects.quiet_floating()
+			special_presenter.show_special_start(id, "department_store")
+		"heal":
+			var healing_card: String = str(event.get("card_data_id", ""))
+			if healing_card in ["drink", "iced_tea"]:
+				special_presenter.show_heal(id, healing_card, bool(event.get("rescued", false)))
+			else:
+				effects.comic(at + Vector3.UP * 2.7, "+%d MÁU" % int(event.get("amount", 1)), Color("#9fe3a9"))
+		"department_store_private":
+			var giver: int = int(event.get("giver", 0))
+			var receiver: int = int(event.get("receiver", 0))
+			if avatars.has(giver) and avatars.has(receiver):
+				effects.flying_card(
+					avatars[giver].position + Vector3.UP * 1.4,
+					avatars[receiver].position + Vector3.UP * 1.4,
+					event.get("card", {})
+				)
 		"draw":
 			avatars[id].act("draw")
 			for index in range(mini(8, int(event.get("count", 1)))):
@@ -391,10 +430,18 @@ func present_event(event: Dictionary) -> void:
 				effects.floating(at + Vector3.UP * 3.4, "BOOM!", Color("#ffc269"))
 				effects.spark(at + Vector3.UP, Color("#d89a65"), 12, 1.2)
 		"transfer":
-			var receiver: int = int(event.get("to",0))
+			var receiver: int = int(event.get("receiver", event.get("to", 0)))
+			# Participants receive a separate private face-card event. Everyone else
+			# sees only this public card-back transfer.
+			if bool(event.get("department_store", false)) and local_player in [id, receiver]:
+				return
+			if bool(event.get("department_store", false)):
+				var giver_name: String = str(player_names.get(id, "Một cao bồi"))
+				var receiver_name: String = str(player_names.get(receiver, "người nhận"))
+				effects.comic(at + Vector3.UP * 2.7, "%s đưa 1 lá cho %s" % [giver_name, receiver_name], Color("#e7cf91"), 0.72)
 			if avatars.has(receiver):
 				avatars[receiver].act("snatch" if event.get("steal",true) else "discard")
-			var destination: Vector3 = avatars.get(int(event.get("to", 0)), avatars[id]).position + Vector3.UP * 1.4
+			var destination: Vector3 = avatars.get(receiver, avatars[id]).position + Vector3.UP * 1.4
 			var origin: Vector3 = at + Vector3.UP * 1.4
 			if not event.get("hidden", true):
 				# Start visible-card removal at its actual table slot, including after
@@ -405,6 +452,11 @@ func present_event(event: Dictionary) -> void:
 			for index in range(mini(8, int(event.get("count", 1)))):
 				effects.flying_card(origin, destination, event.get("card", {}), index * 0.22, bool(event.get("hidden", true)))
 		"discard":
+			var discarded_id: String = str(event.get("card", {}).get("card_data_id", ""))
+			# These accepted cards receive a dedicated readable presentation on the
+			# following semantic event instead of a duplicate generic discard flight.
+			if discarded_id in ["drink", "iced_tea", "department_store", "general_store"]:
+				return
 			var origin: Vector3 = Vector3(0, 1.7, 0) if event.get("from_zone", "") == "market" else at + Vector3.UP * 1.4
 			effects.flying_card(origin, Vector3(0.45, 1.7, 0), event.get("card", {}))
 		"equip":
@@ -422,6 +474,8 @@ func present_event(event: Dictionary) -> void:
 		"store_pick":
 			avatars[id].act("store")
 			effects.flying_card(Vector3(0, 1.7, 0), at + Vector3.UP * 1.4, event.get("card", {}))
+			var picked_name: String = str(CardData.data(str(event.get("card", {}).get("card_data_id", ""))).get("name", "1 lá"))
+			effects.comic(at + Vector3.UP * 2.7, "%s chọn %s" % [str(player_names.get(id, "Một cao bồi")), picked_name], Color("#edc983"), 0.78)
 		"duel":
 			avatars[id].act("duel")
 			var target: int = int(event.get("target", 0))
@@ -466,7 +520,8 @@ func play_animation(actor: int, kind: String, target: int) -> void:
 			effects.spark(at - Vector3(0, 1.1, 0), Color("#e9bd78"))
 			camera_shake = 0.055
 		"drink":
-			effects.floating(at, "+1", Color("#a7edac"))
+			# HEAL already owns the single +HP/comedy message. This animation event
+			# supplies only the physical avatar accent and must not duplicate text.
 			effects.spark(at - Vector3(0, 0.4, 0), Color("#99dbad"), 6, 0.4)
 		"dodge":
 			effects.floating(at, TextCatalog.text("DODGE") + "!", Color("#9adce4"))

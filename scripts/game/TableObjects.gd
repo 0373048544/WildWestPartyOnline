@@ -79,6 +79,7 @@ func sync(snapshot: Dictionary, owner: int, request: Dictionary) -> void:
 			var row: int = index / 4
 			item.position = Vector3((column - minf(3, market.size() - 1) / 2) * 0.79, 1.49, -0.95 + row * 1.9)
 			objects[key] = item
+			item.play_spawn(index * 0.08)
 		objects[key].highlight(choice.get("reaction_type", "") == "store")
 		objects[key].set_attention(int(state.get("choice_player", 0)) > 0)
 	for key in objects.keys():

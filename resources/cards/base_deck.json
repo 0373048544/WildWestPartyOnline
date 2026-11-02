@@ -1,6 +1,6 @@
 {
-  "expected_count": 80,
-  "suit_rank_status": "canonical_official_base",
+  "expected_count": 86,
+  "suit_rank_status": "canonical_official_base_plus_custom",
   "source": "https://bang.dvgiochi.com/cardslist.php?id=1&lang=en",
   "cards": [
     {
@@ -402,6 +402,36 @@
       "card_data_id": "wells_fargo",
       "suit": "HEART",
       "rank": "3"
+    },
+    {
+      "card_data_id": "department_store",
+      "suit": "CLUB",
+      "rank": "5"
+    },
+    {
+      "card_data_id": "department_store",
+      "suit": "CLUB",
+      "rank": "7"
+    },
+    {
+      "card_data_id": "iced_tea",
+      "suit": "HEART",
+      "rank": "2"
+    },
+    {
+      "card_data_id": "iced_tea",
+      "suit": "HEART",
+      "rank": "3"
+    },
+    {
+      "card_data_id": "iced_tea",
+      "suit": "HEART",
+      "rank": "4"
+    },
+    {
+      "card_data_id": "iced_tea",
+      "suit": "DIAMOND",
+      "rank": "5"
     }
   ]
 }

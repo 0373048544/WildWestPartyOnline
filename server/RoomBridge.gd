@@ -48,3 +48,7 @@ func broadcast_animation(actor: int, kind: String, target: int = 0) -> void:
 
 func broadcast_table_event(event: Dictionary) -> void:
 	server.broadcast(room, "TABLE_EVENT", stamp_audio(event))
+
+func send_private_event(id: int, event: Dictionary) -> void:
+	# WebSocket rooms deliver hidden-card details to one member only.
+	server.send_player(id, "TABLE_EVENT", stamp_audio(event))

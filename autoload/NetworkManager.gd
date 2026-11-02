@@ -227,6 +227,14 @@ func broadcast_table_event(event: Dictionary) -> void:
 		if can_send(id):
 			receive_table_event.rpc_id(id, stamped)
 
+func send_private_event(id: int, event: Dictionary) -> void:
+	# Full hidden-card data is sent only to the intended participant.
+	var stamped := stamp_audio(event)
+	if id == 1:
+		receive_table_event(stamped)
+	elif can_send(id):
+		receive_table_event.rpc_id(id, stamped)
+
 @rpc("authority", "call_remote", "reliable")
 func receive_table_event(event: Dictionary) -> void:
 	table_event.emit(event)

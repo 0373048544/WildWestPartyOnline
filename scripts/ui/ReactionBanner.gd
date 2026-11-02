@@ -4,6 +4,7 @@ var app: Node
 var request_id: int = 0
 var deadline: float = 0.0
 var primary_card: int = -1
+var secondary_card: int = -1
 var layout: Script = preload("res://scripts/ui/MatchLayout.gd")
 
 @onready var banner: Panel = $Banner
@@ -12,6 +13,7 @@ var layout: Script = preload("res://scripts/ui/MatchLayout.gd")
 @onready var countdown: Label = $Banner/Content/TitleRow/Countdown
 @onready var detail_label: Label = $Banner/Content/Detail
 @onready var primary_button: Button = $Banner/Content/Actions/Primary
+@onready var secondary_button: Button = $Banner/Content/Actions/Secondary
 @onready var skip_button: Button = $Banner/Content/Actions/Skip
 
 func _ready() -> void:
@@ -22,6 +24,7 @@ func _ready() -> void:
 	visible = false
 	resized.connect(_apply_layout)
 	primary_button.pressed.connect(_primary)
+	secondary_button.pressed.connect(_secondary)
 	skip_button.pressed.connect(_skip)
 
 func present(owner_app: Node, active: Dictionary, state: Dictionary) -> void:
@@ -43,7 +46,12 @@ func present(owner_app: Node, active: Dictionary, state: Dictionary) -> void:
 	skip_button.text = TextCatalog.text("SKIP REACTION")
 	var allowed: Array = active.get("allowed_card_types", [])
 	primary_card = int(allowed[0]) if not allowed.is_empty() else -1
+	secondary_card = -1
+	secondary_button.visible = false
+	if kind == "survive":
+		_configure_survival_actions(active)
 	primary_button.disabled = primary_card < 0
+	secondary_button.disabled = secondary_card < 0
 	skip_button.disabled = false
 	primary_button.tooltip_text = TextCatalog.text("No valid reaction card in hand.") if primary_button.disabled else copy.detail
 	_style_banner(kind)
@@ -57,6 +65,8 @@ func present(owner_app: Node, active: Dictionary, state: Dictionary) -> void:
 func hide_banner() -> void:
 	request_id = 0
 	primary_card = -1
+	secondary_card = -1
+	secondary_button.visible = false
 	visible = false
 	set_process(false)
 	if get_viewport().has_meta("reaction_banner_rect"):
@@ -71,8 +81,19 @@ func _primary() -> void:
 		return
 	AudioManager.play_ui("confirm")
 	primary_button.disabled = true
+	secondary_button.disabled = true
 	skip_button.disabled = true
 	app.intent("reaction", {"request": request_id, "accept": true, "card": primary_card})
+	_animate_out()
+
+func _secondary() -> void:
+	if secondary_card < 0 or not is_instance_valid(app):
+		return
+	AudioManager.play_ui("confirm")
+	primary_button.disabled = true
+	secondary_button.disabled = true
+	skip_button.disabled = true
+	app.intent("reaction", {"request": request_id, "accept": true, "card": secondary_card})
 	_animate_out()
 
 func _skip() -> void:
@@ -80,6 +101,7 @@ func _skip() -> void:
 		return
 	AudioManager.play_ui("button")
 	primary_button.disabled = true
+	secondary_button.disabled = true
 	skip_button.disabled = true
 	app.intent("reaction", {"request": request_id, "accept": false})
 	_animate_out()
@@ -99,10 +121,38 @@ func _copy_for(kind: String, actor: String) -> Dictionary:
 				"detail": TextCatalog.text("Use BANG! or take 1 damage"),
 				"primary": TextCatalog.text("USE BANG"), "icon": "!"}
 		"survive":
-			return {"title": TextCatalog.text("You are about to be eliminated!"),
-				"detail": TextCatalog.text("Use BEER to survive"),
-				"primary": TextCatalog.text("USE BEER"), "icon": "♥"}
+			return {"title": "BẠN ĐANG HẤP HỐI!",
+				"detail": "Dùng BIA hoặc TRÀ ĐÁ để hồi 1 máu.",
+				"primary": "DÙNG BIA", "icon": "♥"}
 	return {"title": "", "detail": "", "primary": "", "icon": "✦"}
+
+func _configure_survival_actions(active: Dictionary) -> void:
+	secondary_card = -1
+	secondary_button.visible = false
+	var beer_id: int = -1
+	var tea_id: int = -1
+	for option in active.get("survival_options", []):
+		match str(option.get("card_data_id", "")):
+			"drink":
+				if beer_id < 0:
+					beer_id = int(option.get("instance_id", -1))
+			"iced_tea":
+				if tea_id < 0:
+					tea_id = int(option.get("instance_id", -1))
+	if beer_id >= 0:
+		primary_card = beer_id
+		primary_button.text = "DÙNG BIA"
+		if tea_id >= 0:
+			secondary_card = tea_id
+			secondary_button.text = "DÙNG TRÀ ĐÁ"
+			secondary_button.visible = true
+			detail_label.text = "Chọn BIA hoặc TRÀ ĐÁ để hồi 1 máu."
+		else:
+			detail_label.text = "Dùng BIA để hồi 1 máu."
+	elif tea_id >= 0:
+		primary_card = tea_id
+		primary_button.text = "DÙNG TRÀ ĐÁ"
+		detail_label.text = "Dùng TRÀ ĐÁ để hồi 1 máu."
 
 func _player_name(id: int, state: Dictionary) -> String:
 	for player in state.get("players", []):
@@ -119,6 +169,9 @@ func _style_banner(kind: String) -> void:
 	primary_button.add_theme_stylebox_override("normal", main)
 	primary_button.add_theme_stylebox_override("hover", SaloonTheme.panel(Color("#8d6135"), Color("#ffe0a0"), 12))
 	primary_button.add_theme_stylebox_override("disabled", SaloonTheme.panel(Color("#2c3232"), Color("#555c5b"), 12))
+	secondary_button.add_theme_stylebox_override("normal", main)
+	secondary_button.add_theme_stylebox_override("hover", SaloonTheme.panel(Color("#8d6135"), Color("#ffe0a0"), 12))
+	secondary_button.add_theme_stylebox_override("disabled", SaloonTheme.panel(Color("#2c3232"), Color("#555c5b"), 12))
 	skip_button.add_theme_stylebox_override("normal", SaloonTheme.panel(Color("#242b2c"), Color("#806445"), 12))
 
 func _apply_layout() -> void:
@@ -135,8 +188,10 @@ func _apply_layout() -> void:
 		else layout.units(self, 62 if mobile else 58)
 	)
 	primary_button.custom_minimum_size.y = layout.units(self, 44 if mobile else 40)
+	secondary_button.custom_minimum_size.y = primary_button.custom_minimum_size.y
 	skip_button.custom_minimum_size.y = primary_button.custom_minimum_size.y
 	primary_button.add_theme_font_size_override("font_size", int(layout.units(self, 15)))
+	secondary_button.add_theme_font_size_override("font_size", int(layout.units(self, 14)))
 	skip_button.add_theme_font_size_override("font_size", int(layout.units(self, 15)))
 	title_label.add_theme_font_size_override("font_size", int(layout.units(self, 18 if short_landscape else (20 if mobile else 21))))
 	detail_label.add_theme_font_size_override("font_size", int(layout.units(self, 13 if short_landscape else 14)))

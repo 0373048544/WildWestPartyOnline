@@ -7,13 +7,17 @@ var sequence: int = 0
 
 func create(target: int, kind: String, context: Dictionary, payload: Dictionary = {}) -> void:
 	sequence += 1
+	var timeout_seconds: float = float(payload.get(
+		"timeout_seconds",
+		15.0 if payload.has("choices") or payload.has("cards") else 8.0
+	))
 	active = {"request_id": sequence, "target_player_id": target, "reaction_type": kind,
 		"source_player_id": context.get("source", 0),
 		"allowed_actions": payload.get("allowed_actions", ["choose", "pass"]),
 		"allowed_card_types": payload.get("allowed_cards", []),
 		"required_count": context.get("required", 1), "resolved_count": context.get("resolved", 0),
-		"timeout_seconds": 15.0 if payload.has("choices") or payload.has("cards") else 8.0,
-		"deadline": Time.get_ticks_msec() + (15000 if payload.has("choices") or payload.has("cards") else 8000),
+		"timeout_seconds": timeout_seconds,
+		"deadline": Time.get_ticks_msec() + int(timeout_seconds * 1000.0),
 		"context": context, "payload": payload}
 
 func expired() -> bool:

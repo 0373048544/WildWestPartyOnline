@@ -11,6 +11,7 @@ var top_signature: String = ""
 var log_signature: String = ""
 var hand_signature: String = ""
 var flow_signature: String = ""
+var choice_status_signature: String = ""
 var target_picker: Control
 var loadout_panel: Control
 var dismissed_picker_request: int = -1
@@ -97,6 +98,7 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 		request
 	)
 	_sync_table_panels()
+	_sync_choice_status()
 
 	if app.selected >= 0:
 		var selected_cards: Array = own.get("hand", []).filter(
@@ -176,7 +178,6 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 		"duel",
 		"indians",
 		"transfer",
-		"store",
 		"draw_steal",
 		"draw_discard"
 	].has(str(request.get("reaction_type", ""))):
@@ -214,6 +215,46 @@ func _free_named(node_name: String) -> void:
 	if old:
 		remove_child(old)
 		old.queue_free()
+
+func _sync_choice_status() -> void:
+	var choice_player: int = int(state.get("choice_player", 0))
+	var choice_type: String = str(state.get("choice_type", ""))
+	var signature := "%d:%s:%d" % [choice_player, choice_type, int(request.get("request_id", 0))]
+	if signature == choice_status_signature:
+		return
+	choice_status_signature = signature
+	_free_named("CenterChoiceStatus")
+	# The active picker receives the interactive modal. Other players receive a
+	# compact public status panel without any private card list.
+	if choice_player <= 0 or not request.is_empty():
+		return
+	var chooser_name := "CAO BỒI"
+	for player in state.get("players", []):
+		if int(player.get("player_id", 0)) == choice_player:
+			chooser_name = str(player.get("display_name", chooser_name))
+			break
+	var panel := PanelContainer.new()
+	panel.name = "CenterChoiceStatus"
+	panel.z_index = layout.Z_TOAST
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var usable: Rect2 = layout.modal_rect(self)
+	var panel_width: float = minf(layout.units(self, 520), usable.size.x * (0.90 if layout.mobile(self) else 0.72))
+	panel.position = Vector2(usable.get_center().x - panel_width * 0.5, usable.position.y + layout.units(self, 54))
+	panel.custom_minimum_size = Vector2(panel_width, layout.units(self, 78))
+	panel.add_theme_stylebox_override("panel", SaloonTheme.panel(Color(0.07, 0.09, 0.09, 0.94), SaloonTheme.GOLD, 14))
+	add_child(panel)
+	var column := VBoxContainer.new()
+	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(column)
+	var title := text("CỬA HÀNG" if choice_type == "store" else "BÁCH HÓA", 20, column)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var subtitle_text := (
+		"Đang chờ %s chọn..." % chooser_name
+		if choice_type == "store"
+		else "Đang chờ %s đưa 1 lá..." % chooser_name
+	)
+	var subtitle := text(subtitle_text, 15, column)
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 func set_modal_blocked(value: bool) -> void:
 	if is_instance_valid(loadout_panel):
@@ -581,7 +622,13 @@ func build_hand() -> void:
 			if int(chooser.get("player_id", 0)) == int(state.choice_player):
 				chooser_name = str(chooser.get("display_name", chooser_name))
 				break
-		message = "BÁCH HÓA · ĐẾN LƯỢT %s CHỌN BÀI" % chooser_name
+		match str(state.get("choice_type", "")):
+			"store":
+				message = "CỬA HÀNG · ĐANG CHỜ %s CHỌN..." % chooser_name
+			"department_store_give":
+				message = "BÁCH HÓA · ĐANG CHỜ %s ĐƯA BÀI..." % chooser_name
+			_:
+				message = "ĐẾN LƯỢT %s CHỌN BÀI" % chooser_name
 
 	elif app.sid_mode:
 		message = (
@@ -1212,6 +1259,13 @@ func reaction_message(active: Dictionary) -> String:
 			return "THỔ DÂN TẤN CÔNG · DÙNG BANG! HOẶC CHỊU 1 SÁT THƯƠNG"
 
 		"survive":
+			var options: Array = active.get("survival_options", [])
+			var has_tea := options.any(func(option): return str(option.get("card_data_id", "")) == "iced_tea")
+			var has_beer := options.any(func(option): return str(option.get("card_data_id", "")) == "drink")
+			if has_tea and has_beer:
+				return "BẠN SẮP BỊ LOẠI · DÙNG BIA HOẶC TRÀ ĐÁ ĐỂ SỐNG SÓT?"
+			if has_tea:
+				return "BẠN SẮP BỊ LOẠI · DÙNG TRÀ ĐÁ ĐỂ SỐNG SÓT?"
 			return "BẠN SẮP BỊ LOẠI · DÙNG BIA ĐỂ SỐNG SÓT?"
 
 	return str(

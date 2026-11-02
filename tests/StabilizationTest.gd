@@ -49,7 +49,7 @@ func conserved() -> void:
 	var ids: Dictionary = {}
 	for card in cards:
 		ids[card.instance_id] = true
-	check(cards.size() == 80 and ids.size() == 80, "80 physical instances conserved")
+	check(cards.size() == 86 and ids.size() == 86, "86 physical instances conserved")
 
 func _ready() -> void:
 	await get_tree().process_frame
@@ -65,6 +65,9 @@ func _ready() -> void:
 	check(GameManager.flow.market.is_empty(), "Store leftovers discarded after chooser disconnect")
 	check(events.any(func(e): return e.get("from_zone", "") == "market"), "leftover movement announced")
 	conserved()
+	# This fixture exercises a second Store cleanup path independently; the
+	# per-match usage restriction itself is covered by CustomCardsTest.
+	GameManager.players[1].general_store_used_this_game = false
 	store = take(1, "general_store")
 	GameManager.resolver.play(GameManager, 1, store.instance_id, 1)
 	for _index in range(4):
@@ -97,6 +100,8 @@ func _ready() -> void:
 	conserved()
 	var app: Node = load("res://scenes/menu/MainMenu.tscn").instantiate()
 	add_child(app)
+	app.seen_role = GameManager.match_id
+	app.clear_game_modal()
 	GameManager.publish()
 	app.table.show_context(3)
 	var portrait: Node = app.root.get_node("PlayerInfoCard").find_child("CharacterPortrait", true, false)
