@@ -47,6 +47,13 @@ func _ready() -> void:
 		check(view.visual.get_node("ArtworkFrame").size.y >= 0.35 * 214.0, "%s artwork occupies at least 35 percent of card height" % id)
 		view.touch_compact(152.0)
 		check(not view.visual.get_node("CardDescription").visible and artwork.visible, "%s mobile compact prioritizes artwork and hides long description" % id)
+		var title: Label = view.visual.get_node("CardName") as Label
+		check(title.visible and not title.clip_text and title.size.y * view.visual.scale.y >= 28.0, "%s portrait mobile reserves a visible title header" % id)
+		check(title.get_theme_font_size("font_size") * view.visual.scale.y >= 14.0, "%s portrait mobile title font remains readable" % id)
+		check(title.position.y + title.size.y <= artwork.get_parent().position.y, "%s artwork remains below the mobile title title=%s art_y=%s" % [id, title.get_rect(), artwork.get_parent().position.y])
+		view.touch_compact(88.0)
+		check(title.visible and title.size.y * view.visual.scale.y >= 20.0, "%s narrow landscape never collapses the title to zero" % id)
+		check(title.get_theme_font_size("font_size") * view.visual.scale.y >= 13.0, "%s narrow mobile title remains legible" % id)
 		view.queue_free()
 
 	check(is_instance_valid(CardArt.texture("unknown_future_card")), "unknown artwork uses safe category fallback")

@@ -75,7 +75,11 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	status_rail.size = Vector2(4 if chosen else 3, 157)
 	status_rail.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visual.add_child(status_rail)
-	add_text(definition.name, Rect2(10, 8, 190, 25), 17, SaloonTheme.CREAM).name = "CardName"
+	var card_name := add_text(definition.name, Rect2(10, 8, 190, 25), 17, SaloonTheme.CREAM)
+	card_name.name = "CardName"
+	card_name.clip_text = false
+	card_name.max_lines_visible = 2
+	card_name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	var corner := add_text(CardInstance.corner(card), Rect2(10, 39, 62, 32), 22, CardInstance.suit_color(card.suit))
 	corner.name = "RankSuitCorner"
 	corner.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -228,12 +232,41 @@ func touch_compact(width: float) -> void:
 	var touch_scale: float = width / 210.0
 	visual.scale = Vector2.ONE * touch_scale * (1.05 if chosen_state else 1.0)
 	visual.position = Vector2.ZERO
-	# Compensate the source font before scaling so landscape text remains at
-	# least ~13 logical pixels even though the whole card becomes narrower.
-	visual.get_node("CardName").add_theme_font_size_override(
-		"font_size",
-		mini(36, maxi(19, int(round(15.0 / touch_scale))))
-	)
+	# Compensate both font and bounds before scaling. Previously the font grew
+	# while CardName remained only 25 source pixels high, so its line was clipped
+	# on portrait phones even though artwork and type remained visible.
+	var portrait_card: bool = width >= 128.0
+	var card_name: Label = visual.get_node("CardName") as Label
+	var desired_title_font: float = 16.0 if portrait_card else 14.0
+	if card_name.text.length() > 10:
+		desired_title_font = 14.0
+	var desired_title_height: float = 30.0 if portrait_card else 21.0
+	var source_title_font: int = mini(38, maxi(17, ceili(desired_title_font / touch_scale)))
+	var source_title_height: float = minf(52.0, maxf(34.0, desired_title_height / touch_scale))
+	card_name.visible = true
+	card_name.clip_text = false
+	# Keep compact hand titles horizontal. Long names reduce font slightly rather
+	# than turning into a vertical stack of one-character lines.
+	card_name.autowrap_mode = TextServer.AUTOWRAP_OFF
+	card_name.max_lines_visible = 1
+	card_name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	card_name.position = Vector2(8.0, 5.0)
+	card_name.size = Vector2(194.0, source_title_height)
+	card_name.add_theme_font_size_override("font_size", source_title_font)
+	# Font changes invalidate Label's minimum size. Reapply the reserved header
+	# rect afterwards so an intrinsic text minimum cannot consume the artwork.
+	card_name.size = Vector2(194.0, source_title_height)
+	var title_band: ColorRect = visual.get_node("TitleBand") as ColorRect
+	title_band.position = Vector2(6.0, 5.0)
+	title_band.size = Vector2(198.0, minf(55.0, source_title_height + 3.0))
+	# Quick-equip detail remains available in the long-press preview. Hiding this
+	# secondary badge prevents it from covering a two-line mobile card name.
+	var quick_badge: Control = visual.get_node_or_null("QuickEquipBadge") as Control
+	var quick_text: Control = visual.get_node_or_null("QuickEquipText") as Control
+	if is_instance_valid(quick_badge):
+		quick_badge.visible = false
+	if is_instance_valid(quick_text):
+		quick_text.visible = false
 	visual.get_node("CardDescription").add_theme_font_size_override(
 		"font_size",
 		mini(36, maxi(18, int(round(15.0 / touch_scale))))
@@ -242,9 +275,21 @@ func touch_compact(width: float) -> void:
 	# belongs to the deliberate 0.45s long-press preview.
 	visual.get_node("CardDescription").visible = false
 	visual.get_node("RankSuitLower").visible = false
-	visual.get_node("CardTypeBadge").position.y = 140.0
-	visual.get_node("CardType").position.y = 142.0
-	visual.get_node("CardType").add_theme_font_size_override("font_size", 14)
+	# Mobile priority row below artwork: rank/suit first, then type. Its font and
+	# height are also compensated so neither label collapses after card scaling.
+	var rank_suit: Label = visual.get_node("RankSuitCorner") as Label
+	rank_suit.position = Vector2(12.0, 140.0)
+	rank_suit.size = Vector2(50.0, minf(48.0, 20.0 / touch_scale))
+	rank_suit.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	rank_suit.add_theme_font_size_override("font_size", mini(34, maxi(18, int(round(14.0 / touch_scale)))))
+	var type_badge: Control = visual.get_node("CardTypeBadge") as Control
+	type_badge.position = Vector2(66.0, 141.0)
+	type_badge.size = Vector2(132.0, minf(44.0, 20.0 / touch_scale))
+	var type_label: Label = visual.get_node("CardType") as Label
+	type_label.position = Vector2(70.0, 141.0)
+	type_label.size = Vector2(124.0, minf(44.0, 20.0 / touch_scale))
+	type_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	type_label.add_theme_font_size_override("font_size", mini(32, maxi(17, int(round(13.0 / touch_scale)))))
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 func draw_symbol(icon: Control) -> void:
