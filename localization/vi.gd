@@ -98,8 +98,8 @@ const TEXT: Dictionary = {
 	"Waiting for players...": "Đang chờ người chơi...",
 	"%s is shooting you!": "%s đang bắn bạn!", "Use DODGE or take 1 damage": "Dùng NÉ hoặc chịu 1 sát thương",
 	"USE DODGE": "DÙNG NÉ", "SKIP REACTION": "BỎ QUA", "No valid reaction card in hand.": "Bạn không có lá phản ứng hợp lệ.",
-	"%s challenges you to a Duel!": "%s thách đấu bạn!", "Use BANG! or take 1 damage": "Dùng BANG! hoặc chịu 1 sát thương",
-	"USE BANG": "DÙNG BANG!", "Indians attack!": "Thổ dân tấn công!",
+	"%s challenges you to a Duel!": "%s thách đấu bạn — ĐẤU SÚNG!", "Use BANG! or take 1 damage": "Dùng BẮN hoặc chịu 1 sát thương.",
+	"USE BANG": "DÙNG BẮN", "Indians attack!": "Thổ dân tấn công!",
 	"You are about to be eliminated!": "Bạn sắp bị loại!", "Use BEER to survive": "Dùng BIA để sống sót", "USE BEER": "DÙNG BIA"
 }
 

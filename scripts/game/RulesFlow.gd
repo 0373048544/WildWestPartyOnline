@@ -83,6 +83,8 @@ func indians(job: Dictionary) -> void:
 func response(job: Dictionary, kind: String, title: String) -> void:
 	var cards: Array = game.abilities.response_cards(game, job.target, "shoot")
 	if cards.is_empty():
+		if kind == "duel":
+			game.record("%s không thể đáp trả ĐẤU SÚNG." % game.players[job.target].display_name)
 		push({"kind": "damage", "target": job.target, "source": job.source, "amount": 1}, true)
 	else:
 		prompt(job.target, kind, job, {"title": title, "allowed_cards": cards.map(func(c): return c.instance_id), "allowed_actions": ["card", "pass"]})
@@ -338,9 +340,12 @@ func resolve(args: Dictionary) -> bool:
 			if accept:
 				game.consume(id, card)
 				if kind == "duel":
+					game.record("%s dùng %s để đáp trả ĐẤU SÚNG." % [game.players[id].display_name, CardData.data(card.card_data_id).name])
 					game.network.broadcast_animation(id, "shoot", context.source)
 					push({"kind": "duel", "target": context.source, "source": id}, true)
 			else:
+				if kind == "duel":
+					game.record("%s bỏ qua đáp trả ĐẤU SÚNG." % game.players[id].display_name)
 				push({"kind": "damage", "target": id, "source": context.source, "amount": 1}, true)
 		"survive":
 			var valid_heal: bool = accept and (card.card_data_id == "iced_tea" or (card.card_data_id == "drink" and game.beer_enabled()))
