@@ -5,33 +5,58 @@ var cards: Dictionary = {}
 var confirm: Button
 var selected_id: String = ""
 var portraits: Dictionary = {}
+var option_order: Array[String] = []
+var carousel_index: int = 0
+var carousel_mode: bool = false
+var carousel_counter: Label
+var navigation: HBoxContainer
 
 func configure(owner_app: Node, options: Array) -> void:
 	app = owner_app
 	name = "CharacterChoicePanel"
 	var layout: Script = load("res://scripts/ui/MatchLayout.gd")
+	var mobile: bool = bool(layout.mobile_portrait(self) or layout.mobile_landscape(self))
 	var landscape_phone: bool = bool(layout.mobile_landscape(self))
-	var portrait_phone: bool = bool(layout.mobile_portrait(self))
-	var body := ScrollContainer.new()
-	body.name = "CharacterOptionsScroll"
-	body.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	body.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO if portrait_phone else ScrollContainer.SCROLL_MODE_DISABLED
-	body.custom_minimum_size.y = layout.units(self, 178.0) if landscape_phone else (layout.units(self, 480.0) if portrait_phone else 330.0)
+	carousel_mode = bool(layout.character_choice_carousel(self))
+	size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	size_flags_vertical = Control.SIZE_EXPAND_FILL
+	add_theme_constant_override("separation", int(layout.units(self, 6.0 if mobile else 12.0)))
+	var body := CenterContainer.new()
+	body.name = "CharacterCardArea"
 	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_child(body)
-	var row: Container = VBoxContainer.new() if portrait_phone else HBoxContainer.new()
+	var row := HBoxContainer.new()
+	row.name = "CharacterOptionsRow"
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", int(layout.units(self, 8.0 if landscape_phone else 14.0)))
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_child(row)
 	for index in range(options.size()):
 		var data: Dictionary = options[index]
+		var character_id := str(data.character_id)
+		option_order.append(character_id)
 		var option_accent: Color = SaloonTheme.SEATS[index % SaloonTheme.SEATS.size()]
 		var card := Button.new()
 		card.name = "CharacterOption%d" % index
 		card.set_meta("character_id", data.character_id)
 		card.set_meta("option_accent", option_accent)
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		card.custom_minimum_size = Vector2(0, layout.units(self, 166.0) if landscape_phone else (layout.units(self, 286.0) if portrait_phone else 310.0))
+		card.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		var css: Vector2 = layout.css_size(self)
+		if mobile:
+			var card_width_css: float = minf(360.0, maxf(240.0, css.x - 82.0)) if carousel_mode else 0.0
+			var card_height_css: float
+			if landscape_phone:
+				card_height_css = clampf(css.y - 190.0, 154.0, 236.0)
+			elif carousel_mode:
+				card_height_css = clampf(css.y - 255.0, 360.0, 510.0)
+			else:
+				card_height_css = clampf(css.y - 215.0, 410.0, 640.0)
+			card.custom_minimum_size = Vector2(layout.units(self, card_width_css), layout.units(self, card_height_css))
+		else:
+			card.custom_minimum_size = Vector2(0, 310.0)
 		card.tooltip_text = data.display_name + "\n" + data.ability_description_vi
 		card.add_theme_stylebox_override("normal", SaloonTheme.panel(Color("#172b37"), option_accent.darkened(0.14), 12))
 		card.add_theme_stylebox_override("hover", SaloonTheme.panel(Color("#223b43"), option_accent.lightened(0.18), 12))
@@ -41,36 +66,96 @@ func configure(owner_app: Node, options: Array) -> void:
 		var column := VBoxContainer.new()
 		column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		var inset: float = float(layout.units(self, 6.0 if landscape_phone else 12.0))
+		column.add_theme_constant_override("separation", int(layout.units(self, 2.0 if landscape_phone else 5.0)))
+		var inset: float = float(layout.units(self, 6.0 if landscape_phone else (8.0 if mobile else 12.0)))
 		column.offset_left = inset
 		column.offset_right = -inset
 		column.offset_top = inset
 		column.offset_bottom = -inset
 		card.add_child(column)
-		var title: Label = app.label(data.display_name, 17 if landscape_phone else 21, column)
+		var title: Label = app.label(data.display_name, 16 if landscape_phone else (18 if mobile else 21), column)
+		title.name = "CharacterName"
 		title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		var portrait: Control = load("res://scripts/ui/CharacterPortrait.gd").new()
 		column.add_child(portrait)
-		portrait.configure(data.character_id, int(layout.units(self, 58.0 if landscape_phone else (112.0 if portrait_phone else 145.0))))
+		var portrait_css: float
+		if landscape_phone:
+			portrait_css = clampf(css.y * 0.22, 70.0, 92.0)
+		elif mobile:
+			portrait_css = clampf(css.y * (0.32 if carousel_mode else 0.27), 112.0, 224.0)
+		else:
+			portrait_css = 145.0
+		portrait.configure(data.character_id, int(layout.units(self, portrait_css)) if mobile else int(portrait_css))
+		portrait.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		portraits[data.character_id] = portrait
 		card.mouse_entered.connect(func(): portrait.react("dodge"))
-		var hp: Label = app.label("%d MÁU" % data.max_hp, 15 if landscape_phone else 20, column)
+		var hp: Label = app.label("%d MÁU" % data.max_hp, 13 if landscape_phone else (16 if mobile else 20), column)
+		hp.name = "CharacterHP"
 		hp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		var icon: String = CharacterData.ability_icon(data.ability_id)
-		var ability: Label = app.label(icon + " " + data.ability_description_vi, 13 if landscape_phone else 16, column)
-		ability.max_lines_visible = 2 if landscape_phone else 3
+		var ability: Label = app.label(icon + " " + data.ability_description_vi, 11 if landscape_phone else (13 if mobile else 16), column)
+		ability.name = "CharacterAbility"
+		ability.max_lines_visible = 2 if mobile else 3
 		ability.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		ability.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		ability.set_meta("ability_id", data.ability_id)
+		var choose_badge := PanelContainer.new()
+		choose_badge.name = "ChooseBadge"
+		choose_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		choose_badge.custom_minimum_size.y = layout.units(self, 44.0 if mobile else 38.0)
+		choose_badge.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#8e541f"), SaloonTheme.GOLD, 9))
+		column.add_child(choose_badge)
+		var choose_text: Label = app.label("CHỌN", 14 if mobile else 15, choose_badge)
+		choose_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		choose_text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		choose_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		for child in column.get_children():
 			if child is Control:
 				child.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		card.pressed.connect(select.bind(str(data.character_id)))
 		cards[data.character_id] = card
+	if carousel_mode:
+		build_carousel_navigation(layout)
+		show_carousel_card(0, false)
 	confirm = app.button("XÁC NHẬN NHÂN VẬT", commit, self, true)
 	confirm.name = "ConfirmCharacter"
 	confirm.custom_minimum_size.y = layout.units(self, 44.0 if landscape_phone else 48.0) if layout.mobile(self) else 46.0
 	if cards.has(app.character_draft):
 		select(app.character_draft)
+
+func build_carousel_navigation(layout: Script) -> void:
+	navigation = HBoxContainer.new()
+	navigation.name = "CharacterCarouselNavigation"
+	navigation.alignment = BoxContainer.ALIGNMENT_CENTER
+	navigation.add_theme_constant_override("separation", int(layout.units(self, 10.0)))
+	add_child(navigation)
+	var previous: Button = app.button("‹", func(): show_carousel_card(carousel_index - 1), navigation, false)
+	previous.name = "PreviousCharacter"
+	previous.custom_minimum_size = Vector2(layout.units(self, 48.0), layout.units(self, 44.0))
+	carousel_counter = app.label("", 14, navigation)
+	carousel_counter.name = "CharacterCarouselCounter"
+	carousel_counter.custom_minimum_size.x = layout.units(self, 72.0)
+	carousel_counter.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var next: Button = app.button("›", func(): show_carousel_card(carousel_index + 1), navigation, false)
+	next.name = "NextCharacter"
+	next.custom_minimum_size = Vector2(layout.units(self, 48.0), layout.units(self, 44.0))
+
+func show_carousel_card(index: int, animate: bool = true) -> void:
+	if option_order.is_empty():
+		return
+	carousel_index = posmod(index, option_order.size())
+	for option_index in range(option_order.size()):
+		var card: Button = cards[option_order[option_index]]
+		card.visible = option_index == carousel_index
+		if card.visible and animate:
+			card.modulate.a = 0.55
+			card.position.x = 12.0
+			var reveal := card.create_tween().set_parallel(true)
+			reveal.tween_property(card, "modulate:a", 1.0, 0.14)
+			reveal.tween_property(card, "position:x", 0.0, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	if is_instance_valid(carousel_counter):
+		carousel_counter.text = "%d / %d" % [carousel_index + 1, option_order.size()]
 
 func select(id: String) -> void:
 	if not cards.has(id):

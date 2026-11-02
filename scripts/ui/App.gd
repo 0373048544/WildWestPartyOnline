@@ -669,12 +669,28 @@ func show_reaction(request: Dictionary) -> void:
 func show_character_selection(own: Dictionary) -> void:
 	var box := modal()
 	var layout: Script = load("res://scripts/ui/MatchLayout.gd")
+	var mobile_choice: bool = bool(layout.mobile_portrait(root) or layout.mobile_landscape(root))
 	var landscape_phone: bool = bool(layout.mobile_landscape(root))
-	var heading := label("CHỌN NHÂN VẬT", 21 if landscape_phone else 26, box)
+	if mobile_choice:
+		var choice_rect: Rect2 = layout.character_choice_rect(root)
+		var frame: PanelContainer = overlay.get_node("ModalFrame")
+		frame.position = choice_rect.position
+		frame.size = choice_rect.size
+		frame.custom_minimum_size = choice_rect.size
+		frame.set_meta("character_choice_fullscreen", true)
+		var scroll: ScrollContainer = frame.find_child("ModalScroll", true, false) as ScrollContainer
+		if is_instance_valid(scroll):
+			scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		var content_padding: float = layout.units(root, 10.0 if landscape_phone else 16.0)
+		box.custom_minimum_size.y = maxf(1.0, choice_rect.size.y - content_padding * 2.0 - 20.0)
+		box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		box.add_theme_constant_override("separation", int(layout.units(root, 6.0 if landscape_phone else 9.0)))
+	var heading := label("CHỌN NHÂN VẬT", 18 if landscape_phone else (22 if mobile_choice else 26), box)
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	if not landscape_phone:
+	if not mobile_choice:
 		label("Hai lựa chọn riêng của bạn. Chọn một thẻ rồi xác nhận. Hết giờ: máy chủ chọn một trong hai.", 15, box)
-	reaction_label = label("", 14 if landscape_phone else 18, box)
+	reaction_label = label("", 13 if landscape_phone else (15 if mobile_choice else 18), box)
+	reaction_label.name = "CharacterChoiceTimer"
 	reaction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	set_process(true)
 	reaction_until = Time.get_ticks_msec() / 1000.0 + float(own.get("character_remaining", 25))

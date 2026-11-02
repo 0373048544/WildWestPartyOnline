@@ -162,11 +162,31 @@ func _ready() -> void:
 		app.show_character_selection({"character_options": [definitions[0], definitions[1]], "character_remaining": 20.0, "character_chosen": false})
 		await get_tree().process_frame
 		var modal_frame: Control = app.root.get_node("GameModal/ModalFrame")
-		var modal_safe: Rect2 = LAYOUT.modal_rect(app.root)
+		var phone_choice: bool = layout_mode in [LAYOUT.MOBILE_PORTRAIT,LAYOUT.MOBILE_LANDSCAPE]
+		var modal_safe: Rect2 = LAYOUT.character_choice_rect(app.root) if phone_choice else LAYOUT.modal_rect(app.root)
 		check(modal_safe.encloses(modal_frame.get_global_rect()),"modal frame remains inside safe viewport "+str(css))
+		if phone_choice:
+			check(modal_frame.get_meta("character_choice_fullscreen",false) and modal_frame.get_global_rect().is_equal_approx(modal_safe),"mobile character choice fills safe viewport "+str(css))
+			var modal_scroll: ScrollContainer = modal_frame.find_child("ModalScroll",true,false)
+			check(is_instance_valid(modal_scroll) and modal_scroll.vertical_scroll_mode==ScrollContainer.SCROLL_MODE_DISABLED,"mobile character choice has no vertical scrolling "+str(css))
+		else:
+			check(not modal_frame.get_meta("character_choice_fullscreen",false) and modal_frame.size.x<logical.x,"desktop character choice remains a centered modal "+str(css))
 		check(not app.match_hud.loadout_panel.visible and not app.match_hud.hand.visible and not app.match_hud.get_node("HandActions").visible,"true modal hides equipment, hand and actions")
 		var confirm: Control = modal_frame.find_child("ConfirmCharacter",true,false)
 		check(is_instance_valid(confirm) and modal_safe.encloses(confirm.get_global_rect()),"character confirm remains reachable in viewport %s safe=%s confirm=%s" % [css,modal_safe,confirm.get_global_rect() if is_instance_valid(confirm) else Rect2()])
+		var character_panel: Control = modal_frame.find_child("CharacterChoicePanel",true,false)
+		if phone_choice:
+			check(confirm.size.y/sy>=44.0,"character confirm keeps a 44px mobile touch target "+str(css))
+			check(character_panel.carousel_mode==LAYOUT.character_choice_carousel(app.root),"character card breakpoint follows viewport width "+str(css))
+			var option_keys: Array = character_panel.cards.keys()
+			if character_panel.carousel_mode:
+				check(character_panel.cards[option_keys[0]].visible!=character_panel.cards[option_keys[1]].visible,"narrow portrait shows exactly one carousel card "+str(css))
+				check(is_instance_valid(character_panel.navigation) and character_panel.navigation.get_global_rect().size.y/sy>=44.0,"carousel navigation remains touch sized "+str(css))
+			else:
+				var left_card: Control = character_panel.cards[option_keys[0]]
+				var right_card: Control = character_panel.cards[option_keys[1]]
+				check(left_card.visible and right_card.visible and left_card.global_position.x<right_card.global_position.x and is_equal_approx(left_card.global_position.y,right_card.global_position.y),"mobile cards remain side by side "+str(css))
+				check(modal_safe.encloses(left_card.get_global_rect()) and modal_safe.encloses(right_card.get_global_rect()),"both character cards remain inside safe viewport "+str(css))
 		app.clear_game_modal()
 		app.refresh()
 		await get_tree().process_frame

@@ -205,6 +205,19 @@ static func modal_rect(node: Node) -> Rect2:
 	var margin_css := 12.0 if mobile_landscape(node) else (16.0 if mobile(node) else 28.0)
 	return safe_rect(node, margin_css)
 
+static func character_choice_rect(node: Node) -> Rect2:
+	# Character selection is a true full-screen mobile step. The backdrop still
+	# covers the complete viewport while interactive content respects browser
+	# notches/toolbars through the shared safe insets.
+	if mobile_portrait(node) or mobile_landscape(node):
+		return safe_rect(node)
+	return modal_rect(node)
+
+static func character_choice_carousel(node: Node) -> bool:
+	# Two portrait cards become too narrow below this CSS width. Use a single-card
+	# carousel instead of shrinking text or introducing vertical scrolling.
+	return mobile_portrait(node) and css_size(node).x < 390.0
+
 static func hand_scrollbar_height(node: Node) -> float:
 	if mobile_landscape(node):
 		return units(node, 8.0)
