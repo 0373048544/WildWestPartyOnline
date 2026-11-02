@@ -1,5 +1,8 @@
 extends Node
 
+const WesternToastScript = preload("res://scripts/ui/WesternToast.gd")
+const WesternStatusBadgeScript = preload("res://scripts/ui/WesternStatusBadge.gd")
+
 signal presentation_feedback(kind: String)
 
 var canvas: CanvasLayer
@@ -48,7 +51,7 @@ func _ready() -> void:
 	personal_toasts = load("res://scripts/ui/PersonalEventToast.gd").new()
 	canvas.add_child(personal_toasts)
 	root.resized.connect(func():
-		if NetworkManager.public_state.get("started",false) and not layout_refresh_queued:
+		if not layout_refresh_queued:
 			layout_refresh_queued = true
 			call_deferred("refresh_layout"))
 	NetworkManager.updated.connect(refresh)
@@ -127,6 +130,44 @@ func button(text: String, callback: Callable, parent: Node = content, disabled: 
 	parent.add_child(node)
 	return node
 
+func western_input(placeholder: String, parent: Node = content, code: bool = false) -> LineEdit:
+	var field := LineEdit.new()
+	field.placeholder_text = placeholder
+	field.custom_minimum_size.y = 52
+	field.add_theme_font_size_override("font_size", 20 if code else 18)
+	field.virtual_keyboard_enabled = true
+	field.clear_button_enabled = true
+	if code:
+		field.alignment = HORIZONTAL_ALIGNMENT_CENTER
+		field.add_theme_constant_override("minimum_character_width", 12)
+	parent.add_child(field)
+	return field
+
+func section_header(text: String, parent: Node = content, icon: String = "✦") -> Label:
+	var heading := label("%s  %s" % [icon, text], 18, parent)
+	heading.add_theme_color_override("font_color", SaloonTheme.GOLD)
+	heading.add_theme_color_override("font_shadow_color", Color("#1b100b"))
+	heading.add_theme_constant_override("shadow_offset_y", 2)
+	return heading
+
+func show_outgame_toast(message: String, tone: String = "neutral") -> void:
+	var old := root.get_node_or_null("OutGameToast")
+	if old:
+		old.queue_free()
+	var toast := WesternToastScript.new()
+	root.add_child(toast)
+	var width := minf(460.0, root.size.x - 28.0)
+	toast.position = Vector2((root.size.x - width) * 0.5, maxf(16.0, root.size.y * 0.06))
+	toast.size = Vector2(width, 54)
+	toast.show_message(message, tone)
+
+func show_help() -> void:
+	var box := modal()
+	label("HƯỚNG DẪN NHANH", 28, box)
+	label("1. Tạo phòng và gửi mã cho bạn bè.\n2. Mọi người nhấn SẴN SÀNG.\n3. Chủ phòng nhấn BẮT ĐẦU GAME.\n4. Trong trận, chọn bài rồi chọn mục tiêu.", 18, box)
+	label("Mẹo: trên điện thoại, giữ lá bài để xem chi tiết và kéo ngang để cuộn tay bài.", 15, box)
+	button("ĐÃ HIỂU", func(): clear_game_modal(); refresh(), box).set_variant("primary")
+
 func refresh() -> void:
 	var state: Dictionary = NetworkManager.public_state
 	var in_game: bool = not state.is_empty() and state.get("started", false)
@@ -186,13 +227,17 @@ func refresh() -> void:
 	var margin := MarginContainer.new()
 	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 24)
+	var safe: Vector4 = load("res://scripts/ui/MatchLayout.gd").safe_insets(root)
+	margin.add_theme_constant_override("margin_left", maxi(14, int(safe.x + 14)))
+	margin.add_theme_constant_override("margin_right", maxi(14, int(safe.z + 14)))
+	margin.add_theme_constant_override("margin_top", maxi(12, int(safe.y + 12)))
+	margin.add_theme_constant_override("margin_bottom", maxi(12, int(safe.w + 12)))
 	if not in_game:
-		var inset: int = maxi(24, int((root.size.x - (880 if not state.is_empty() else 760)) / 2))
+		var target_width: int = 940 if not state.is_empty() else 720
+		var inset: int = maxi(int(safe.x + 14), int((root.size.x - target_width) / 2))
 		margin.add_theme_constant_override("margin_left", inset)
-		margin.add_theme_constant_override("margin_right", inset)
-		margin.add_theme_constant_override("margin_top", 18 if root.size.y < 800 else 48)
+		margin.add_theme_constant_override("margin_right", maxi(int(safe.z + 14), inset))
+		margin.add_theme_constant_override("margin_top", maxi(int(safe.y + 10), 10 if root.size.y < 620 else 34))
 	root.add_child(margin)
 	if not state.is_empty() and not in_game:
 		content = load("res://scenes/menu/Lobby.tscn").instantiate()
@@ -208,11 +253,17 @@ func refresh() -> void:
 		scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		margin.add_child(scroll)
 		var frame := PanelContainer.new()
+		frame.name = "OutGameFrame"
 		frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		frame.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-		frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color(0.065, 0.12, 0.16, 0.96), SaloonTheme.GOLD, 28))
+		frame.add_theme_stylebox_override("panel", SaloonTheme.wood_panel(18 if root.size.y < 520 else 28))
 		scroll.add_child(frame)
 		frame.add_child(content)
+		frame.modulate.a = 0.0
+		frame.position.y += 10
+		var enter := frame.create_tween().set_parallel()
+		enter.tween_property(frame, "modulate:a", 1.0, 0.18)
+		enter.tween_property(frame, "position:y", frame.position.y - 10, 0.22).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	if state.is_empty():
 		build_menu()
 	elif not in_game:
@@ -221,22 +272,25 @@ func refresh() -> void:
 		build_game(state)
 	if not error_text.is_empty():
 		var warning := PanelContainer.new()
-		warning.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#4c2e2c"), Color("#dd8b62")))
+		warning.name = "ConnectionStatus"
+		warning.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#4c2e2c"), SaloonTheme.DANGER))
 		content.add_child(warning)
 		var notice := HBoxContainer.new()
 		warning.add_child(notice)
 		var message := label(TextCatalog.message(error_text), 16, notice)
 		message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		message.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button("Dismiss", func(): error_text = ""; refresh(), notice)
+		var dismiss := button("ĐÓNG", func(): error_text = ""; refresh(), notice)
+		dismiss.set_variant("danger")
 
 func build_menu() -> void:
 	var short_landscape := root.size.y < 520.0 and root.size.x > root.size.y
-	var ornament := label("✦  SALOON NIGHTS  ✦", 16)
+	var portrait_phone := root.size.x < 600.0 and root.size.y >= root.size.x
+	var ornament := label("★  QUÁN RƯỢU MIỀN TÂY  ★", 14)
 	ornament.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ornament.add_theme_color_override("font_color", SaloonTheme.GOLD)
 	ornament.visible = not short_landscape
-	var title := label("WILD WEST\nPARTY ONLINE", 24 if short_landscape else (30 if root.size.x < 900 else 40))
+	var title := label("WILD WEST\nPARTY ONLINE", 26 if short_landscape else (28 if portrait_phone else (34 if root.size.x < 900 else 44)))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_color_override("font_color", SaloonTheme.GOLD)
 	title.add_theme_color_override("font_shadow_color", Color("#080f17"))
@@ -245,49 +299,75 @@ func build_menu() -> void:
 		var pulse := title.create_tween().set_loops()
 		pulse.tween_property(title, "modulate", Color("#f5c879"), 1.8).set_trans(Tween.TRANS_SINE)
 		pulse.tween_property(title, "modulate", Color.WHITE, 1.8).set_trans(Tween.TRANS_SINE)
-	var subtitle := label("A private saloon. A hidden allegiance. One last card.", 16)
+	var subtitle := label("Vào phòng, gọi bạn, bắt đầu đấu súng.", 16)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.visible = not short_landscape
 	content.add_child(HSeparator.new())
 	if NetworkManager.connecting:
-		label("Đang kết nối đến máy chủ phòng...", 24)
-		button("CANCEL", leave)
+		var connecting := WesternStatusBadgeScript.new()
+		connecting.configure("◆  ĐANG KẾT NỐI ĐẾN CHỦ PHÒNG…", "warning")
+		content.add_child(connecting)
+		button("HỦY KẾT NỐI", leave).set_variant("danger")
 		return
 	var space := Control.new()
 	space.custom_minimum_size.y = 0 if short_landscape else 12
 	content.add_child(space)
 	if screen == "main":
-		button("HOST GAME", func(): screen = "host"; refresh())
-		button("JOIN GAME", func(): screen = "join"; refresh())
-		button("ÂM THANH", show_audio_settings)
-		button("HÌNH ẢNH", show_visual_settings)
+		var create := button("★  TẠO PHÒNG", func(): screen = "host"; refresh())
+		create.name = "CreateRoomButton"
+		create.set_variant("primary")
+		var join := button("♠  THAM GIA PHÒNG", func(): screen = "join"; refresh())
+		join.name = "JoinRoomButton"
+		join.set_variant("primary")
+		# Stack labelled settings controls on narrow phones so none overflow.
+		var secondary: Container = VBoxContainer.new() if portrait_phone else HBoxContainer.new()
+		secondary.add_theme_constant_override("separation", 8)
+		content.add_child(secondary)
+		for spec in [["⚙  ÂM THANH", show_audio_settings], ["◇  HÌNH ẢNH", show_visual_settings], ["?  HƯỚNG DẪN", show_help]]:
+			var secondary_button := button(spec[0], spec[1], secondary)
+			secondary_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			secondary_button.set_variant("quiet")
 		if not OS.has_feature("web"):
-			button("QUIT", func(): get_tree().quit())
+			button("THOÁT GAME", func(): get_tree().quit()).set_variant("danger")
+		var footer := label("● Sẵn sàng kết nối  •  v0.9  •  %s" % NetworkConfig.server_url(), 12)
+		footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		footer.add_theme_color_override("font_color", Color("#b9aa8f"))
 		return
-	label("HOST A SALOON" if screen == "host" else "JOIN A SALOON", 20 if short_landscape else 26)
-	label("Player name")
-	name_field = LineEdit.new()
+	section_header("TẠO PHÒNG MỚI" if screen == "host" else "THAM GIA PHÒNG", content, "★" if screen == "host" else "♠")
+	var form := PanelContainer.new()
+	form.add_theme_stylebox_override("panel", SaloonTheme.inset_panel(14))
+	content.add_child(form)
+	var form_box := VBoxContainer.new()
+	form_box.add_theme_constant_override("separation", 7)
+	form.add_child(form_box)
+	label("TÊN CAO BỒI", 14, form_box).add_theme_color_override("font_color", SaloonTheme.GOLD)
+	name_field = western_input("Nhập tên của bạn", form_box)
 	name_field.text = NetworkManager.local_name
 	name_field.max_length = 24
-	content.add_child(name_field)
 	if screen == "join":
-		label("MÃ PHÒNG")
-		room_field = LineEdit.new()
+		label("MÃ PHÒNG", 14, form_box).add_theme_color_override("font_color", SaloonTheme.GOLD)
+		room_field = western_input("AB7KQ2", form_box, true)
 		room_field.name = "RoomCode"
-		room_field.placeholder_text = "AB7KQ2"
 		room_field.max_length = 6
-		content.add_child(room_field)
 	if short_landscape:
 		var actions := HBoxContainer.new()
 		actions.add_theme_constant_override("separation", 10)
 		content.add_child(actions)
 		var submit := button("HOST" if screen == "host" else "JOIN", connect_game, actions)
 		var back := button("BACK", func(): screen = "main"; refresh(), actions)
+		submit.name = "SubmitRoomButton"
+		back.name = "BackButton"
+		submit.set_variant("primary")
+		back.set_variant("quiet")
 		submit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	else:
-		button("HOST" if screen == "host" else "JOIN", connect_game)
-		button("BACK", func(): screen = "main"; refresh())
+		var submit := button("TẠO PHÒNG" if screen == "host" else "THAM GIA", connect_game)
+		submit.name = "SubmitRoomButton"
+		submit.set_variant("primary")
+		var back := button("← QUAY LẠI", func(): screen = "main"; refresh())
+		back.name = "BackButton"
+		back.set_variant("quiet")
 
 func connect_game() -> void:
 	error_text = ""

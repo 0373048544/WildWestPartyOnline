@@ -171,16 +171,16 @@ async function save(page,name) {
     }
   });
   const a=await newPage(),b=await newPage();
-  await click(a,c=>c.text==='TẠO PHÒNG');
+  await click(a,c=>c.name==='CreateRoomButton');
   await input(a,null,'Thang');
   assert(!(await snapshot(a)).controls.some(c=>c.text==='Cổng'||c.text==='Địa chỉ IP'));
-  await click(a,c=>c.text==='TẠO PHÒNG');
+  await click(a,c=>c.name==='SubmitRoomButton');
   const room=await wait(async()=>{const s=await snapshot(a);return s?.room;},'room created');
   await save(a,'created');
-  await click(b,c=>c.text==='THAM GIA');
+  await click(b,c=>c.name==='JoinRoomButton');
   await input(b,null,'Minh');
   await input(b,'RoomCode',room);
-  await click(b,c=>c.text==='THAM GIA');
+  await click(b,c=>c.name==='SubmitRoomButton');
   await wait(async()=>{const s=await snapshot(b);return s?.public.players?.length===2;},'same lobby');
   assert.equal((await snapshot(a)).room,(await snapshot(b)).room);
   await click(a,c=>c.name==='ReadyButton');
