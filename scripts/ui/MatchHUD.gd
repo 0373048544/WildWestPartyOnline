@@ -343,9 +343,11 @@ func _sync_department_store_give_panel() -> void:
 		for side in ["top", "bottom"]:
 			padding.add_theme_constant_override("margin_" + side, int(layout.units(self, 7.0)))
 		panel.add_child(padding)
-		var content := HBoxContainer.new()
+		# Keep copy and actions on separate rows. The previous HBox let Copy consume
+		# the available width and collapsed Actions into two narrow vertical strips.
+		var content := VBoxContainer.new()
 		content.name = "Content"
-		content.add_theme_constant_override("separation", int(layout.units(self, 10.0)))
+		content.add_theme_constant_override("separation", int(layout.units(self, 7.0)))
 		padding.add_child(content)
 		var copy := VBoxContainer.new()
 		copy.name = "Copy"
@@ -363,6 +365,9 @@ func _sync_department_store_give_panel() -> void:
 		var buttons := HBoxContainer.new()
 		buttons.name = "Actions"
 		buttons.add_theme_constant_override("separation", int(layout.units(self, 8.0)))
+		var button_width: float = layout.units(self, 122.0 if layout.mobile(self) else 132.0)
+		buttons.custom_minimum_size.x = button_width * 2.0 + layout.units(self, 8.0)
+		buttons.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		content.add_child(buttons)
 		var confirm := action("ĐƯA", _confirm_department_store_give, buttons, true)
 		confirm.name = "ConfirmGive"
@@ -383,8 +388,9 @@ func _sync_department_store_give_panel() -> void:
 	confirm_button.disabled = selected_name.is_empty()
 	reset_button.disabled = selected_name.is_empty()
 	var action_touch_height: float = maxf(44.0, layout.units(self, 44.0))
-	confirm_button.custom_minimum_size.y = action_touch_height
-	reset_button.custom_minimum_size.y = action_touch_height
+	var action_button_width: float = layout.units(self, 122.0 if layout.mobile(self) else 132.0)
+	confirm_button.custom_minimum_size = Vector2(action_button_width, action_touch_height)
+	reset_button.custom_minimum_size = Vector2(action_button_width, action_touch_height)
 	var safe: Rect2 = layout.safe_rect(self, 8.0 if layout.mobile(self) else 18.0)
 	var targeting_hand: bool = department_give_selected >= 0
 	var action_zone: Rect2 = layout.action_rect(self, targeting_hand)
