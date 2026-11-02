@@ -182,6 +182,9 @@ func dispatch(connection_id: int, message: Dictionary) -> void:
 		remove_session(str(players_to_tokens.get(conn.player, "")))
 		conn.player = 0
 		return
+	if kind == "CHAT_SEND":
+		handle_chat(connection_id, room, payload)
+		return
 	var decoded := RoomProtocol.decode(kind, payload)
 	if decoded.is_empty() or not NetworkManager.valid_arguments(decoded.action, decoded.args):
 		reject(connection_id, "HÃ nh Ä‘á»™ng hoáº·c dá»¯ liá»‡u khÃ´ng há»£p lá»‡.", false)
@@ -214,6 +217,24 @@ func make_code() -> String:
 			code += CODE_ALPHABET[int(value) % CODE_ALPHABET.length()]
 	return code
 
+func handle_chat(connection_id: int, room: Dictionary, payload: Dictionary) -> void:
+	var player_id: int = int(connections[connection_id].player)
+	if not room.game.players.has(player_id):
+		return
+	var player: PlayerState = room.game.players[player_id]
+	var result: Dictionary = room.chat.accept(
+		player_id,
+		player.display_name,
+		not player.is_alive,
+		payload,
+		Time.get_ticks_msec(),
+		int(Time.get_unix_time_from_system())
+	)
+	if not bool(result.get("ok", false)):
+		send(connection_id, "CHAT_REJECTED", {"message": str(result.get("reason", "Không gửi được tin nhắn."))})
+		return
+	broadcast(room, "CHAT_MESSAGE", result.message)
+
 func admit(connection_id: int, kind: String, payload: Dictionary) -> void:
 	if not valid_name(payload.get("player_name", null)):
 		reject(connection_id, "TÃªn ngÆ°á»i chÆ¡i khÃ´ng há»£p lá»‡ (1â€“24 kÃ½ tá»±).")
@@ -224,7 +245,7 @@ func admit(connection_id: int, kind: String, payload: Dictionary) -> void:
 			reject(connection_id, "MÃ¡y chá»§ Ä‘ang Ä‘áº§y. HÃ£y thá»­ láº¡i sau.")
 			return
 		var code := make_code()
-		room = {"room_code": code, "host_player_id": next_player, "members": [], "created_at": Time.get_unix_time_from_system(), "activity": Time.get_ticks_msec()}
+		room = {"room_code": code, "host_player_id": next_player, "members": [], "created_at": Time.get_unix_time_from_system(), "activity": Time.get_ticks_msec(), "chat": ChatRoomState.new(code)}
 		var bridge: Node = load("res://server/RoomBridge.gd").new()
 		bridge.server = self
 		bridge.room = room
@@ -258,6 +279,7 @@ func admit(connection_id: int, kind: String, payload: Dictionary) -> void:
 	room.game.add_player(id, str(payload.player_name).strip_edges())
 	send(connection_id, "ROOM_CREATED" if kind == "CREATE_ROOM" else "JOIN_ACCEPTED",
 		{"player_id": id, "room_code": room.room_code, "host_player_id": room.host_player_id, "session_token": token})
+	send(connection_id, "CHAT_HISTORY", {"messages": room.chat.recent_history()})
 	room.game.publish()
 
 func resume(connection_id: int, token: String) -> void:
@@ -281,6 +303,7 @@ func resume(connection_id: int, token: String) -> void:
 	if not player_online(room.host_player_id):
 		room.host_player_id = session.player
 	send(connection_id, "SESSION_RESUMED", {"player_id": session.player, "room_code": session.room, "host_player_id": room.host_player_id, "session_token": token})
+	send(connection_id, "CHAT_HISTORY", {"messages": room.chat.recent_history()})
 	room.game.publish()
 
 func drop_connection(connection_id: int) -> void:
@@ -322,6 +345,7 @@ func remove_session(token: String) -> void:
 		return
 	var room: Dictionary = rooms[session.room]
 	room.members.erase(session.player)
+	room.chat.forget_player(int(session.player))
 	room.game.disconnect_player(session.player)
 	reassign_host(room)
 	if room.members.is_empty():

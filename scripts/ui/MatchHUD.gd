@@ -222,6 +222,24 @@ func _sync_choice_status() -> void:
 	var signature := "%d:%s:%d" % [choice_player, choice_type, int(request.get("request_id", 0))]
 	if signature == choice_status_signature:
 		return
+	# A chooser change is only a status-text update. Keep one compact banner so
+	# repeated authoritative snapshots cannot replay its entrance animation.
+	var persistent_status: Control = get_node_or_null("CenterChoiceStatus") as Control
+	if is_instance_valid(persistent_status) and choice_player > 0 and request.is_empty():
+		var updated_name := "CAO BỒI"
+		for row in state.get("players", []):
+			if int(row.get("player_id", 0)) == choice_player:
+				updated_name = str(row.get("display_name", updated_name))
+				break
+		var status_title: Label = persistent_status.get_node_or_null("Content/Title") as Label
+		var status_detail: Label = persistent_status.get_node_or_null("Content/Detail") as Label
+		if is_instance_valid(status_title):
+			status_title.text = "CỬA HÀNG" if choice_type == "store" else "BÁCH HÓA"
+		if is_instance_valid(status_detail):
+			status_detail.text = ("Đang chờ %s chọn..." % updated_name
+				if choice_type == "store" else "Đang chờ %s đưa 1 lá..." % updated_name)
+		choice_status_signature = signature
+		return
 	choice_status_signature = signature
 	_free_named("CenterChoiceStatus")
 	# The active picker receives the interactive modal. Other players receive a
@@ -244,6 +262,7 @@ func _sync_choice_status() -> void:
 	panel.add_theme_stylebox_override("panel", SaloonTheme.panel(Color(0.07, 0.09, 0.09, 0.94), SaloonTheme.GOLD, 14))
 	add_child(panel)
 	var column := VBoxContainer.new()
+	column.name = "Content"
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(column)
 	var title := text("CỬA HÀNG" if choice_type == "store" else "BÁCH HÓA", 20, column)
@@ -255,6 +274,8 @@ func _sync_choice_status() -> void:
 	)
 	var subtitle := text(subtitle_text, 15, column)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	column.get_child(0).name = "Title"
+	subtitle.name = "Detail"
 
 func set_modal_blocked(value: bool) -> void:
 	if is_instance_valid(loadout_panel):

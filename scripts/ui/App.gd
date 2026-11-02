@@ -34,6 +34,7 @@ var character_draft: String = ""
 var layout_refresh_queued: bool = false
 var personal_toasts: Control
 var reaction_banner: Control
+var chat_panel: Control
 
 func _ready() -> void:
 	set_process(false)
@@ -50,6 +51,9 @@ func _ready() -> void:
 	canvas.add_child(reaction_banner)
 	personal_toasts = load("res://scripts/ui/PersonalEventToast.gd").new()
 	canvas.add_child(personal_toasts)
+	chat_panel = load("res://scenes/ui/ChatPanel.tscn").instantiate()
+	canvas.add_child(chat_panel)
+	chat_panel.setup(self)
 	root.resized.connect(func():
 		if not layout_refresh_queued:
 			layout_refresh_queued = true
@@ -206,6 +210,8 @@ func refresh() -> void:
 		table = null
 	if not in_game and is_instance_valid(reaction_banner):
 		reaction_banner.hide_banner()
+	if not in_game and is_instance_valid(chat_panel):
+		chat_panel.sync_state({}, {}, false)
 	var backdrop: Control
 	if in_game and hud_match != int(state.match_id):
 		hud_match = state.match_id
@@ -410,6 +416,8 @@ func build_game(state: Dictionary) -> void:
 		# A toast that began before an urgent reaction must never cover its title or
 		# buttons. Its own lifetime continues invisibly and the queue resumes after.
 		personal_toasts.visible = reaction_kind not in ["dodge", "duel", "indians", "survive"] and not is_instance_valid(overlay)
+	if is_instance_valid(chat_panel):
+		chat_panel.sync_state(state, own, is_instance_valid(overlay))
 	if not is_instance_valid(match_hud):
 		match_hud = load("res://scripts/ui/MatchHUD.gd").new()
 		root.add_child(match_hud)
@@ -447,6 +455,8 @@ func play_selected(target: int) -> void:
 
 func modal() -> VBoxContainer:
 	clear_game_modal()
+	if is_instance_valid(chat_panel):
+		chat_panel.set_blocked(true)
 	var layout: Script = load("res://scripts/ui/MatchLayout.gd")
 	overlay = ColorRect.new()
 	overlay.name = "GameModal"
@@ -496,9 +506,20 @@ func modal() -> VBoxContainer:
 	return box
 
 func clear_game_modal() -> void:
-	var current: Node = root.get_node_or_null("GameModal")
-	if current:
-		root.remove_child(current)
+	var candidates: Array[Node] = []
+	if is_instance_valid(overlay):
+		candidates.append(overlay)
+	for child in root.get_children():
+		if str(child.name).begins_with("GameModal") and not candidates.has(child):
+			candidates.append(child)
+	for current in candidates:
+		# Hide synchronously before deferred destruction. Without this, the render
+		# thread can retain the previous choice frame for one captured/displayed
+		# frame while the next authoritative giver state is already active.
+		if current is CanvasItem:
+			current.visible = false
+		if current.get_parent() == root:
+			root.remove_child(current)
 		current.queue_free()
 	overlay = null
 	reaction_label = null
@@ -508,6 +529,8 @@ func clear_game_modal() -> void:
 	if is_instance_valid(personal_toasts):
 		var reaction_kind: String = str(NetworkManager.private_state.get("reaction", {}).get("reaction_type", ""))
 		personal_toasts.visible = reaction_kind not in ["dodge", "duel", "indians", "survive"]
+	if is_instance_valid(chat_panel) and not NetworkManager.public_state.is_empty():
+		chat_panel.sync_state(NetworkManager.public_state, NetworkManager.private_state, false)
 
 func show_role(role: String, match_number: int) -> void:
 	AudioManager.play_once("role:%d" % match_number, "role")

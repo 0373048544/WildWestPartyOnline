@@ -202,6 +202,20 @@ async function save(page,name) {
   assert.equal(s.public.players.filter(p=>p.public_role==='SHERIFF').length,0);
   assert(s.public.players.some(p=>p.player_id===s.public.current_player));
   await save(a,'table');
+  // Real canvas chat: focus/type/send, authoritative fanout and unread reset.
+  await click(a,c=>c.name==='ChatToggle');
+  await input(a,'ChatInput','ông là tội phạm phải không 😂');
+  let chatState=await snapshot(a);
+  assert(chatState.chat.expanded&&chatState.chat.input_focused,'chat input focuses for desktop/mobile keyboard');
+  assert(chatState.chat.panel.x>=0&&chatState.chat.panel.y>=0&&chatState.chat.panel.x+chatState.chat.panel.w<=chatState.size.x+1&&chatState.chat.panel.y+chatState.chat.panel.h<=chatState.size.y+1,'chat panel inside viewport');
+  if(chatState.layout) assert(chatState.chat.panel.y+chatState.chat.panel.h<=chatState.layout.hand.y+1,'chat panel above hand');
+  await save(a,'chat-open');
+  await click(a,c=>c.name==='ChatSend');
+  await wait(async()=>{const sa=await snapshot(a),sb=await snapshot(b);return sa?.chat?.messages===1&&sb?.chat?.messages===1&&sb.chat.unread===1;},'authoritative chat fanout/unread');
+  assert(!(await snapshot(a)).chat.input_focused,'send releases keyboard focus');
+  await click(b,c=>c.name==='ChatToggle');
+  assert.equal((await snapshot(b)).chat.unread,0,'opening chat clears unread');
+  await click(b,c=>c.name==='ChatClose');
   if(mobile&&Number(process.env.WWPO_MOBILE_HEIGHT||390)>Number(process.env.WWPO_MOBILE_WIDTH||844)){
     const identity=(await snapshot(a)).player_id;
     for(const [width,height] of [[844,390],[Number(process.env.WWPO_MOBILE_WIDTH||390),Number(process.env.WWPO_MOBILE_HEIGHT||844)]]){

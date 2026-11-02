@@ -95,6 +95,11 @@ func send_intent(action: String, args: Dictionary) -> void:
 		message["intent_id"] = Crypto.new().generate_random_bytes(16).hex_encode()
 		transport.send_message(message)
 
+func send_chat(text: String) -> void:
+	if transport == null or not transport.is_transport_connected() or reconnecting:
+		return
+	transport.send_message(RoomProtocol.encode_chat(text))
+
 func leave() -> void:
 	leaving = true
 	if transport:
@@ -130,6 +135,7 @@ func receive(message: Dictionary) -> void:
 			reconnecting = false
 			retries = 0
 			response_deadline = 0
+			manager.begin_chat_room(room_code)
 			if OS.has_feature("web"):
 				var saved := JSON.stringify({"token": session_token, "room": room_code})
 				JavaScriptBridge.eval("sessionStorage.setItem('wwpo_session', " + JSON.stringify(saved) + ")")
@@ -142,6 +148,12 @@ func receive(message: Dictionary) -> void:
 			manager.visual_event.emit(int(payload.actor), str(payload.kind), int(payload.get("target", 0)))
 		"TABLE_EVENT":
 			manager.table_event.emit(payload)
+		"CHAT_MESSAGE":
+			manager.receive_chat_message(payload)
+		"CHAT_HISTORY":
+			manager.receive_chat_history(payload.get("messages", []))
+		"CHAT_REJECTED":
+			manager.chat_error.emit(str(payload.get("message", "Không gửi được tin nhắn.")))
 		"ERROR", "JOIN_REJECTED":
 			var reason := str(payload.get("message", "Yêu cầu không hợp lệ."))
 			if bool(payload.get("fatal", false)):

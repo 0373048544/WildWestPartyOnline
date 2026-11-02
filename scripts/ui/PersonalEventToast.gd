@@ -330,6 +330,15 @@ func _event_item(event: Dictionary, local_id: int, state: Dictionary) -> Diction
 
 		"ability":
 			if event_owner == local_id:
+				var ability_id := str(event.get("ability_id", ""))
+				var amount := int(event.get("amount", 1))
+				var feedback: Dictionary = {
+					"damage_draw": {"title": "BART CASSIDY • RÚT %d LÁ" % amount, "detail": "Mất máu kích hoạt kỹ năng"},
+					"damage_steal": {"title": "EL GRINGO • LẤY %d LÁ" % amount, "detail": "Lấy ngẫu nhiên từ người gây sát thương"},
+					"empty_draw": {"title": "SUZY LAFAYETTE • HẾT BÀI → RÚT 1", "detail": "Kỹ năng tự động"}
+				}.get(ability_id, {})
+				if not feedback.is_empty():
+					return _item(str(feedback.title), str(feedback.detail), "neutral", "★", 1.8)
 				return _item(
 					"Kỹ năng của bạn đã kích hoạt",
 					"",

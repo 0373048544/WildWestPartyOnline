@@ -67,6 +67,7 @@ func _ready() -> void:
 	test_department_store_all_counts()
 	test_department_store_edge_cases()
 	test_department_store_validation_and_privacy()
+	test_department_store_suzy_last_card()
 	test_per_game_limits_and_reset()
 	test_general_store_unchanged_and_limited()
 	test_duplicate_card_restrictions()
@@ -138,6 +139,21 @@ func test_department_store_edge_cases() -> void:
 	check(GameManager.players[1].hand.size() == 1, "dead and empty-hand opponents are skipped")
 	check(GameManager.players[3].weapon == kept_weapon, "BÁCH HÓA never steals weapons or equipment")
 	check(GameManager.players[4].hand.is_empty(), "eligible giver loses the selected hand card")
+
+func test_department_store_suzy_last_card() -> void:
+	setup(3)
+	var source := give(1, "department_store")
+	GameManager.players[2].ability_id = "empty_draw"
+	var last_card := give(2, "shoot")
+	var third_card := give(3, "dodge")
+	GameManager.resolver.play(GameManager, 1, source.instance_id, 1)
+	check(GameManager.reactions.active.target_player_id == 2, "Suzy is prompted once as the first giver")
+	check(GameManager.flow.resolve({"accept": true, "cards": [last_card.instance_id]}), "Suzy gives her last card")
+	check(GameManager.players[2].hand.size() == 1, "Suzy draws exactly one replacement after giving her last card")
+	check(GameManager.reactions.active.target_player_id == 3, "Suzy replacement card does not create a second giver obligation")
+	check(GameManager.flow.resolve({"accept": true, "cards": [third_card.instance_id]}), "next giver completes normally after Suzy refill")
+	check(GameManager.reactions.active.is_empty() and GameManager.players[1].hand.size() == 2,
+		"BÁCH HÓA completes once with both transfers and no stuck prompt")
 
 func test_department_store_validation_and_privacy() -> void:
 	setup(3)

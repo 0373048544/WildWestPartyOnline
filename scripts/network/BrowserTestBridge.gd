@@ -63,6 +63,13 @@ func _process(delta: float) -> void:
 		snapshot["layout"] = {"mobile":fan.mobile_mode,"clip":fan.clip_contents,
 			"hand": {"x":rect.position.x,"y":rect.position.y,"w":rect.size.x,"h":rect.size.y},
 			"safe":get_viewport().get_meta("match_safe_insets",Vector4.ZERO)}
+	if is_instance_valid(app.chat_panel):
+		var chat: Control = app.chat_panel
+		var chat_rect: Rect2 = chat.panel.get_global_rect() if chat.panel.visible else Rect2()
+		snapshot["chat"] = {"messages":NetworkManager.chat_messages.size(), "unread":chat.unread,
+			"expanded":chat.expanded, "panel_visible":chat.panel.visible,
+			"toggle_visible":chat.toggle_button.visible, "input_focused":chat.input.has_focus(),
+			"panel":{"x":chat_rect.position.x,"y":chat_rect.position.y,"w":chat_rect.size.x,"h":chat_rect.size.y}}
 	var serialized := JSON.stringify(snapshot)
 	JavaScriptBridge.eval("window.__WWPO_TEST = JSON.parse(" + JSON.stringify(serialized) + ")")
 

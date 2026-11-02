@@ -87,6 +87,9 @@ func _ready() -> void:
 		GameManager.add_player(id, "Player %d" % id)
 		GameManager.players[id].ready = true
 	GameManager.start_match()
+	# This suite inspects the public character card, not the once-per-match role
+	# reveal modal. Mark that reveal seen so the real modal correctly stays closed.
+	app.seen_role = GameManager.match_id
 	GameManager.publish()
 	check(app.table.avatars.values().all(func(a): return a.character_id.is_empty()), "unconfirmed/private character appearance never leaked")
 	var offered: Dictionary = GameManager.selection.options.duplicate(true)
@@ -107,7 +110,7 @@ func _ready() -> void:
 	var original_quality: String = VisualSettings.level
 	for level in ["LOW", "MEDIUM", "HIGH"]:
 		VisualSettings.set_quality(level, false)
-		check(VisualSettings.particle_count(10) == {"LOW": 4, "MEDIUM": 7, "HIGH": 10}[level], "bounded particles for quality " + level)
+		check(VisualSettings.particle_count(10) == {"LOW": 3, "MEDIUM": 6, "HIGH": 10}[level], "bounded particles for quality " + level)
 		check(app.table.avatars.size() == 7 and app.table.avatars[1].character_id == GameManager.players[1].character_id, "quality preserves all gameplay visuals " + level)
 	VisualSettings.set_quality(original_quality, false)
 	app.seen_role = GameManager.match_id

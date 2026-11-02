@@ -50,8 +50,10 @@ func setup(count: int = 4) -> void:
 	GameManager.flow.market.clear()
 	for id in GameManager.players:
 		var player: PlayerState = GameManager.players[id]
-		GameManager.discard_all(player)
+		# Disable the selected character before clearing setup cards; otherwise a
+		# randomly selected Suzy can refill and contaminate Duel fixtures.
 		player.ability_id = ""
+		GameManager.discard_all(player)
 		player.max_hp = 4
 		player.current_hp = 4
 		player.role = PlayerState.Role.OUTLAW

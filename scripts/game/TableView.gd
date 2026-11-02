@@ -341,7 +341,7 @@ func presentation(event: Dictionary) -> void:
 	# transient floating labels now so they cannot overlap the new choice UI.
 	if str(event.get("kind", "")) in ["store_started", "department_store"]:
 		effects.quiet_floating()
-	var event_id: String = str(event.get("audio_event_id", ""))
+	var event_id: String = str(event.get("event_id", event.get("audio_event_id", "")))
 	if not event_id.is_empty():
 		if seen_presentation.has(event_id):
 			return

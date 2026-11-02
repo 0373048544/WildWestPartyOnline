@@ -2,6 +2,7 @@ class_name RoomProtocol
 extends RefCounted
 
 const VERSION := 1
+const CHAT_MAX_LENGTH := 160
 const INTENTS: Dictionary = {
 	"SET_READY": "ready", "START_MATCH": "start", "SELECT_CHARACTER": "character",
 	"PLAY_CARD": "play", "END_TURN": "end", "DISCARD_CARD": "discard",
@@ -21,6 +22,11 @@ static func encode(action: String, args: Dictionary) -> Dictionary:
 		payload["target_player_id"] = payload.target
 		payload.erase("target")
 	return {"type": types[0], "payload": payload, "version": VERSION}
+
+static func encode_chat(text: String) -> Dictionary:
+	# Identity is deliberately absent. The server derives it from the authenticated
+	# socket/session and ignores any forged fields a modified client may add.
+	return {"type": "CHAT_SEND", "payload": {"text": text}, "version": VERSION}
 
 static func decode(kind: String, payload: Dictionary) -> Dictionary:
 	var args := payload.duplicate(true)

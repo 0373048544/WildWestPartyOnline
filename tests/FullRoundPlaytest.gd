@@ -160,14 +160,22 @@ func setup_round() -> Dictionary:
 	GameManager.start_match()
 	for id in GameManager.players:
 		GameManager.selection.choose(GameManager, id, GameManager.selection.options[id][0])
-	# Character selection dealt opening hands and began a turn. Return every card,
-	# then start the deterministic full-round fixture from a conserved 86-card deck.
-	return_all_hands_to_deck()
+	# Character selection dealt opening hands and began a turn. A randomly chosen
+	# draw ability (notably Kit Carlson) may already have reserved cards inside a
+	# pending choice job, so collecting hands alone is not a complete reset. Rebuild
+	# the physical deck before constructing the deterministic round fixture.
+	check(GameManager.deck.reset(), "full-round fixture rebuilds the 86-card deck")
+	for card in GameManager.deck.draw_pile:
+		card.instance_id += GameManager.match_id * 1000
+	GameManager.deck.next_id += GameManager.match_id * 1000
 	GameManager.flow.jobs.clear()
 	GameManager.flow.market.clear()
 	GameManager.reactions.active = {}
 	for id in GameManager.players:
 		var p: PlayerState = GameManager.players[id]
+		p.hand.clear()
+		p.weapon = {}
+		p.equipment.clear()
 		p.ability_id = ""
 		p.max_hp = 4
 		p.current_hp = 4
@@ -212,13 +220,26 @@ func run_round(layout_name: String, viewport_size: Vector2i) -> void:
 	check_ui_bounds(layout_name + " normal action")
 	await screenshot(layout_name, "01-normal-action")
 	verify_physical_cards(layout_name + " after draw")
+	# Mobile-first chat stays above action/hand zones and releases input on close.
+	var chat: ChatPanel = app.chat_panel
+	check(chat.toggle_button.visible, layout_name + ": collapsed chat button is visible in active match")
+	chat.append_message({"message_id":"round:%s" % layout_name, "sender_id":3, "sender_name":"Cao Bồi Không Bao Giờ Ngủ", "text":"coi chừng ông bên trái 😂", "timestamp":1}, true)
+	chat.open_chat()
+	await settle(0.05)
+	check(chat.panel.visible and not chat.panel.get_global_rect().intersects(app.match_hud.hand.get_global_rect()), layout_name + ": open chat does not cover hand")
+	check(not chat.panel.get_global_rect().intersects(load("res://scripts/ui/MatchLayout.gd").action_rect(chat)), layout_name + ": open chat does not cover End Turn/action zone")
+	await screenshot(layout_name, "01a-chat-open")
+	chat.close_chat()
+	check(not chat.panel.visible and chat.mouse_filter == Control.MOUSE_FILTER_IGNORE, layout_name + ": closed chat releases gameplay input")
 
 	# BANG -> local compact reaction banner -> DODGE.
+	chat.open_chat()
 	GameManager.resolver.play(GameManager, 2, cards.bang.instance_id, 1)
 	GameManager.publish()
 	await settle()
 	check(GameManager.reactions.active.get("reaction_type", "") == "dodge", layout_name + ": BANG opens authoritative dodge reaction")
 	check(app.reaction_banner.visible and not app.reaction_banner.primary_button.disabled, layout_name + ": reaction banner exposes usable DÙNG NÉ")
+	check(not chat.expanded and not chat.toggle_button.visible, layout_name + ": incoming BANG collapses chat below ReactionBanner")
 	check(not is_instance_valid(app.overlay), layout_name + ": BANG does not open fullscreen modal")
 	check_ui_bounds(layout_name + " BANG reaction")
 	await screenshot(layout_name, "02-bang-dodge")
@@ -277,11 +298,22 @@ func run_round(layout_name: String, viewport_size: Vector2i) -> void:
 	check(not is_instance_valid(app.overlay) and app.match_hud.hand.visible, layout_name + ": Store modal closes and hand/input returns")
 	check(GameManager.players[2].general_store_used_this_game, layout_name + ": Store per-game limit recorded")
 	verify_physical_cards(layout_name + " after Store")
+	# A human Store selection lasts longer than its short accepted-card intro. Let
+	# that presentation drain so the following Bách Hóa screenshot validates the
+	# current state instead of an intentionally non-blocking previous animation.
+	await drain_presentation()
 
 	# BÁCH HÓA giver order is 3 -> 4 -> 1. Local final giver uses select+confirm UI.
+	chat.open_chat()
 	GameManager.resolver.play(GameManager, 2, cards.department.instance_id, 2)
 	GameManager.publish()
 	await settle(0.18)
+	var wait_banner: Control = app.match_hud.get_node_or_null("CenterChoiceStatus") as Control
+	check(not is_instance_valid(app.overlay), layout_name + ": non-giver Bách Hóa never receives a blocking modal")
+	check(not chat.expanded and not chat.toggle_button.visible, layout_name + ": Bách Hóa auto-collapses chat for every player")
+	check(is_instance_valid(wait_banner) and wait_banner.size.y <= load("res://scripts/ui/MatchLayout.gd").units(app.match_hud, 90),
+		layout_name + ": non-giver Bách Hóa uses one compact wait banner")
+	await screenshot(layout_name, "06a-department-non-giver-wait")
 	var giver_order: Array[int] = []
 	for remote_id in [3, 4]:
 		giver_order.append(int(GameManager.reactions.active.target_player_id))

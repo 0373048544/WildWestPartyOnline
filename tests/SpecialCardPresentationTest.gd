@@ -37,6 +37,34 @@ func _ready() -> void:
 	await settle(0.2)
 	var table: Node3D = app.table
 	check(is_instance_valid(table.special_presenter), "reusable presenter is attached once to persistent table")
+	var repeated_event := {"kind": "department_store", "player": 1, "event_id": "special:dedupe"}
+	table.presentation(repeated_event)
+	for _repeat in range(20):
+		table.presentation(repeated_event)
+	check(table.presentation_queue.size() == 1 and table.seen_presentation.has("special:dedupe"),
+		"twenty duplicate network events enqueue the BÁCH HÓA intro exactly once")
+	table.presentation_queue.clear()
+	var wait_state: Dictionary = NetworkManager.public_state.duplicate(true)
+	wait_state["choice_player"] = 2
+	wait_state["choice_type"] = "department_store_give"
+	var wait_private: Dictionary = NetworkManager.private_state.duplicate(true)
+	wait_private["reaction"] = {}
+	for _repeat in range(20):
+		app.match_hud.initialize(app, wait_state, wait_private)
+	var wait_banner: Control = app.match_hud.get_node_or_null("CenterChoiceStatus") as Control
+	check(is_instance_valid(wait_banner) and app.match_hud.find_children("CenterChoiceStatus", "Control", true, false).size() == 1,
+		"twenty repeated snapshots keep one non-giver BÁCH HÓA status banner")
+	var banner_id := wait_banner.get_instance_id()
+	var third: Dictionary = wait_state.players[1].duplicate(true)
+	third["player_id"] = 3
+	third["display_name"] = "Rose"
+	wait_state.players.append(third)
+	wait_state["choice_player"] = 3
+	app.match_hud.initialize(app, wait_state, wait_private)
+	wait_banner = app.match_hud.get_node_or_null("CenterChoiceStatus") as Control
+	var detail: Label = wait_banner.get_node_or_null("Content/Detail") as Label
+	check(wait_banner.get_instance_id() == banner_id and is_instance_valid(detail) and detail.text.contains("Rose"),
+		"giver change updates the existing compact banner without replay/recreate")
 	table.present_event({"kind": "store_started", "player": 1, "audio_event_id": "special:store"})
 	check(table.special_presenter.banner.visible
 		and table.special_presenter.title_label.text == "CỬA HÀNG",

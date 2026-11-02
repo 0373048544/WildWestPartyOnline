@@ -1,0 +1,311 @@
+class_name ChatPanel
+extends Control
+
+const MAX_RENDERED := 40
+
+var app: Node
+var expanded := false
+var blocked := true
+var unread := 0
+var rendered: Dictionary = {}
+var room_code := ""
+var last_submit_text := ""
+var last_submit_at := 0
+var preview_generation := 0
+var next_keyboard_poll := 0
+
+var toggle_button: Button
+var panel: PanelContainer
+var message_scroll: ScrollContainer
+var message_list: VBoxContainer
+var input: LineEdit
+var send_button: Button
+var close_button: Button
+var preview: Label
+
+func _ready() -> void:
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	z_index = load("res://scripts/ui/MatchLayout.gd").Z_CHAT
+	_build()
+	get_viewport().size_changed.connect(layout_chat)
+	set_process(false)
+
+func setup(owner_app: Node) -> void:
+	app = owner_app
+	if not NetworkManager.chat_message.is_connected(_on_message):
+		NetworkManager.chat_message.connect(_on_message)
+	if not NetworkManager.chat_history.is_connected(_on_history):
+		NetworkManager.chat_history.connect(_on_history)
+	if not NetworkManager.chat_error.is_connected(_on_error):
+		NetworkManager.chat_error.connect(_on_error)
+	_on_history(NetworkManager.chat_messages)
+
+func _build() -> void:
+	toggle_button = load("res://scripts/ui/WesternButton.gd").new()
+	toggle_button.name = "ChatToggle"
+	toggle_button.text = "💬 CHAT"
+	toggle_button.mouse_filter = Control.MOUSE_FILTER_STOP
+	toggle_button.pressed.connect(open_chat)
+	add_child(toggle_button)
+
+	panel = PanelContainer.new()
+	panel.name = "ChatWindow"
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	panel.add_theme_stylebox_override("panel", SaloonTheme.panel(Color(0.075, 0.052, 0.035, 0.97), SaloonTheme.GOLD, 14))
+	panel.gui_input.connect(func(event):
+		if event is InputEventScreenTouch or event is InputEventScreenDrag:
+			accept_event())
+	add_child(panel)
+	var margin := MarginContainer.new()
+	for side in ["left", "right", "top", "bottom"]:
+		margin.add_theme_constant_override("margin_" + side, 10)
+	panel.add_child(margin)
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 7)
+	margin.add_child(body)
+	var header := HBoxContainer.new()
+	body.add_child(header)
+	var title := Label.new()
+	title.text = "TRÒ CHUYỆN"
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.add_theme_color_override("font_color", SaloonTheme.GOLD)
+	title.add_theme_font_size_override("font_size", 18)
+	header.add_child(title)
+	close_button = load("res://scripts/ui/WesternButton.gd").new()
+	close_button.name = "ChatClose"
+	close_button.text = "×"
+	close_button.custom_minimum_size = Vector2(44, 44)
+	close_button.pressed.connect(close_chat)
+	header.add_child(close_button)
+
+	message_scroll = ScrollContainer.new()
+	message_scroll.name = "ChatMessages"
+	message_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	message_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	message_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	message_scroll.mouse_filter = Control.MOUSE_FILTER_STOP
+	body.add_child(message_scroll)
+	message_list = VBoxContainer.new()
+	message_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	message_list.add_theme_constant_override("separation", 4)
+	message_scroll.add_child(message_list)
+
+	var composer := HBoxContainer.new()
+	composer.add_theme_constant_override("separation", 6)
+	body.add_child(composer)
+	input = LineEdit.new()
+	input.name = "ChatInput"
+	input.placeholder_text = "Nhắn gì đó..."
+	input.max_length = ChatRoomState.MAX_LENGTH
+	input.virtual_keyboard_enabled = true
+	input.clear_button_enabled = true
+	input.custom_minimum_size.y = 46
+	input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	input.text_submitted.connect(func(_value): submit())
+	input.focus_entered.connect(func(): set_process(OS.has_feature("web") or OS.has_feature("mobile")); layout_chat())
+	input.focus_exited.connect(func(): set_process(false); layout_chat())
+	composer.add_child(input)
+	send_button = load("res://scripts/ui/WesternButton.gd").new()
+	send_button.name = "ChatSend"
+	send_button.text = "GỬI"
+	send_button.custom_minimum_size = Vector2(64, 46)
+	send_button.pressed.connect(submit)
+	composer.add_child(send_button)
+
+	preview = Label.new()
+	preview.name = "ChatPreview"
+	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	preview.add_theme_stylebox_override("normal", SaloonTheme.inset_panel(8))
+	preview.add_theme_color_override("font_color", SaloonTheme.CREAM)
+	preview.add_theme_font_size_override("font_size", 14)
+	preview.hide()
+	add_child(preview)
+	panel.hide()
+	toggle_button.hide()
+
+func sync_state(state: Dictionary, own: Dictionary, has_modal: bool) -> void:
+	var active := not state.is_empty() and bool(state.get("started", false))
+	visible = active
+	var next_room := str(state.get("room_code", "ENET" if NetworkManager.mode == "enet" else ""))
+	if next_room != room_code:
+		room_code = next_room
+		clear_rows()
+		_on_history(NetworkManager.chat_messages)
+	var reaction_kind := str(own.get("reaction", {}).get("reaction_type", ""))
+	var public_choice := str(state.get("choice_type", ""))
+	var urgent := reaction_kind in ["dodge", "duel", "indians", "survive", "store", "department_store_give"] or public_choice in ["store", "department_store_give"]
+	set_blocked(not active or has_modal or urgent or str(state.get("phase", "")) == "CHARACTER_SELECTION" or not str(state.get("winner", "")).is_empty())
+	layout_chat()
+
+func set_blocked(value: bool) -> void:
+	blocked = value
+	if blocked:
+		close_chat()
+	if is_instance_valid(toggle_button):
+		toggle_button.visible = visible and not blocked and not expanded
+
+func open_chat() -> void:
+	if blocked:
+		return
+	expanded = true
+	unread = 0
+	_update_badge()
+	preview.hide()
+	panel.show()
+	toggle_button.hide()
+	layout_chat()
+	call_deferred("_scroll_to_bottom", true)
+
+func close_chat() -> void:
+	expanded = false
+	if is_instance_valid(panel):
+		panel.hide()
+	if is_instance_valid(toggle_button):
+		toggle_button.visible = visible and not blocked
+	if is_instance_valid(input) and input.has_focus():
+		input.release_focus()
+	_hide_keyboard()
+	set_process(false)
+	layout_chat()
+
+func submit() -> void:
+	var text := ChatRoomState.sanitize_text(input.text)
+	if text.is_empty():
+		return
+	var now := Time.get_ticks_msec()
+	if text == last_submit_text and now - last_submit_at < 250:
+		return
+	last_submit_text = text
+	last_submit_at = now
+	NetworkManager.send_chat(text)
+	input.clear()
+	input.release_focus()
+	_hide_keyboard()
+	set_process(false)
+	layout_chat()
+
+func _on_history(messages: Array) -> void:
+	if messages.is_empty() and NetworkManager.chat_room.is_empty():
+		clear_rows()
+		return
+	for message in messages:
+		if message is Dictionary:
+			append_message(message, false)
+	call_deferred("_scroll_to_bottom", true)
+
+func _on_message(message: Dictionary) -> void:
+	if not append_message(message, true):
+		return
+	var own := int(message.get("sender_id", 0)) == NetworkManager.local_player_id()
+	if not expanded and not own:
+		unread += 1
+		_update_badge()
+		show_preview(message)
+
+func append_message(message: Dictionary, _live: bool) -> bool:
+	var id := str(message.get("message_id", ""))
+	if id.is_empty() or rendered.has(id):
+		return false
+	rendered[id] = true
+	var row := Label.new()
+	row.name = "ChatMessage"
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.text = "%s%s: %s" % ["☠ " if bool(message.get("dead", false)) else "", str(message.get("sender_name", "Cao bồi")), str(message.get("text", ""))]
+	row.add_theme_font_size_override("font_size", 15)
+	row.add_theme_color_override("font_color", SaloonTheme.CREAM)
+	row.add_theme_stylebox_override("normal", SaloonTheme.inset_panel(6))
+	message_list.add_child(row)
+	while message_list.get_child_count() > MAX_RENDERED:
+		var old := message_list.get_child(0)
+		for key in rendered.keys():
+			if old.get_meta("message_id", "") == key:
+				rendered.erase(key)
+		old.queue_free()
+	row.set_meta("message_id", id)
+	if expanded:
+		call_deferred("_scroll_to_bottom", false)
+	return true
+
+func clear_rows() -> void:
+	rendered.clear()
+	unread = 0
+	if is_instance_valid(message_list):
+		for child in message_list.get_children():
+			child.queue_free()
+	_update_badge()
+
+func show_preview(message: Dictionary) -> void:
+	preview_generation += 1
+	var generation := preview_generation
+	preview.text = "%s: %s" % [str(message.get("sender_name", "Cao bồi")), str(message.get("text", ""))]
+	preview.show()
+	layout_chat()
+	get_tree().create_timer(2.0).timeout.connect(func():
+		if generation == preview_generation and not expanded:
+			preview.hide())
+
+func _on_error(message: String) -> void:
+	if not expanded:
+		return
+	preview_generation += 1
+	preview.text = message
+	preview.show()
+	layout_chat()
+
+func _update_badge() -> void:
+	if is_instance_valid(toggle_button):
+		toggle_button.text = "💬 CHAT" if unread <= 0 else "💬 %d" % unread
+
+func _scroll_to_bottom(force: bool) -> void:
+	if not is_instance_valid(message_scroll):
+		return
+	var bar := message_scroll.get_v_scroll_bar()
+	var near_bottom := bar.value >= bar.max_value - bar.page - 36
+	if force or near_bottom:
+		bar.value = bar.max_value
+
+func layout_chat() -> void:
+	if not is_inside_tree():
+		return
+	var layout: Script = load("res://scripts/ui/MatchLayout.gd")
+	var touch: float = float(layout.units(self, 44.0))
+	close_button.custom_minimum_size = Vector2(touch, touch)
+	input.custom_minimum_size.y = touch
+	send_button.custom_minimum_size = Vector2(layout.units(self, 64.0), touch)
+	var button_rect: Rect2 = layout.chat_button_rect(self)
+	toggle_button.position = button_rect.position
+	toggle_button.size = button_rect.size
+	var panel_rect: Rect2 = layout.chat_panel_rect(self)
+	var keyboard_shift := _keyboard_shift()
+	var safe_top: float = layout.safe_rect(self, 8.0).position.y
+	var top_limit: float = layout.top_hud_rect(self).end.y + layout.units(self, 6.0)
+	panel_rect.position.y = maxf(top_limit, panel_rect.position.y - keyboard_shift)
+	panel.position = panel_rect.position
+	panel.custom_minimum_size = panel_rect.size
+	panel.size = panel_rect.size
+	# Containers may enforce a slightly taller minimum than the calculated short-
+	# landscape rect. Keep the real bottom above End Turn/hand, moving upward only
+	# as far as the safe viewport permits.
+	var bottom_limit: float = layout.action_rect(self).position.y - layout.units(self, 8.0)
+	panel.position.y = maxf(safe_top, minf(panel.position.y, bottom_limit - panel.size.y))
+	preview.position = Vector2(button_rect.position.x, button_rect.position.y - layout.units(self, 42.0))
+	preview.size = Vector2(minf(layout.units(self, 320.0), layout.safe_rect(self).size.x * 0.75), layout.units(self, 36.0))
+
+func _keyboard_shift() -> float:
+	if not OS.has_feature("web") or not is_instance_valid(input) or not input.has_focus():
+		return 0.0
+	var css_hidden := float(JavaScriptBridge.eval("Math.max(0,window.innerHeight-(window.visualViewport?.height||window.innerHeight)-(window.visualViewport?.offsetTop||0))"))
+	return load("res://scripts/ui/MatchLayout.gd").units(self, css_hidden)
+
+func _process(_delta: float) -> void:
+	if Time.get_ticks_msec() >= next_keyboard_poll:
+		next_keyboard_poll = Time.get_ticks_msec() + 100
+		layout_chat()
+
+func _hide_keyboard() -> void:
+	if DisplayServer.has_feature(DisplayServer.FEATURE_VIRTUAL_KEYBOARD):
+		DisplayServer.virtual_keyboard_hide()

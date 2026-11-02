@@ -4,6 +4,9 @@ signal updated
 signal error_received(message: String)
 signal visual_event(actor: int, kind: String, target: int)
 signal table_event(event: Dictionary)
+signal chat_message(message: Dictionary)
+signal chat_history(messages: Array)
+signal chat_error(message: String)
 var public_state: Dictionary = {}
 var private_state: Dictionary = {}
 var local_name: String = "Cao bồi"
@@ -15,6 +18,10 @@ var mode: String = "offline"
 var room_client: Node
 var local_room_server: Node
 var audio_sequence: int = 0
+var chat_room: String = ""
+var chat_messages: Array[Dictionary] = []
+var seen_chat_messages: Dictionary = {}
+var enet_chat := ChatRoomState.new("ENET")
 
 func stamp_audio(event: Dictionary) -> Dictionary:
 	audio_sequence += 1
@@ -102,12 +109,14 @@ func host_game(title: String, port: int) -> void:
 		return
 	session_port = port
 	local_name = clean_name(title)
+	enet_chat = ChatRoomState.new("ENET")
 	var peer := ENetTransport.server(port)
 	if peer == null:
 		error_received.emit("Cannot host on that port: unavailable")
 		return
 	multiplayer.multiplayer_peer = peer
 	GameManager.add_player(1, local_name)
+	begin_chat_room("ENET")
 	GameManager.publish()
 
 func join_game(title: String, address: String, port: int) -> void:
@@ -121,6 +130,7 @@ func join_game(title: String, address: String, port: int) -> void:
 	mode = "enet"
 	session_port = port
 	local_name = clean_name(title)
+	begin_chat_room("ENET")
 	var peer := ENetTransport.client(address, port)
 	if peer == null:
 		error_received.emit("Connection failed: unavailable")
@@ -142,6 +152,7 @@ func leave() -> void:
 	connecting = false
 	public_state = {}
 	private_state = {}
+	clear_chat()
 	GameManager.clear()
 	updated.emit()
 
@@ -190,6 +201,8 @@ func register_player(title: String) -> void:
 		return
 	GameManager.add_player(sender, clean_name(title))
 	GameManager.publish()
+	if can_send(sender):
+		receive_chat_history_rpc.rpc_id(sender, enet_chat.recent_history())
 
 @rpc("authority", "call_remote", "reliable")
 func rejected(reason: String) -> void:
@@ -207,6 +220,81 @@ func send_intent(action: String, args: Dictionary = {}) -> void:
 		GameManager.handle_intent(1, action, args)
 	else:
 		request.rpc_id(1, action, args)
+
+func begin_chat_room(code: String) -> void:
+	if chat_room == code:
+		return
+	chat_room = code
+	chat_messages.clear()
+	seen_chat_messages.clear()
+	chat_history.emit(chat_messages)
+
+func clear_chat() -> void:
+	chat_room = ""
+	chat_messages.clear()
+	seen_chat_messages.clear()
+	chat_history.emit(chat_messages)
+
+func receive_chat_history(messages: Variant) -> void:
+	if not messages is Array:
+		return
+	for message in messages:
+		if message is Dictionary:
+			receive_chat_message(message)
+	chat_history.emit(chat_messages.duplicate(true))
+
+func receive_chat_message(message: Dictionary) -> void:
+	var message_id := str(message.get("message_id", ""))
+	if message_id.is_empty() or seen_chat_messages.has(message_id):
+		return
+	seen_chat_messages[message_id] = true
+	chat_messages.append(message.duplicate(true))
+	while chat_messages.size() > 50:
+		var removed: Dictionary = chat_messages.pop_front()
+		seen_chat_messages.erase(str(removed.get("message_id", "")))
+	chat_message.emit(message.duplicate(true))
+
+func send_chat(text: String) -> void:
+	if mode == "websocket":
+		room_client.send_chat(text)
+	elif mode == "enet":
+		if multiplayer.is_server():
+			accept_enet_chat(1, {"text": text})
+		else:
+			request_chat.rpc_id(1, text)
+
+func accept_enet_chat(sender: int, payload: Dictionary) -> void:
+	if not multiplayer.is_server() or not GameManager.players.has(sender):
+		return
+	var player: PlayerState = GameManager.players[sender]
+	var result := enet_chat.accept(sender, player.display_name, not player.is_alive, payload, Time.get_ticks_msec(), int(Time.get_unix_time_from_system()))
+	if not bool(result.get("ok", false)):
+		if sender == 1:
+			chat_error.emit(str(result.get("reason", "Không gửi được tin nhắn.")))
+		elif can_send(sender):
+			receive_chat_rejected.rpc_id(sender, str(result.get("reason", "Không gửi được tin nhắn.")))
+		return
+	receive_chat_message(result.message)
+	for id in multiplayer.get_peers():
+		if can_send(id):
+			receive_chat.rpc_id(id, result.message)
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_chat(text: String) -> void:
+	if multiplayer.is_server():
+		accept_enet_chat(multiplayer.get_remote_sender_id(), {"text": text})
+
+@rpc("authority", "call_remote", "reliable")
+func receive_chat(message: Dictionary) -> void:
+	receive_chat_message(message)
+
+@rpc("authority", "call_remote", "reliable")
+func receive_chat_rejected(message: String) -> void:
+	chat_error.emit(message)
+
+@rpc("authority", "call_remote", "reliable")
+func receive_chat_history_rpc(messages: Array) -> void:
+	receive_chat_history(messages)
 
 func can_send(id: int) -> bool:
 	if not multiplayer.get_peers().has(id) or not multiplayer.multiplayer_peer is ENetMultiplayerPeer:

@@ -20,29 +20,39 @@ func hand_changed(game: Node, id: int) -> void:
 	var p: PlayerState = game.players[id]
 	if p.is_alive and p.ability_id == "empty_draw" and p.hand.is_empty():
 		refilling = true
-		game.draw_cards(id, 1)
+		var drawn: Array = game.draw_cards(id, 1)
 		refilling = false
+		if not drawn.is_empty():
+			game.emit_event("ABILITY_TRIGGERED", id, {"kind": "ability", "ability_id": "empty_draw", "amount": drawn.size()})
 
 func on_damage(game: Node, target: int, source: int, amount: int) -> void:
 	var ability: String = game.players[target].ability_id
 	if damage_handlers.has(ability):
-		game.emit_event("ABILITY_TRIGGERED", target, {"kind": "ability", "ability_id": ability})
-		damage_handlers[ability].call(game, target, source, amount)
+		var resolved: int = int(damage_handlers[ability].call(game, target, source, amount))
+		# Do not announce El Gringo for environmental/self damage or an empty source
+		# hand. Presentation follows an actual authoritative effect only.
+		if resolved > 0:
+			game.emit_event("ABILITY_TRIGGERED", target, {"kind": "ability", "ability_id": ability, "amount": resolved, "source": source})
 
-func damage_draw(game: Node, target: int, _source: int, amount: int) -> void:
-	game.draw_cards(target, amount)
+func damage_draw(game: Node, target: int, _source: int, amount: int) -> int:
+	return game.draw_cards(target, amount).size()
 
-func damage_steal(game: Node, target: int, source: int, amount: int) -> void:
+func damage_steal(game: Node, target: int, source: int, amount: int) -> int:
 	if source == target or not game.players.has(source):
-		return
+		return 0
+	var transferred := 0
 	for _i in range(amount):
 		if game.players[source].hand.is_empty():
 			break
 		var card: Dictionary = game.players[source].hand.pick_random()
 		game.players[source].hand.erase(card)
 		game.players[target].hand.append(card)
+		transferred += 1
 		game.emit_event("CARD_STOLEN", source, {"kind": "transfer", "to": target, "steal": true, "from_zone": "hand", "hidden": true})
+		game.emit_private_event(source, {"kind": "ability_transfer_private", "role": "source", "ability_id": "damage_steal", "other": target, "card": card.duplicate(true)})
+		game.emit_private_event(target, {"kind": "ability_transfer_private", "role": "receiver", "ability_id": "damage_steal", "other": source, "card": card.duplicate(true)})
 		hand_changed(game, source)
+	return transferred
 
 func heal_with_discards(game: Node, id: int, ids: Array) -> bool:
 	var p: PlayerState = game.players[id]

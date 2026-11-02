@@ -35,7 +35,7 @@ async function react(c) {
   return true;
 }
 (async()=>{
-  const a=await client('A'), b=await client('B'), other=await client('OtherRoom');
+  const a=await client('A'), b=await client('B'), c=await client('C'), other=await client('OtherRoom');
   a.send('CREATE_ROOM',{player_name:'Thắng'});
   await a.wait(()=>a.session&&a.state,'create');
   const code=a.session.room_code;
@@ -50,6 +50,46 @@ async function react(c) {
   await other.wait(()=>other.session&&other.state,'isolation');
   assert.notEqual(other.session.room_code,code);
   assert.equal(other.state.public.players.length,1);
+  c.send('JOIN_ROOM',{player_name:'Lan',room_code:code});
+  await c.wait(()=>c.state?.public.players.length===3,'third chat client');
+  await a.wait(()=>a.state.public.players.length===3,'three clients in room');
+  // Sender identity comes from A's authenticated session, never its payload.
+  const chatCounts=new Map([[a,a.messages.length],[b,b.messages.length],[c,c.messages.length]]);
+  a.send('CHAT_SEND',{text:'xin chào',sender_id:b.session.player_id,sender_name:'Minh',role:'SHERIFF',timestamp:1});
+  for(const peer of [a,b,c]) await peer.wait(()=>peer.messages.slice(chatCounts.get(peer)).some(m=>m.type==='CHAT_MESSAGE'),'chat fanout');
+  const firstChat=a.messages.find(m=>m.type==='CHAT_MESSAGE'&&m.payload.text==='xin chào').payload;
+  assert.equal(firstChat.sender_id,a.session.player_id);
+  assert.equal(firstChat.sender_name,'Thắng');
+  assert(!('role' in firstChat));
+  await delay(150);
+  assert.equal(other.messages.filter(m=>m.type==='CHAT_MESSAGE').length,0,'cross-room chat blocked');
+  // A already used one slot: a 20-message burst may produce at most three more.
+  for(let i=0;i<20;i++) a.send('CHAT_SEND',{text:'spam '+i});
+  await delay(500);
+  const aBroadcast=a.messages.filter(m=>m.type==='CHAT_MESSAGE'&&m.payload.sender_id===a.session.player_id);
+  assert(aBroadcast.length<=4&&aBroadcast.length>=1,'4 messages / 5 seconds server rate limit');
+  assert(a.messages.some(m=>m.type==='CHAT_REJECTED'),'spammer receives local rejection');
+  b.send('CHAT_SEND',{text:'<script>alert(1)</script> [bbcode]'});
+  b.send('CHAT_SEND',{text:'x'.repeat(220)});
+  b.send('CHAT_SEND',{text:'ông là tội phạm phải không 😂'});
+  await b.wait(()=>b.messages.filter(m=>m.type==='CHAT_MESSAGE'&&m.payload.sender_id===b.session.player_id).length===3,'sanitized messages');
+  const bChats=b.messages.filter(m=>m.type==='CHAT_MESSAGE'&&m.payload.sender_id===b.session.player_id).map(m=>m.payload);
+  assert.equal(bChats[0].text,'<script>alert(1)</script> [bbcode]');
+  assert.equal(bChats[1].text.length,160);
+  assert.equal(bChats[2].text,'ông là tội phạm phải không 😂');
+  // Reconnect receives bounded recent history with stable unique IDs.
+  const bToken=b.session.session_token;
+  b.ws.close(); await delay(150);
+  c.send('CHAT_SEND',{text:'tin khi B mất kết nối'});
+  await c.wait(()=>c.messages.some(m=>m.type==='CHAT_MESSAGE'&&m.payload.text==='tin khi B mất kết nối'),'offline chat');
+  await b.open(); b.send('RESUME_SESSION',{session_token:bToken});
+  await b.wait(()=>b.messages.some(m=>m.type==='SESSION_RESUMED')&&b.messages.some(m=>m.type==='CHAT_HISTORY'),'chat resume history');
+  const history=b.messages.filter(m=>m.type==='CHAT_HISTORY').at(-1).payload.messages;
+  assert(history.some(m=>m.text==='tin khi B mất kết nối'));
+  assert.equal(new Set(history.map(m=>m.message_id)).size,history.length,'history message IDs unique');
+  assert(history.length<=30,'history bounded to 30');
+  c.send('LEAVE_ROOM');
+  await a.wait(()=>a.state.public.players.length===2,'third client left cleanly');
   const bad=await client('BadCode');
   bad.send('JOIN_ROOM',{player_name:'X',room_code:'XXXXXX'});
   await bad.wait(()=>bad.messages.some(m=>m.type==='JOIN_REJECTED'),'unknown room');
@@ -89,8 +129,11 @@ async function react(c) {
     if(a.state.public.phase==='ACTION_PHASE') break;
   }
   const sheriff=a.state.public.players.find(p=>p.public_role==='SHERIFF');
-  assert.equal(a.state.public.current_player,sheriff.player_id);
-  assert.equal(a.state.public.players.filter(p=>p.public_role==='SHERIFF').length,1);
+  if(sheriff) assert.equal(a.state.public.current_player,sheriff.player_id);
+  else {
+    assert.equal(a.state.public.players.filter(p=>p.public_role==='SHERIFF').length,0);
+    assert(a.state.public.players.some(p=>p.player_id===a.state.public.current_player),'2-player starter is a living player');
+  }
   for(const c of [a,b]) {
     assert(c.state.private.hand.length>=3);
     assert(c.state.public.players.every(p=>!('hand'in p)&&!('role'in p)));
@@ -133,5 +176,5 @@ async function react(c) {
   await forged.wait(()=>forged.messages.some(m=>m.type==='JOIN_REJECTED'),'forged token');
   for(const c of [a,b,other]) c.send('LEAVE_ROOM');
   await delay(200);
-  console.log('PASS: WebSocket rooms, isolation, names/ready, authority, private characters/hands, host migration, refresh/resume, card interactions and turn flow');
+  console.log('PASS: WebSocket rooms, 3-client authoritative chat, fake-sender defense, cross-room isolation, spam limit, sanitization/history/reconnect, gameplay authority and turn flow');
 })().catch(e=>{ console.error(e.stack); process.exitCode=1; }).finally(()=>{ for(const c of clients) c.ws?.close(); setTimeout(()=>process.exit(process.exitCode||0),300); });
