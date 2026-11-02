@@ -27,6 +27,8 @@ func sync(snapshot: Dictionary, owner: int, request: Dictionary) -> void:
 		for key in p.equipment_ids:
 			var physical: Array = p.get("equipment_cards", []).filter(func(c): return c.card_data_id == key)
 			zones.append({"zone": key, "kind": key, "name": CardData.data(key).name, "card": physical[0] if not physical.is_empty() else {}})
+		for delayed in p.get("delayed_cards", []):
+			zones.append({"zone": "delayed_dynamite", "kind": "dynamite", "name": CardData.data("dynamite").name, "card": delayed})
 		var radial: Vector3 = table.avatars[p.player_id].position.normalized()
 		var tangent := Vector3(radial.z, 0, -radial.x)
 		for index in range(zones.size()):

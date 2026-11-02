@@ -1,4 +1,4 @@
-﻿extends Node
+extends Node
 
 var network: Node
 var players: Dictionary = {}
@@ -309,6 +309,28 @@ func discard_all(p: PlayerState) -> void:
 	p.equipment.clear()
 	abilities.hand_changed(self, p.player_id)
 
+func pass_dynamite(holder: int, explosive: Dictionary = {}) -> int:
+	if not players.has(holder):
+		return 0
+	var card: Dictionary = explosive if not explosive.is_empty() else players[holder].dynamite
+	if card.is_empty():
+		return 0
+	players[holder].dynamite = {}
+	var ordered: Array = players.values()
+	ordered.sort_custom(func(a, b): return a.seat_index < b.seat_index)
+	var holder_index: int = ordered.find(players[holder])
+	for offset in range(1, ordered.size() + 1):
+		var next: int = ordered[posmod(holder_index + offset, ordered.size())].player_id
+		if next != holder and living(next) and players[next].dynamite.is_empty():
+			players[next].dynamite = card
+			record("Thuốc nổ chuyển sang " + players[next].display_name + ".")
+			emit_event("CARD_MOVED", holder, {"kind": "dynamite_pass", "to": next, "card": card.duplicate(), "from_zone": "delayed", "to_zone": "delayed"})
+			return next
+	# A match may end with no eligible successor. Preserve the physical delayed
+	# card on its last holder instead of silently discarding or duplicating it.
+	players[holder].dynamite = card
+	return 0
+
 func kill_player(id: int, source: int) -> void:
 	if not players.has(id) or not players[id].is_alive:
 		return
@@ -317,6 +339,7 @@ func kill_player(id: int, source: int) -> void:
 	p.current_hp = 0
 	emit_event("PLAYER_DIED", id, {"kind": "death", "source": source})
 	emit_event("ROLE_REVEALED", id, {"kind": "role", "role": PlayerState.ROLE_NAMES[p.role]})
+	pass_dynamite(id)
 	abilities.on_death(self, p)
 	discard_all(p)
 	record(TextCatalog.text("%s fell: %s") % [p.display_name, TextCatalog.text(PlayerState.ROLE_NAMES[p.role])])
@@ -491,6 +514,7 @@ func debug_card_zones() -> Array:
 		zones.append({"zone": "hand", "owner": p.player_id, "cards": p.hand})
 		zones.append({"zone": "weapon", "owner": p.player_id, "cards": [] if p.weapon.is_empty() else [p.weapon]})
 		zones.append({"zone": "equipment", "owner": p.player_id, "cards": p.equipment.values()})
+		zones.append({"zone": "delayed", "owner": p.player_id, "cards": [] if p.dynamite.is_empty() else [p.dynamite]})
 	if not reactions.active.is_empty():
 		zones.append({"zone": "reserved", "owner": reactions.active.target_player_id, "cards": reactions.active.context.get("cards", [])})
 	for zone in zones:
@@ -500,5 +524,3 @@ func debug_card_zones() -> Array:
 			entry["owner"] = zone.owner
 			result.append(entry)
 	return result
-
-

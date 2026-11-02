@@ -18,7 +18,7 @@ async function sync(group){await until(()=>{const rev=Math.max(...group.map(p=>p
 function verify(group){
  const pub=group[0].state.public;const ids=[];let reserved=0;
  for(const p of group){assert.equal(p.state.public.revision,pub.revision);const row=pub.players.find(x=>x.player_id===p.session.player_id);assert.equal(row.hand_count,p.state.private.hand.length);ids.push(...p.state.private.hand.map(c=>c.instance_id));const r=p.state.private.reaction;if(r&&['judge','draw_choose'].includes(r.reaction_type)){ids.push(...r.cards.map(c=>c.instance_id));reserved+=r.cards.length;}}
- for(const row of pub.players){assert(!('hand'in row)&&!('role'in row)&&!('character_options'in row));if(row.weapon_card?.instance_id)ids.push(row.weapon_card.instance_id);ids.push(...(row.equipment_cards||[]).map(c=>c.instance_id));}
+ for(const row of pub.players){assert(!('hand'in row)&&!('role'in row)&&!('character_options'in row));if(row.weapon_card?.instance_id)ids.push(row.weapon_card.instance_id);ids.push(...(row.equipment_cards||[]).map(c=>c.instance_id));ids.push(...(row.delayed_cards||[]).map(c=>c.instance_id));}
  ids.push(...pub.market.map(c=>c.instance_id));assert.equal(new Set(ids).size,ids.length,'no duplicate physical cards across owners/in-play/reserved/market');
  assert.equal(ids.length+pub.draw_count+pub.discard_count,80,'80-card conservation over actual client views');assert(!('draw_pile'in pub)&&!('character_options'in pub));
 }

@@ -97,6 +97,8 @@ func all_zone_cards() -> Array:
 		cards.append_array(player.hand)
 		if not player.weapon.is_empty(): cards.append(player.weapon)
 		cards.append_array(player.equipment.values())
+		if not player.dynamite.is_empty():
+			cards.append(player.dynamite)
 	return cards
 
 func verify_physical_cards(label: String) -> void:

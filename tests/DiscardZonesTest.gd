@@ -61,7 +61,7 @@ func remove(kind: String, card: Dictionary) -> void:
 func _ready() -> void:
 	await get_tree().process_frame
 	NetworkManager.table_event.connect(func(event): events.append(event.duplicate(true)))
-	for kind in ["winchester", "horse", "spyglass", "barrel", "jail", "dynamite"]:
+	for kind in ["winchester", "horse", "spyglass", "barrel", "jail"]:
 		setup()
 		var physical := equip(kind)
 		begin_discard()
@@ -86,7 +86,7 @@ func _ready() -> void:
 		else:
 			events.clear()
 			GameManager.begin_turn(2)
-			check(not events.any(func(e): return e.get("kind") in ["judge", "dynamite_pass", "jail_result"]), "removed Jail/Dynamite has no future judgement or pass")
+			check(not events.any(func(e): return e.get("kind") in ["judge", "jail_result"]), "removed Jail has no future judgement")
 			check(GameManager.turns.current_player == 2 and GameManager.players[2].current_hp == 4, "no skipped turn or explosive damage")
 	for pair in [["horse", "distance_defense"], ["spyglass", "distance_sight"], ["barrel", "innate_barrel"]]:
 		setup()

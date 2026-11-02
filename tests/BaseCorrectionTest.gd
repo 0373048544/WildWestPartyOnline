@@ -133,6 +133,8 @@ func conserved() -> void:
 		if not p.weapon.is_empty():
 			all_cards.append(p.weapon)
 		all_cards.append_array(p.equipment.values())
+		if not p.dynamite.is_empty():
+			all_cards.append(p.dynamite)
 	if not GameManager.reactions.active.is_empty():
 		all_cards.append_array(GameManager.reactions.active.context.get("cards", []))
 	var ids: Dictionary = {}

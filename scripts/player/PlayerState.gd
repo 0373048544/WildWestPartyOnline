@@ -14,6 +14,7 @@ var current_hp: int = 4
 var hand: Array = []
 var weapon: Dictionary = {}
 var equipment: Dictionary = {}
+var dynamite: Dictionary = {}
 var is_alive: bool = true
 var is_connected: bool = true
 var shoot_used_this_action_turn: bool = false
@@ -39,6 +40,7 @@ func public_snapshot(reveal: bool = false, show_character: bool = true) -> Dicti
 		"current_hp": current_hp, "max_hp": max_hp, "hand_count": hand.size(),
 		"weapon_id": weapon.get("card_data_id", ""), "equipment_ids": equipment.keys(),
 		"weapon_card": weapon.duplicate(true), "equipment_cards": equipment.values().duplicate(true),
+		"delayed_cards": [] if dynamite.is_empty() else [dynamite.duplicate(true)],
 		"is_alive": is_alive, "is_connected": is_connected, "ready": ready,
 		"character_id": character_id if show_character else "",
 		"weapon_range": DistanceManager.weapon_range(self),

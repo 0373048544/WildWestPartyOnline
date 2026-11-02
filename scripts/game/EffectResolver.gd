@@ -39,7 +39,9 @@ func valid_targets(game: Node, sender: int, card: Dictionary) -> Array:
 		return result
 	if card.get("card_data_id", "") == "cat_balou" and p.cat_balou_used_this_action_turn:
 		return result
-	if [CardData.EffectType.EQUIP_PASSIVE, CardData.EffectType.DYNAMITE].has(effect) and p.equipment.has(card.card_data_id):
+	if effect == CardData.EffectType.DYNAMITE and not p.dynamite.is_empty():
+		return result
+	if effect == CardData.EffectType.EQUIP_PASSIVE and p.equipment.has(card.card_data_id):
 		return result
 	var targeted: bool = definition.target == CardData.TargetType.SINGLE_PLAYER or effect == CardData.EffectType.ATTACK
 	if targeted:
@@ -77,6 +79,10 @@ func play(game: Node, sender: int, uid: int, target: int) -> void:
 		return
 	if not valid_targets(game, sender, card).has(target):
 		var reason: String = disabled_reason(game,sender,card)
+		if game.players.has(target) and [CardData.EffectType.STEAL, CardData.EffectType.DISCARD].has(effect):
+			var victim: PlayerState = game.players[target]
+			if not victim.dynamite.is_empty() and victim.hand.is_empty() and victim.weapon.is_empty() and victim.equipment.is_empty():
+				reason = "THUỐC NỔ không thể bị lấy hoặc hủy."
 		if effect == CardData.EffectType.ATTACK and game.living(target) and game.turns.current_player == sender and game.turns.phase == "ACTION_PHASE" and not DistanceManager.in_range(game.players,sender,target):
 			reason = "Mục tiêu ngoài tầm bắn."
 		game.fail(sender, reason if not reason.is_empty() else "Lá bài, mục tiêu hoặc tầm hiện tại không hợp lệ.")
@@ -129,7 +135,9 @@ func disabled_reason(game: Node, sender: int, card: Dictionary) -> String:
 		return "Bạn đã dùng BỎ BÀI trong lượt hành động này."
 	if effect == CardData.EffectType.DODGE:
 		return "Chỉ dùng lá Né khi đáp trả hiệu ứng Bắn."
-	if effect in [CardData.EffectType.EQUIP_PASSIVE, CardData.EffectType.DYNAMITE] and p.equipment.has(card.card_data_id):
+	if effect == CardData.EffectType.DYNAMITE and not p.dynamite.is_empty():
+		return "Bạn đã có THUỐC NỔ trước mặt."
+	if effect == CardData.EffectType.EQUIP_PASSIVE and p.equipment.has(card.card_data_id):
 		return "Bạn đã có %s trên bàn." % CardData.data(card.card_data_id).name
 	return "Không có mục tiêu hợp lệ trong tầm." if valid_targets(game, sender, card).is_empty() else ""
 
@@ -156,8 +164,12 @@ func weapon(game: Node, sender: int, _target: int, card: Dictionary) -> void:
 	game.emit_event("CARD_EQUIPPED", sender, {"kind": "equip", "card": card.duplicate(), "from_zone": "hand", "to_zone": "weapon"})
 
 func passive(game: Node, sender: int, _target: int, card: Dictionary) -> void:
-	game.players[sender].equipment[card.card_data_id] = card
-	game.emit_event("CARD_EQUIPPED", sender, {"kind": "equip", "card": card.duplicate(), "from_zone": "hand", "to_zone": "equipment"})
+	if card.get("card_data_id", "") == "dynamite":
+		game.players[sender].dynamite = card
+		game.emit_event("CARD_EQUIPPED", sender, {"kind": "dynamite_placed", "card": card.duplicate(), "from_zone": "hand", "to_zone": "delayed"})
+	else:
+		game.players[sender].equipment[card.card_data_id] = card
+		game.emit_event("CARD_EQUIPPED", sender, {"kind": "equip", "card": card.duplicate(), "from_zone": "hand", "to_zone": "equipment"})
 
 func jail(game: Node, _sender: int, target: int, card: Dictionary) -> void:
 	game.players[target].equipment.jail = card

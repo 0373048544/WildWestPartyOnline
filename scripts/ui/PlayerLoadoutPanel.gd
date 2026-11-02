@@ -43,7 +43,7 @@ func _ready() -> void:
 
 func update_loadout(row: Dictionary) -> void:
 	var next_signature := JSON.stringify([
-		row.get("weapon_card", {}), row.get("equipment_cards", []),
+		row.get("weapon_card", {}), row.get("equipment_cards", []), row.get("delayed_cards", []),
 		row.get("weapon_range", 1), layout.css_size(self), layout.mode(self)
 	])
 	if next_signature == signature:
@@ -52,15 +52,18 @@ func update_loadout(row: Dictionary) -> void:
 	for child in items.get_children():
 		child.queue_free()
 	var weapon: Dictionary = row.get("weapon_card", {})
-	has_public_loadout = not weapon.is_empty() or not row.get("equipment_cards", []).is_empty()
+	has_public_loadout = not weapon.is_empty() or not row.get("equipment_cards", []).is_empty() or not row.get("delayed_cards", []).is_empty()
 	var weapon_name := "Colt .45" if weapon.is_empty() else str(CardData.data(weapon.get("card_data_id", "")).get("name", "Colt .45"))
 	current_weapon_name = weapon_name
 	current_range = int(row.get("weapon_range", 1))
-	current_equipment_count = row.get("equipment_cards", []).size()
+	current_equipment_count = row.get("equipment_cards", []).size() + row.get("delayed_cards", []).size()
 	_add_item(weapon_name, "♠", weapon, "Súng hiện tại · Tầm %d" % int(row.get("weapon_range", 1)))
 	for card in row.get("equipment_cards", []):
 		var data: Dictionary = CardData.data(card.get("card_data_id", ""))
 		_add_item(str(data.get("name", "")), _icon(str(card.get("card_data_id", ""))), card, str(data.get("description", "")))
+	for card in row.get("delayed_cards", []):
+		var data: Dictionary = CardData.data(card.get("card_data_id", ""))
+		_add_item(str(data.get("name", "")), _icon(str(card.get("card_data_id", ""))), card, "HIỆU ỨNG TRÌ HOÃN • " + str(data.get("description", "")))
 	_apply_layout()
 
 func set_modal_blocked(value: bool) -> void:

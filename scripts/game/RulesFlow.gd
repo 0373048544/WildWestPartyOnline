@@ -138,27 +138,18 @@ func judged(job: Dictionary) -> void:
 				game.record(game.players[id].display_name + " thoát khỏi Nhà giam.")
 				game.network.broadcast_table_event({"kind": "jail_result", "player": id, "escaped": true})
 		"dynamite":
-			var explosive: Dictionary = game.players[id].equipment.get("dynamite", {})
-			game.players[id].equipment.erase("dynamite")
+			var explosive: Dictionary = game.players[id].dynamite
+			game.players[id].dynamite = {}
 			if card.get("suit", "") == "SPADE" and int(card.get("rank", 0)) >= 2 and int(card.get("rank", 0)) <= 9:
 				game.deck.discard(explosive)
-				game.emit_event("CARD_DISCARDED", id, {"kind": "discard", "card": explosive.duplicate(), "from_zone": "equipment"})
+				game.emit_event("CARD_DISCARDED", id, {"kind": "dynamite_explode", "card": explosive.duplicate(), "from_zone": "delayed", "to_zone": "discard"})
 				game.record("Thuốc nổ phát nổ! Mất 3 máu.")
 				game.damage(id, 0, 3)
 			else:
-				var passed := false
-				for next in game.living_order(id, false):
-					if not game.players[next].equipment.has("dynamite"):
-						game.players[next].equipment.dynamite = explosive
-						game.record("Thuốc nổ chuyển sang " + game.players[next].display_name + ".")
-						game.emit_event("CARD_MOVED", id, {"kind": "dynamite_pass", "to": next, "card": explosive.duplicate()})
-						passed = true
-						break
-				if not passed:
-					game.deck.discard(explosive)
+				game.pass_dynamite(id, explosive)
 
 func dynamite(job: Dictionary) -> void:
-	if game.living(job.target) and game.players[job.target].equipment.has("dynamite"):
+	if game.living(job.target) and not game.players[job.target].dynamite.is_empty():
 		judge(job.target, "dynamite", {})
 
 func jail(job: Dictionary) -> void:
@@ -290,6 +281,11 @@ func resolve(args: Dictionary) -> bool:
 				return false
 	if payload.has("choices"):
 		var choices: Array = payload.choices
+		if kind == "transfer" and game.players.has(int(context.get("target", 0))):
+			var protected: Dictionary = game.players[int(context.target)].dynamite
+			if option == "dynamite" or (not protected.is_empty() and int(args.get("card", -1)) == int(protected.get("instance_id", -2))):
+				game.fail(id, "THUỐC NỔ không thể bị lấy hoặc hủy.")
+				return false
 		if option.is_empty() and not accept:
 			option = str(choices[0].id)
 		if not choices.any(func(c): return str(c.id) == option):
