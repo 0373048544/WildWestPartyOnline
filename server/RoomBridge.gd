@@ -9,7 +9,9 @@ var audio_sequence: int = 0
 func stamp_audio(event: Dictionary) -> Dictionary:
 	audio_sequence += 1
 	var result := event.duplicate(true)
-	var id := "%s:%d" % [room.room_code, audio_sequence]
+	var event_match: int = int(result.get("match_id", room.game.match_id))
+	var id := "%s:%d:%d" % [room.room_code, event_match, audio_sequence]
+	result["match_id"] = event_match
 	result["audio_event_id"] = id
 	result["event_id"] = id
 	return result

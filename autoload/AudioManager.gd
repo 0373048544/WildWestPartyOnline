@@ -14,6 +14,8 @@ var loops: Array = []
 var cooldowns: Dictionary = {}
 var seen: Dictionary = {}
 var pending: Array = []
+var schedule_generation: int = 0
+var unique_loop_players: Dictionary = {}
 var rng := RandomNumberGenerator.new()
 var duck_until := 0
 var duck_gain := 1.0
@@ -33,6 +35,7 @@ var dynamite_active: bool = false
 var local_threat: bool = false
 var next_detail: int = 0
 var tension_deadline: int = 0
+var reconnecting_active: bool = false
 
 const SPECIAL_CUES := {
 	"beer_drink": "beer",
@@ -53,11 +56,41 @@ func stop_cue(key: String) -> void:
 	for player in pool + world_pool:
 		if player.get_meta("cue", "") == key:
 			player.stop()
+			player.stream = null
+			player.set_meta("cue", "")
+	unique_loop_players.erase(key)
+
+func start_unique_loop(key: String, bus: String = "SFX", at: Variant = null, gain: float = 0) -> bool:
+	var current: Node = unique_loop_players.get(key)
+	if is_instance_valid(current) and current.playing:
+		if current is AudioStreamPlayer3D and at is Vector3:
+			current.global_position = at
+		return false
+	stop_cue(key)
+	if not play_sound(key, bus, at, gain):
+		return false
+	for player in pool + world_pool:
+		if player.playing and player.get_meta("cue", "") == key:
+			unique_loop_players[key] = player
+			return true
+	return false
+
+func stop_unique_loop(key: String) -> void:
+	stop_cue(key)
+
+func cancel_transient_audio() -> void:
+	schedule_generation += 1
+	pending.clear()
+	stop_unique_loop("fuse")
+	dynamite_active = false
+	duel_active = false
+	tension_deadline = 0
 
 func _exit_tree() -> void:
 	for player in pool + world_pool + loops:
 		player.stop()
 	pending.clear()
+	unique_loop_players.clear()
 	streams.clear()
 
 func play_once(identity: String, cue: String) -> void:
@@ -114,7 +147,9 @@ func start_ambience() -> void:
 func get_stream(key: String) -> AudioStreamWAV:
 	var choices: Array = manifest.get(key, [])
 	if choices.is_empty():
-		if OS.is_debug_build() and not warnings.has(key):
+		# An explicitly registered empty list is an optional silent cue. Only an
+		# unknown key is a manifest mistake worth warning about.
+		if OS.is_debug_build() and not manifest.has(key) and not warnings.has(key):
 			warnings[key] = true
 			push_warning("Missing audio cue: " + key)
 		return null
@@ -146,6 +181,7 @@ func play_sound(key: String, bus: String = "SFX", at: Variant = null, gain: floa
 		if candidate.playing and candidate.get_meta("cue", "") == key:
 			same += 1
 		if not candidate.playing and player == null:
+			candidate.set_meta("cue", "")
 			player = candidate
 	if same >= 3:
 		return false
@@ -189,7 +225,7 @@ func play_world(key: String, position: Vector3) -> void:
 func play_character(key: String, player_id: int) -> void:
 	play_sound(key, "Character", position_for(player_id))
 
-func play_special(key: String, player_id: int = 0, delay: float = 0.0, gain: float = 0.0) -> void:
+func play_special(key: String, player_id: int = 0, delay: float = 0.0, gain: float = 0.0, context: Dictionary = {}) -> void:
 	# A single safe lookup keeps optional comedy assets out of gameplay scripts.
 	# Missing/empty manifest entries intentionally resolve to silence.
 	var cue: String = str(SPECIAL_CUES.get(key, ""))
@@ -197,23 +233,32 @@ func play_special(key: String, player_id: int = 0, delay: float = 0.0, gain: flo
 		return
 	var at: Variant = position_for(player_id) if player_id > 0 else null
 	if delay > 0.0:
-		schedule(cue, delay, "Character", at, gain)
+		schedule(cue, delay, "Character", at, gain, context)
 	else:
 		play_sound(cue, "Character", at, gain)
 
 func position_for(id: int) -> Variant:
 	return table.avatars[id].global_position + Vector3.UP if is_instance_valid(table) and table.avatars.has(id) else null
 
-func schedule(key: String, delay: float, bus: String = "SFX", at: Variant = null, gain: float = 0) -> void:
+func schedule(key: String, delay: float, bus: String = "SFX", at: Variant = null, gain: float = 0, context: Dictionary = {}) -> void:
 	if pending.size() < 64:
-		pending.append({"key": key, "at_ms": Time.get_ticks_msec() + int(delay * 1000), "bus": bus, "position": at, "gain": gain})
+		pending.append({
+			"key": key,
+			"at_ms": Time.get_ticks_msec() + int(delay * 1000),
+			"bus": bus,
+			"position": at,
+			"gain": gain,
+			"generation": schedule_generation,
+			"match_id": int(context.get("match_id", NetworkManager.public_state.get("match_id", 0))),
+			"event_id": str(context.get("audio_event_id", context.get("event_id", "")))
+		})
 
 func _process(delta: float) -> void:
 	var now := Time.get_ticks_msec()
 	if tension_deadline > 0 and now > tension_deadline:
 		duel_active = false
 		dynamite_active = false
-		stop_cue("fuse")
+		stop_unique_loop("fuse")
 		tension_deadline = 0
 	var tension: bool = duel_active or dynamite_active or local_threat or now < tension_until
 	duck_gain = move_toward(duck_gain, 0.18 if dynamite_active else (0.35 if tension else (0.55 if now < duck_until else 1.0)), delta * 2)
@@ -232,6 +277,10 @@ func _process(delta: float) -> void:
 		if not tension:
 			play_sound("wood_creak" if rng.randf() < 0.8 else "glass", "Ambient", null, -15)
 	for item in pending.duplicate():
+		var current_match: int = int(NetworkManager.public_state.get("match_id", 0))
+		if int(item.get("generation", -1)) != schedule_generation or (int(item.get("match_id", 0)) > 0 and current_match > 0 and int(item.match_id) != current_match):
+			pending.erase(item)
+			continue
 		if now >= int(item.at_ms):
 			pending.erase(item)
 			play_sound(item.key, item.bus, item.position, item.gain)
@@ -241,6 +290,10 @@ func _process(delta: float) -> void:
 		play_ui("tick")
 
 func consume_event(event: Dictionary) -> void:
+	var event_match: int = int(event.get("match_id", 0))
+	var current_match: int = int(NetworkManager.public_state.get("match_id", 0))
+	if event_match > 0 and current_match > 0 and event_match != current_match:
+		return
 	var identity: String = str(event.get("audio_event_id", ""))
 	if not identity.is_empty():
 		if seen.has(identity):
@@ -259,20 +312,20 @@ func consume_event(event: Dictionary) -> void:
 				var weapon: String = table.player_rows.get(id, {}).get("weapon_id", "") if is_instance_valid(table) else ""
 				cue = weapon if weapon in ["schofield", "remington", "carabine", "winchester", "volcanic"] else "bang"
 				play_sound("cock", "Weapons", at, -10)
-				schedule(cue, 0.1, "Weapons", at)
+				schedule(cue, 0.1, "Weapons", at, 0, event)
 				return
 			if cue == "dodge":
-				schedule("ricochet", 0.04, "Weapons", at, -8)
+				schedule("ricochet", 0.04, "Weapons", at, -8, event)
 			if cue == "death":
 				tension_until = Time.get_ticks_msec() + 900
 			if not cue.is_empty():
 				play_sound(cue, "Weapons" if cue == "gatling" else "Character", at)
 		"draw":
 			for index in range(mini(8, int(event.get("count", 1)))):
-				schedule("draw", index * 0.09, "Cards", null, -6)
+				schedule("draw", index * 0.09, "Cards", null, -6, event)
 		"discard":
 			play_card("play")
-			schedule("discard", 0.35, "SFX", null, -7)
+			schedule("discard", 0.35, "SFX", null, -7, event)
 			# Drink audio belongs to the successful HEAL event, not card removal;
 			# otherwise Beer would play twice and rejected/failed heals could sound valid.
 			var special: String = {"saloon": "glass", "supply": "wagon", "wells_fargo": "coins", "general_store": "fan", "panic": "snatch", "cat_balou": "discard", "indians": "danger"}.get(card.get("card_data_id", ""), "")
@@ -281,7 +334,7 @@ func consume_event(event: Dictionary) -> void:
 		"transfer":
 			# Hidden card identity is deliberately ignored.
 			play_card("snatch" if event.get("steal", true) else "discard")
-			schedule("place", 0.35, "SFX", null, -7)
+			schedule("place", 0.35, "SFX", null, -7, event)
 			if not event.get("hidden", true):
 				var material: String = {"barrel": "barrel", "spyglass": "scope", "jail": "jail", "horse": "wood_creak"}.get(card.get("card_data_id", ""), "weapon")
 				play_sound(material, "WorldSFX", at, -7)
@@ -294,13 +347,16 @@ func consume_event(event: Dictionary) -> void:
 				dynamite_active = true
 				tension_deadline = Time.get_ticks_msec() + 18000
 			if event.get("purpose", "") in ["dynamite", "barrel"]:
-				play_sound("fuse" if event.purpose == "dynamite" else "barrel", "WorldSFX", at)
-			schedule("flip", 0.14)
+				if event.purpose == "dynamite":
+					start_unique_loop("fuse", "WorldSFX", at)
+				else:
+					play_sound("barrel", "WorldSFX", at)
+			schedule("flip", 0.14, "SFX", null, 0, event)
 		"reveal": play_card("flip")
 		"barrel_result": play_sound("lucky" if event.get("success", false) else "fail", "WorldSFX", at)
 		"damage":
 			var explosion: bool = dynamite_active and int(event.get("amount", 1)) >= 3
-			stop_cue("fuse")
+			stop_unique_loop("fuse")
 			dynamite_active = false
 			duel_active = false
 			play_sound("explosion" if explosion else "hit", "Weapons" if explosion else "Character", at)
@@ -308,13 +364,13 @@ func consume_event(event: Dictionary) -> void:
 			var healing_card: String = str(event.get("card_data_id", ""))
 			if healing_card == "drink":
 				play_special("beer_drink", id)
-				play_special("beer_burp", id, 0.42, 1.0)
+				play_special("beer_burp", id, 0.42, 1.0, event)
 			elif healing_card == "iced_tea":
 				play_special("iced_tea_drink", id)
-				play_special("iced_tea_fart", id, 0.42, -1.5)
+				play_special("iced_tea_fart", id, 0.42, -1.5, event)
 			play_sound("heal", "Character", at, -8)
 		"store_started", "department_store":
-			play_special("mischievous_laugh", id, 0.24, -1.0)
+			play_special("mischievous_laugh", id, 0.24, -1.0, event)
 		"duel":
 			duel_active = true
 			tension_deadline = Time.get_ticks_msec() + 18000
@@ -324,7 +380,7 @@ func consume_event(event: Dictionary) -> void:
 				tension_until = Time.get_ticks_msec() + 500
 		"jail_result": play_sound("unlock" if event.get("escaped", false) else "jail", "WorldSFX", at)
 		"dynamite_pass":
-			stop_cue("fuse")
+			stop_unique_loop("fuse")
 			dynamite_active = false
 			play_sound("pass", "WorldSFX", at)
 		"reward": play_gameplay("reward")
@@ -333,6 +389,12 @@ func consume_event(event: Dictionary) -> void:
 func observe_state() -> void:
 	var current: Dictionary = NetworkManager.public_state
 	update_mix_policy(current)
+	var reconnecting_now: bool = NetworkManager.mode == "websocket" and is_instance_valid(NetworkManager.room_client) and NetworkManager.room_client.reconnecting
+	if reconnecting_now and not reconnecting_active:
+		# The retained snapshot is only a reconnect baseline. Any delayed cue from
+		# before the transport interruption no longer has reliable presentation context.
+		cancel_transient_audio()
+	reconnecting_active = reconnecting_now
 	if current.get("phase", "") != "REACTION":
 		duel_active = false
 	if music_allowed:
@@ -340,7 +402,8 @@ func observe_state() -> void:
 	if current.is_empty():
 		previous = {}
 		reaction_deadline = 0
-		pending.clear()
+		last_tick = -1
+		cancel_transient_audio()
 		return
 	if previous.is_empty() and current.get("started", false):
 		# A reconnect snapshot is a baseline, not a replay of match start/win/turn.
@@ -357,7 +420,7 @@ func observe_state() -> void:
 			if not before.is_empty() and before[0].ready != row.ready:
 				play_ui("ready" if row.ready else "unready")
 	if current.get("match_id", 0) != previous.get("match_id", 0) and current.get("started", false):
-		pending.clear()
+		cancel_transient_audio()
 		play_gameplay("start")
 		play_card("fan")
 	var local_row: Array = current.get("players", []).filter(func(p): return p.player_id == NetworkManager.local_player_id())
@@ -367,6 +430,7 @@ func observe_state() -> void:
 	if previous.get("phase", "") == "CHARACTER_SELECTION" and current.get("phase", "") != "CHARACTER_SELECTION":
 		play_ui("turn")
 	if current.get("winner", "") != previous.get("winner", "") and not str(current.get("winner", "")).is_empty():
+		cancel_transient_audio()
 		play_gameplay({"SHERIFF TEAM WINS": "sheriff_win", "DEPUTY WINS": "sheriff_win",
 			"OUTLAWS WIN": "outlaw_win", "OUTLAW WINS": "outlaw_win", "RENEGADE WINS": "renegade_win"}.get(current.winner, "start"))
 	if current.get("action_turn", 0) != previous.get("action_turn", 0) and current.get("current_player", 0) == NetworkManager.local_player_id():
@@ -377,7 +441,7 @@ func observe_state() -> void:
 	if request_id != reaction_id:
 		reaction_id = request_id
 		last_tick = -1
-		reaction_deadline = Time.get_ticks_msec() + int(float(reaction.get("remaining", 0)) * 1000)
+		reaction_deadline = Time.get_ticks_msec() + int(float(reaction.get("remaining", 0)) * 1000) if request_id >= 0 else 0
 		if request_id >= 0:
 			play_ui({"survive": "survive", "duel": "duel_alert", "indians": "danger"}.get(reaction.get("reaction_type", ""), "reaction"))
 	previous = current.duplicate(true)

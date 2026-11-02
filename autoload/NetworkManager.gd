@@ -26,7 +26,9 @@ var enet_chat := ChatRoomState.new("ENET")
 func stamp_audio(event: Dictionary) -> Dictionary:
 	audio_sequence += 1
 	var result := event.duplicate(true)
-	var id := "enet:%d:%d" % [GameManager.match_id, audio_sequence]
+	var event_match: int = int(result.get("match_id", GameManager.match_id))
+	var id := "enet:%d:%d" % [event_match, audio_sequence]
+	result["match_id"] = event_match
 	result["audio_event_id"] = id
 	result["event_id"] = id
 	return result

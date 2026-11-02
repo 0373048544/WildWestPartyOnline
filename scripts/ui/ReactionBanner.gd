@@ -59,7 +59,8 @@ func present(owner_app: Node, active: Dictionary, state: Dictionary) -> void:
 	visible = true
 	set_process(true)
 	if is_new:
-		AudioManager.play_ui("reaction")
+		# AudioManager.observe_state() owns the request-ID-scoped reaction cue.
+		# Rendering/rebuilding this banner must never replay semantic audio.
 		_animate_in()
 
 func hide_banner() -> void:
