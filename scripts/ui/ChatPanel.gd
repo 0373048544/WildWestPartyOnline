@@ -33,6 +33,8 @@ func _ready() -> void:
 
 func setup(owner_app: Node) -> void:
 	app = owner_app
+	if is_instance_valid(app) and is_instance_valid(app.get("web_layout")):
+		app.web_layout.register_text_input(input)
 	if not NetworkManager.chat_message.is_connected(_on_message):
 		NetworkManager.chat_message.connect(_on_message)
 	if not NetworkManager.chat_history.is_connected(_on_history):
@@ -135,7 +137,9 @@ func sync_state(state: Dictionary, own: Dictionary, has_modal: bool) -> void:
 		_on_history(NetworkManager.chat_messages)
 	var reaction_kind := str(own.get("reaction", {}).get("reaction_type", ""))
 	var public_choice := str(state.get("choice_type", ""))
-	var urgent := reaction_kind in ["dodge", "duel", "indians", "survive", "store", "department_store_give"] or public_choice in ["store", "department_store_give"]
+	# Any authoritative choice deserves uncontested touch space: attacks, survival,
+	# card-zone targeting, character abilities, Store and Bách Hóa.
+	var urgent := not reaction_kind.is_empty() or not public_choice.is_empty()
 	set_blocked(not active or has_modal or urgent or str(state.get("phase", "")) == "CHARACTER_SELECTION" or not str(state.get("winner", "")).is_empty())
 	layout_chat()
 
@@ -165,8 +169,7 @@ func close_chat() -> void:
 	if is_instance_valid(toggle_button):
 		toggle_button.visible = visible and not blocked
 	if is_instance_valid(input) and input.has_focus():
-		input.release_focus()
-	_hide_keyboard()
+		_finish_input()
 	set_process(false)
 	layout_chat()
 
@@ -181,8 +184,7 @@ func submit() -> void:
 	last_submit_at = now
 	NetworkManager.send_chat(text)
 	input.clear()
-	input.release_focus()
-	_hide_keyboard()
+	_finish_input()
 	set_process(false)
 	layout_chat()
 
@@ -276,24 +278,40 @@ func layout_chat() -> void:
 	close_button.custom_minimum_size = Vector2(touch, touch)
 	input.custom_minimum_size.y = touch
 	send_button.custom_minimum_size = Vector2(layout.units(self, 64.0), touch)
-	var button_rect: Rect2 = layout.chat_button_rect(self)
+	var button_rect: Rect2 = _journal_button_rect(layout)
 	toggle_button.position = button_rect.position
 	toggle_button.size = button_rect.size
 	var panel_rect: Rect2 = layout.chat_panel_rect(self)
+	panel_rect.position.x = button_rect.position.x
+	panel_rect.position.y = button_rect.end.y + layout.units(self, 6.0)
 	var keyboard_shift := _keyboard_shift()
 	var safe_top: float = layout.safe_rect(self, 8.0).position.y
-	var top_limit: float = layout.top_hud_rect(self).end.y + layout.units(self, 6.0)
-	panel_rect.position.y = maxf(top_limit, panel_rect.position.y - keyboard_shift)
+	panel_rect.position.y = maxf(safe_top, panel_rect.position.y - keyboard_shift)
+	var bottom_limit: float = layout.action_rect(self).position.y - layout.units(self, 8.0)
+	panel_rect.size.y = minf(panel_rect.size.y, maxf(1.0, bottom_limit - panel_rect.position.y))
 	panel.position = panel_rect.position
 	panel.custom_minimum_size = panel_rect.size
 	panel.size = panel_rect.size
 	# Containers may enforce a slightly taller minimum than the calculated short-
 	# landscape rect. Keep the real bottom above End Turn/hand, moving upward only
 	# as far as the safe viewport permits.
-	var bottom_limit: float = layout.action_rect(self).position.y - layout.units(self, 8.0)
 	panel.position.y = maxf(safe_top, minf(panel.position.y, bottom_limit - panel.size.y))
-	preview.position = Vector2(button_rect.position.x, button_rect.position.y - layout.units(self, 42.0))
+	preview.position = Vector2(button_rect.position.x, button_rect.end.y + layout.units(self, 4.0))
 	preview.size = Vector2(minf(layout.units(self, 320.0), layout.safe_rect(self).size.x * 0.75), layout.units(self, 36.0))
+
+func _journal_button_rect(layout: Script) -> Rect2:
+	var hud: Node = app.get("match_hud") if is_instance_valid(app) else null
+	if is_instance_valid(hud):
+		var holder: Node = hud.get_node_or_null("MatchLog")
+		if is_instance_valid(holder):
+			for child in holder.get_children():
+				if child is Button and child.is_visible_in_tree():
+					var journal: Rect2 = child.get_global_rect()
+					return Rect2(
+						Vector2(journal.position.x, journal.end.y + layout.units(self, 4.0)),
+						Vector2(journal.size.x, maxf(layout.units(self, 42.0), journal.size.y))
+					)
+	return layout.chat_button_rect(self)
 
 func _keyboard_shift() -> float:
 	if not OS.has_feature("web") or not is_instance_valid(input) or not input.has_focus():
@@ -309,3 +327,11 @@ func _process(_delta: float) -> void:
 func _hide_keyboard() -> void:
 	if DisplayServer.has_feature(DisplayServer.FEATURE_VIRTUAL_KEYBOARD):
 		DisplayServer.virtual_keyboard_hide()
+
+func _finish_input() -> void:
+	if is_instance_valid(app) and app.has_method("finish_text_input"):
+		app.finish_text_input(input)
+	else:
+		if input.has_focus():
+			input.release_focus()
+		_hide_keyboard()

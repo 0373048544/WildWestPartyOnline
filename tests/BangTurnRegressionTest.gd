@@ -83,7 +83,7 @@ func _ready() -> void:
 	GameManager.resolver.play(GameManager,1,second.instance_id,2)
 	check(GameManager.find_card(1,second.instance_id).is_empty(),"same BANG is usable next turn")
 	drain()
-	for effect in ["cat_balou","panic"]:
+	for effect in ["cat_balou"]:
 		setup()
 		play(1,"shoot",2)
 		drain()

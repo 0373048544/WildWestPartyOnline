@@ -1,41 +1,110 @@
 extends Node
 
 var _last_css_size := Vector2.ZERO
-var _next_viewport_poll: int = 0
+var _current_text_input: Control
+var _resize_pending := false
+var _resize_timer: Timer
+var _viewport_timer: Timer
 
 
 func _ready() -> void:
-	# Keyboard handling is useful on Web, Android and iOS.
-	set_process(OS.has_feature("web") or OS.has_feature("mobile"))
+	# Text focus is event-driven. Polling focus every frame used to race the
+	# browser's hidden IME input while visualViewport was changing.
+	set_process(false)
 	set_process_input(OS.has_feature("web") or OS.has_feature("mobile"))
 
 	if OS.has_feature("web"):
-		get_viewport().size_changed.connect(resize)
-		resize()
+		_resize_timer = Timer.new()
+		_resize_timer.one_shot = true
+		_resize_timer.wait_time = 0.075
+		_resize_timer.timeout.connect(_flush_resize)
+		add_child(_resize_timer)
+		_viewport_timer = Timer.new()
+		_viewport_timer.wait_time = 0.25
+		_viewport_timer.timeout.connect(_poll_css_viewport)
+		add_child(_viewport_timer)
+		_viewport_timer.start()
+		get_viewport().size_changed.connect(_request_resize)
+		_request_resize()
 
 
-func _process(_delta: float) -> void:
-	if not (OS.has_feature("web") or OS.has_feature("mobile")):
-		return
-
-	var focus: Control = get_viewport().gui_get_focus_owner()
-	var text_input_focused := is_instance_valid(focus) and _is_text_input(focus)
-
+func _poll_css_viewport() -> void:
 	# Safari/embedded browsers resize visualViewport when their toolbar expands
-	# without always changing the outer canvas immediately. Poll cheaply and
-	# reflow only when the real CSS viewport changed.
-	if OS.has_feature("web") and Time.get_ticks_msec() >= _next_viewport_poll:
-		_next_viewport_poll = Time.get_ticks_msec() + 250
-		var measured: Variant = JavaScriptBridge.eval("JSON.stringify([Math.min(window.visualViewport?.width||window.innerWidth,window.innerWidth,window.screen?.width||window.innerWidth),Math.min(window.visualViewport?.height||window.innerHeight,window.innerHeight,window.screen?.height||window.innerHeight)])")
-		var parsed: Variant = JSON.parse_string(str(measured))
-		if parsed is Array and parsed.size() == 2:
-			var next_css := Vector2(float(parsed[0]), float(parsed[1]))
-			if not next_css.is_equal_approx(_last_css_size):
-				# Opening the mobile keyboard shrinks visualViewport. Rebuilding the
-				# menu here destroys the focused LineEdit and makes the keyboard flash
-				# open/closed. Keep the last stable layout until editing finishes.
-				if not text_input_focused:
-					resize()
+	# without always changing the outer canvas immediately. Poll only viewport
+	# geometry (not focus), and postpone reflow for the whole IME composition.
+	var measured: Variant = JavaScriptBridge.eval("JSON.stringify([Math.min(window.visualViewport?.width||window.innerWidth,window.innerWidth,window.screen?.width||window.innerWidth),Math.min(window.visualViewport?.height||window.innerHeight,window.innerHeight,window.screen?.height||window.innerHeight)])")
+	var parsed: Variant = JSON.parse_string(str(measured))
+	if parsed is Array and parsed.size() == 2:
+		var next_css := Vector2(float(parsed[0]), float(parsed[1]))
+		if not next_css.is_equal_approx(_last_css_size):
+			_request_resize()
+
+
+func register_text_input(control: Control) -> void:
+	if not is_instance_valid(control) or not _is_text_input(control):
+		return
+	control.add_to_group("mobile_text_input")
+	if not control.focus_entered.is_connected(_on_focus_entered.bind(control)):
+		control.focus_entered.connect(_on_focus_entered.bind(control))
+	if not control.focus_exited.is_connected(_on_focus_exited.bind(control)):
+		control.focus_exited.connect(_on_focus_exited.bind(control))
+
+
+func is_text_edit_active() -> bool:
+	if is_instance_valid(_current_text_input) and _current_text_input.has_focus():
+		return true
+	var focus: Control = get_viewport().gui_get_focus_owner()
+	return is_instance_valid(focus) and _is_text_input(focus)
+
+
+func finish_text_input(control: Control = null, hide_keyboard: bool = true) -> void:
+	var target: Control = control
+	if not is_instance_valid(target):
+		target = get_viewport().gui_get_focus_owner()
+	if is_instance_valid(target) and _is_text_input(target) and target.has_focus():
+		target.release_focus()
+	if hide_keyboard:
+		_hide_virtual_keyboard()
+	call_deferred("_settle_focus_exit")
+
+
+func _on_focus_entered(control: Control) -> void:
+	_current_text_input = control
+
+
+func _on_focus_exited(_control: Control) -> void:
+	# The browser briefly moves focus between its hidden textarea and Godot.
+	# Settle after GUI dispatch and never hide the keyboard just for focus_exited.
+	call_deferred("_settle_focus_exit")
+
+
+func _settle_focus_exit() -> void:
+	var focus: Control = get_viewport().gui_get_focus_owner()
+	if is_instance_valid(focus) and _is_text_input(focus):
+		_current_text_input = focus
+		return
+	_current_text_input = null
+	if get_parent().has_method("text_input_settled"):
+		get_parent().call_deferred("text_input_settled")
+	if _resize_pending:
+		_request_resize()
+
+
+func _request_resize() -> void:
+	_resize_pending = true
+	if is_text_edit_active():
+		return
+	if is_instance_valid(_resize_timer):
+		_resize_timer.start()
+	else:
+		call_deferred("_flush_resize")
+
+
+func _flush_resize() -> void:
+	if is_text_edit_active():
+		return
+	_resize_pending = false
+	resize()
 
 
 func _input(event: InputEvent) -> void:
@@ -47,22 +116,19 @@ func _input(event: InputEvent) -> void:
 	if not is_instance_valid(focus) or not _is_text_input(focus):
 		return
 
-	# Enter / Done / Go on the mobile keyboard.
-	if event.is_action_pressed("ui_text_submit"):
-		focus.release_focus()
-		_hide_virtual_keyboard()
-		return
-
 	# Defer outside-tap handling until Godot GUI has had a chance to transfer
 	# focus. Otherwise a tap from PlayerName to RoomCode closes the keyboard
 	# because the pointer is outside the previously focused LineEdit.
-	if event is InputEventScreenTouch and event.pressed:
+	# Never release focus on pointer-down: a viewport resize between touchStart
+	# and touchEnd cancels the Button press, forcing users to tap Submit twice.
+	# Resolve outside taps only after the complete click/touch gesture.
+	if event is InputEventScreenTouch and not event.pressed:
 		call_deferred("_finish_pointer_focus", focus, event.position)
 		return
 
 	# Also support mouse/pointer taps in mobile browsers and desktop testing.
 	if event is InputEventMouseButton:
-		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		if event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
 			call_deferred("_finish_pointer_focus", focus, event.position)
 
 
@@ -92,6 +158,9 @@ func _hide_virtual_keyboard() -> void:
 
 func resize() -> void:
 	if not OS.has_feature("web"):
+		return
+	if is_text_edit_active():
+		_resize_pending = true
 		return
 
 	# screen.* closes a Chromium touch-emulation edge case where visualViewport

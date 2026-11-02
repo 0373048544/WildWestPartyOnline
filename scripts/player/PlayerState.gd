@@ -17,6 +17,7 @@ var equipment: Dictionary = {}
 var is_alive: bool = true
 var is_connected: bool = true
 var shoot_used_this_turn: bool = false
+var panic_used_this_turn: bool = false
 var department_store_used_this_game: bool = false
 var general_store_used_this_game: bool = false
 # Descriptive alias over the existing authoritative flag, never separate state.

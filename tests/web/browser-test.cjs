@@ -172,17 +172,54 @@ async function save(page,name) {
   });
   const a=await newPage(),b=await newPage();
   await click(a,c=>c.name==='CreateRoomButton');
-  await input(a,null,'Thang');
+  const hostName='Tạo Phòng Việt';
+  await input(a,null,hostName);
   assert(!(await snapshot(a)).controls.some(c=>c.text==='Cổng'||c.text==='Địa chỉ IP'));
   await click(a,c=>c.name==='SubmitRoomButton');
   const room=await wait(async()=>{const s=await snapshot(a);return s?.room;},'room created');
+  assert((await snapshot(a)).public.players.some(p=>p.display_name===hostName),'Vietnamese host name reaches authoritative server unchanged');
   await save(a,'created');
   await click(b,c=>c.name==='JoinRoomButton');
-  await input(b,null,'Minh');
-  await input(b,'RoomCode',room);
+  const registeredBeforeReopen=(await snapshot(b)).text_input_policy.registered;
+  for(let reopen=0;reopen<20;reopen++){
+    await click(b,c=>c.name==='BackButton');
+    await click(b,c=>c.name==='JoinRoomButton');
+  }
+  assert.equal((await snapshot(b)).text_input_policy.registered,registeredBeforeReopen,'reopening Join 20 times does not leak registered inputs or handlers');
+  // Global mobile text-input regression: Unicode, backspace, paste/insertText,
+  // rapid field switching and lowercase room-code normalization on submit.
+  await input(b,null,'Nguyễn Văn An X');
+  await command('Input.dispatchKeyEvent',{type:'rawKeyDown',key:'Backspace',code:'Backspace',windowsVirtualKeyCode:8},b);
+  await command('Input.dispatchKeyEvent',{type:'keyUp',key:'Backspace',code:'Backspace',windowsVirtualKeyCode:8},b);
+  if(mobile) await command('Input.insertText',{text:'🤠'},b);
+  const typedName=mobile?'Nguyễn Văn An 🤠':'Nguyễn Văn An ';
+  const joinedName=typedName.trim();
+  await wait(async()=>{const s=await snapshot(b);return s?.controls.some(c=>c.kind==='input'&&c.name!=='RoomCode'&&c.text===typedName&&c.focused)},'Vietnamese/emoji/backspace input');
+  await input(b,'RoomCode',room.toLowerCase());
+  if(mobile){
+    const mobileWidth=Number(process.env.WWPO_MOBILE_WIDTH||844),mobileHeight=Number(process.env.WWPO_MOBILE_HEIGHT||390);
+    const keyboardHeight=Math.max(240,Math.floor(mobileHeight*0.62));
+    await command('Emulation.setDeviceMetricsOverride',{width:mobileWidth,height:keyboardHeight,screenWidth:mobileWidth,screenHeight:mobileHeight,deviceScaleFactor:1,mobile:true},b);
+    await delay(500);
+    let duringKeyboard=await snapshot(b);
+    assert(duringKeyboard.controls.some(c=>c.kind==='input'&&c.name==='RoomCode'&&c.text===room.toLowerCase()&&c.focused),'keyboard viewport resize preserves room text, node and focus');
+    assert(duringKeyboard.controls.some(c=>c.kind==='input'&&c.name!=='RoomCode'&&c.text===typedName),'keyboard viewport resize preserves name draft');
+    await command('Emulation.setDeviceMetricsOverride',{width:mobileWidth,height:mobileHeight,screenWidth:mobileWidth,screenHeight:mobileHeight,deviceScaleFactor:1,mobile:true},b);
+    await delay(500);
+  }
+  for(let switchIndex=0;switchIndex<10;switchIndex++){
+    const wantsRoom=switchIndex%2===0;
+    await click(b,c=>c.kind==='input'&&(wantsRoom?c.name==='RoomCode':c.name!=='RoomCode'));
+    const switched=await snapshot(b);
+    assert(switched.controls.some(c=>c.kind==='input'&&(wantsRoom?c.name==='RoomCode':c.name!=='RoomCode')&&c.focused),'rapid input switch keeps intended focus');
+  }
+  // Return to room code; the submit button must work on this first tap even
+  // while the browser keyboard/input still owns focus.
+  await click(b,c=>c.kind==='input'&&c.name==='RoomCode');
   await click(b,c=>c.name==='SubmitRoomButton');
   await wait(async()=>{const s=await snapshot(b);return s?.public.players?.length===2;},'same lobby');
   assert.equal((await snapshot(a)).room,(await snapshot(b)).room);
+  assert((await snapshot(a)).public.players.some(p=>p.display_name===joinedName),'Unicode player name reaches authoritative server unchanged');
   await click(a,c=>c.name==='ReadyButton');
   await click(b,c=>c.name==='ReadyButton');
   await wait(async()=>(await snapshot(a)).public.players.every(p=>p.ready),'ready synchronized');

@@ -47,6 +47,10 @@ func _process(delta: float) -> void:
 		"selected": app.selected, "error": app.error_text, "size": {"x": app.root.size.x, "y": app.root.size.y},
 		"connected": not NetworkManager.connecting, "room": NetworkManager.room_client.room_code,
 		"client_registry_count": GameManager.players.size()}
+	snapshot["text_input_policy"] = {
+		"registered": get_tree().get_nodes_in_group("mobile_text_input").size(),
+		"active": app.web_layout.is_text_edit_active() if is_instance_valid(app.web_layout) else false
+	}
 	snapshot["profile"] = {"fps": Performance.get_monitor(Performance.TIME_FPS),
 		"draw_calls": Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
 		"primitives": Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME),
@@ -96,6 +100,9 @@ func collect(node: Node, controls: Array) -> void:
 						return
 					item.x = exposed.position.x+minf(30,exposed.size.x/2)
 					item.y = exposed.position.y+minf(60,exposed.size.y/2)
+		else:
+			item["focused"] = node.has_focus()
+			item["caret"] = node.caret_column
 		controls.append(item)
 	for child in node.get_children():
 		collect(child, controls)

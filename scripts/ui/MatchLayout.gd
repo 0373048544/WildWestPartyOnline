@@ -160,11 +160,12 @@ static func action_rect(node: Node, targeting: bool = false) -> Rect2:
 
 static func chat_button_rect(node: Node) -> Rect2:
 	var safe := safe_rect(node, 8.0)
-	var action_zone := action_rect(node)
-	var width := units(node, 94.0 if mobile(node) else 124.0)
-	var height := units(node, 46.0 if mobile(node) else 42.0)
+	# Matches the collapsed Journal control; ChatPanel replaces this fallback with
+	# the Journal's measured rect once MatchHUD is present.
+	var width := units(node, 105.0)
+	var height := units(node, 44.0 if mobile(node) else 42.0)
 	return Rect2(
-		Vector2(safe.position.x, maxf(safe.position.y, action_zone.position.y - height - units(node, 6.0))),
+		Vector2(safe.position.x + units(node, 4.0), safe.position.y + units(node, 48.0)),
 		Vector2(width, height)
 	)
 
@@ -175,19 +176,19 @@ static func chat_panel_rect(node: Node) -> Rect2:
 	var width: float
 	var height: float
 	if mobile_portrait(node):
-		width = safe.size.x * 0.92
-		height = safe.size.y * 0.36
+		width = safe.size.x * 0.78
+		height = safe.size.y * 0.29
 	elif mobile_landscape(node):
-		width = safe.size.x * 0.42
-		height = safe.size.y * 0.55
+		width = safe.size.x * 0.38
+		height = safe.size.y * 0.45
 	else:
-		width = minf(380.0, safe.size.x * 0.32)
-		height = minf(300.0, safe.size.y * 0.36)
+		width = minf(360.0, safe.size.x * 0.30)
+		height = minf(270.0, safe.size.y * 0.30)
+	var anchor := chat_button_rect(node)
+	var y := anchor.end.y + gap
 	var bottom := action_zone.position.y - gap
-	var top_limit := top_hud_rect(node).end.y + gap
-	height = minf(height, maxf(1.0, bottom - top_limit))
-	var y := maxf(top_limit, bottom - height)
-	return Rect2(Vector2(safe.position.x, y), Vector2(width, height))
+	height = minf(height, maxf(1.0, bottom - y))
+	return Rect2(Vector2(anchor.position.x, y), Vector2(width, height))
 
 static func equipment_rect(node: Node, expanded: bool = false) -> Rect2:
 	var safe := safe_rect(node, 8.0 if mobile(node) else 16.0)

@@ -189,6 +189,8 @@ func setup_round() -> Dictionary:
 		"tea": take_card(2, "iced_tea"),
 		"store": take_card(2, "general_store"),
 		"department": take_card(2, "department_store"),
+		"panic_first": take_card(2, "panic"),
+		"panic_stolen": take_card(3, "panic"),
 		"dodge": take_card(1, "dodge"),
 		"rescue_tea": take_card(1, "iced_tea"),
 		"weapon": take_card(3, "winchester")
@@ -216,18 +218,29 @@ func run_round(layout_name: String, viewport_size: Vector2i) -> void:
 	var cards := setup_round()
 	await settle(0.32)
 	check(GameManager.turns.current_player == 2 and GameManager.turns.phase == "ACTION_PHASE", layout_name + ": normal draw reaches player 2 action phase")
-	check(GameManager.players[2].hand.size() == 7, layout_name + ": normal draw added exactly two cards to prepared five-card hand")
+	check(GameManager.players[2].hand.size() == 8, layout_name + ": normal draw added exactly two cards to prepared six-card hand")
 	check_ui_bounds(layout_name + " normal action")
 	await screenshot(layout_name, "01-normal-action")
 	verify_physical_cards(layout_name + " after draw")
 	# Mobile-first chat stays above action/hand zones and releases input on close.
 	var chat: ChatPanel = app.chat_panel
 	check(chat.toggle_button.visible, layout_name + ": collapsed chat button is visible in active match")
+	var journal_button: Button = app.match_hud.get_node("MatchLog").get_child(0)
+	var journal_rect := journal_button.get_global_rect()
+	var chat_button_rect := chat.toggle_button.get_global_rect()
+	check(absf(chat_button_rect.position.x - journal_rect.position.x) <= 1.0 and chat_button_rect.position.y >= journal_rect.end.y,
+		layout_name + ": collapsed Chat is stacked directly below Journal")
+	check(chat_button_rect.size.x <= journal_rect.size.x + 1.0 and chat_button_rect.size.y >= load("res://scripts/ui/MatchLayout.gd").units(chat, 40.0),
+		layout_name + ": Chat button matches Journal width and remains touch-friendly")
 	chat.append_message({"message_id":"round:%s" % layout_name, "sender_id":3, "sender_name":"Cao Bồi Không Bao Giờ Ngủ", "text":"coi chừng ông bên trái 😂", "timestamp":1}, true)
 	chat.open_chat()
 	await settle(0.05)
 	check(chat.panel.visible and not chat.panel.get_global_rect().intersects(app.match_hud.hand.get_global_rect()), layout_name + ": open chat does not cover hand")
 	check(not chat.panel.get_global_rect().intersects(load("res://scripts/ui/MatchLayout.gd").action_rect(chat)), layout_name + ": open chat does not cover End Turn/action zone")
+	if load("res://scripts/ui/MatchLayout.gd").mobile_portrait(chat):
+		var usable: Rect2 = load("res://scripts/ui/MatchLayout.gd").safe_rect(chat)
+		check(chat.panel.size.x <= usable.size.x * 0.82 + 1.0 and chat.panel.size.y <= usable.size.y * 0.32 + 1.0,
+			layout_name + ": portrait chat stays within compact 82% × 32% envelope")
 	await screenshot(layout_name, "01a-chat-open")
 	chat.close_chat()
 	check(not chat.panel.visible and chat.mouse_filter == Control.MOUSE_FILTER_IGNORE, layout_name + ": closed chat releases gameplay input")
@@ -247,6 +260,26 @@ func run_round(layout_name: String, viewport_size: Vector2i) -> void:
 	await settle(0.25)
 	check(GameManager.reactions.active.is_empty() and GameManager.players[1].current_hp == 4, layout_name + ": DODGE clears reaction without damage")
 	check(not app.reaction_banner.visible and not app.table.targeting.blocked, layout_name + ": reaction clears banner and input lock")
+
+	# Custom Panic rule: the first Panic steals a second physical Panic, but the
+	# newly received card remains disabled until this player's next action turn.
+	chat.open_chat()
+	GameManager.resolver.play(GameManager, 2, cards.panic_first.instance_id, 3)
+	GameManager.publish()
+	await settle(0.12)
+	check(not chat.expanded, layout_name + ": Panic card-choice prompt auto-collapses chat")
+	check(GameManager.reactions.active.get("reaction_type", "") == "transfer", layout_name + ": first Panic opens existing transfer chooser")
+	check(GameManager.flow.resolve({"accept":true, "option":"hand"}), layout_name + ": Panic steals opponent's hidden hand card")
+	GameManager.publish()
+	await settle(0.12)
+	check(GameManager.players[2].hand.has(cards.panic_stolen), layout_name + ": first Panic obtains opponent's second Panic")
+	var panic_hand_before: int = GameManager.players[2].hand.size()
+	var panic_discard_before: int = GameManager.deck.discard_pile.size()
+	GameManager.resolver.play(GameManager, 2, cards.panic_stolen.instance_id, 3)
+	check(GameManager.players[2].hand.size() == panic_hand_before and GameManager.deck.discard_pile.size() == panic_discard_before and GameManager.reactions.active.is_empty(),
+		layout_name + ": authority rejects stolen Panic in same action turn without consuming it")
+	check(GameManager.private_snapshot(2).disabled_reasons[cards.panic_stolen.instance_id] == "Bạn đã dùng HOẢNG LOẠN trong lượt này.",
+		layout_name + ": stolen Panic exposes exact disabled reason")
 
 	# Successful tea, then rejected full-HP Beer must stay silent and remain in hand.
 	GameManager.players[2].current_hp = 3
@@ -385,7 +418,8 @@ func run_round(layout_name: String, viewport_size: Vector2i) -> void:
 	check(GameManager.turns.phase in ["DISCARD_PHASE", "ACTION_PHASE"], layout_name + ": end intent reaches discard or next action state")
 	await screenshot(layout_name, "08-end-turn")
 	while GameManager.turns.current_player == 2 and GameManager.turns.phase == "DISCARD_PHASE":
-		var discard_card: Dictionary = GameManager.players[2].hand[0]
+		var discard_options: Array = GameManager.players[2].hand.filter(func(card): return card.instance_id != cards.panic_stolen.instance_id)
+		var discard_card: Dictionary = discard_options[0] if not discard_options.is_empty() else GameManager.players[2].hand[0]
 		GameManager.rate_limits.erase(2)
 		GameManager.handle_intent(2, "discard", {"card":discard_card.instance_id})
 	GameManager.publish()
@@ -398,6 +432,22 @@ func run_round(layout_name: String, viewport_size: Vector2i) -> void:
 	verify_physical_cards(layout_name + " next turn")
 	check_ui_bounds(layout_name + " next turn")
 	await screenshot(layout_name, "09-next-player")
+
+	# Cycle back to A's next action turn: begin_turn is the only reset point and
+	# the retained stolen Panic becomes legal again.
+	GameManager.flow.jobs.clear()
+	GameManager.reactions.active = {}
+	GameManager.begin_turn(2)
+	GameManager.flow.jobs.clear()
+	GameManager.reactions.active = {}
+	GameManager.turns.phase = "ACTION_PHASE"
+	check(not GameManager.players[2].panic_used_this_turn, layout_name + ": next own turn resets Panic allowance")
+	take_card(3, "dodge")
+	GameManager.resolver.play(GameManager, 2, cards.panic_stolen.instance_id, 3)
+	check(GameManager.find_card(2, cards.panic_stolen.instance_id).is_empty() and GameManager.players[2].panic_used_this_turn,
+		layout_name + ": retained stolen Panic succeeds next own turn")
+	check(GameManager.flow.resolve({"accept":true, "option":"hand"}), layout_name + ": next-turn Panic transfer resolves normally")
+	verify_physical_cards(layout_name + " after next-turn Panic")
 
 func _ready() -> void:
 	capture_enabled = OS.get_cmdline_user_args().has("--capture") and DisplayServer.get_name() != "headless"

@@ -129,6 +129,9 @@ func begin_turn(id: int) -> void:
 	turns.round_number += 1
 	turns.phase = "TURN_START"
 	players[id].shoot_used_this_turn = false
+	# Card-specific action-turn allowance. It belongs to this player and resets
+	# only when that player's next turn begins, never on transfers or reactions.
+	players[id].panic_used_this_turn = false
 	flow.push({"kind": "dynamite", "target": id})
 	flow.push({"kind": "jail", "target": id})
 	flow.push({"kind": "draw", "target": id})

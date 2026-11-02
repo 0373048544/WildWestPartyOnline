@@ -35,6 +35,8 @@ func valid_targets(game: Node, sender: int, card: Dictionary) -> Array:
 		return result
 	if effect == CardData.EffectType.STORE and p.general_store_used_this_game:
 		return result
+	if card.get("card_data_id", "") == "panic" and p.panic_used_this_turn:
+		return result
 	if [CardData.EffectType.EQUIP_PASSIVE, CardData.EffectType.DYNAMITE].has(effect) and p.equipment.has(card.card_data_id):
 		return result
 	var targeted: bool = definition.target == CardData.TargetType.SINGLE_PLAYER or effect == CardData.EffectType.ATTACK
@@ -65,6 +67,9 @@ func play(game: Node, sender: int, uid: int, target: int) -> void:
 	if effect == CardData.EffectType.ATTACK and game.turns.phase == "ACTION_PHASE" and game.turns.current_player == sender and not game.abilities.can_shoot(game.players[sender]):
 		game.fail(sender, "Bạn đã dùng BẮN trong lượt này.")
 		return
+	if card.get("card_data_id", "") == "panic" and game.turns.phase == "ACTION_PHASE" and game.turns.current_player == sender and game.players[sender].panic_used_this_turn:
+		game.fail(sender, "Bạn đã dùng HOẢNG LOẠN trong lượt này.")
+		return
 	if not valid_targets(game, sender, card).has(target):
 		var reason: String = disabled_reason(game,sender,card)
 		if effect == CardData.EffectType.ATTACK and game.living(target) and game.turns.current_player == sender and game.turns.phase == "ACTION_PHASE" and not DistanceManager.in_range(game.players,sender,target):
@@ -81,6 +86,8 @@ func play(game: Node, sender: int, uid: int, target: int) -> void:
 	game.abilities.hand_changed(game, sender)
 	game.record("%s dùng %s%s." % [game.players[sender].display_name, definition.name,
 		" vào " + game.players[target].display_name if target != sender else ""])
+	if card.get("card_data_id", "") == "panic":
+		game.players[sender].panic_used_this_turn = true
 	handlers[effect].call(game, sender, target, card)
 	game.flow.run()
 
@@ -109,6 +116,8 @@ func disabled_reason(game: Node, sender: int, card: Dictionary) -> String:
 		return "Bạn đã dùng BÁCH HÓA trong ván này."
 	if effect == CardData.EffectType.STORE and p.general_store_used_this_game:
 		return "Bạn đã dùng CỬA HÀNG trong ván này."
+	if card.get("card_data_id", "") == "panic" and p.panic_used_this_turn:
+		return "Bạn đã dùng HOẢNG LOẠN trong lượt này."
 	if effect == CardData.EffectType.DODGE:
 		return "Chỉ dùng lá Né khi đáp trả hiệu ứng Bắn."
 	if effect in [CardData.EffectType.EQUIP_PASSIVE, CardData.EffectType.DYNAMITE] and p.equipment.has(card.card_data_id):

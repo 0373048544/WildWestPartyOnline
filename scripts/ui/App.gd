@@ -35,10 +35,16 @@ var layout_refresh_queued: bool = false
 var personal_toasts: Control
 var reaction_banner: Control
 var chat_panel: Control
+var web_layout: Node
+var menu_name_draft := ""
+var menu_room_draft := ""
+var menu_refresh_pending := false
+var last_room_submit_at := -1000
 
 func _ready() -> void:
 	set_process(false)
-	add_child(load("res://scripts/ui/WebLayout.gd").new())
+	web_layout = load("res://scripts/ui/WebLayout.gd").new()
+	add_child(web_layout)
 	var theme := SaloonTheme.create()
 	canvas = CanvasLayer.new()
 	add_child(canvas)
@@ -82,6 +88,9 @@ func _process(_delta: float) -> void:
 
 func refresh_layout() -> void:
 	layout_refresh_queued = false
+	if is_instance_valid(web_layout) and web_layout.is_text_edit_active():
+		menu_refresh_pending = true
+		return
 	if is_instance_valid(root):
 		# Rebuild only responsive UI sections/modal; the table, HUD and CardViews
 		# remain persistent and authoritative state is untouched.
@@ -145,7 +154,25 @@ func western_input(placeholder: String, parent: Node = content, code: bool = fal
 		field.alignment = HORIZONTAL_ALIGNMENT_CENTER
 		field.add_theme_constant_override("minimum_character_width", 12)
 	parent.add_child(field)
+	if is_instance_valid(web_layout):
+		web_layout.register_text_input(field)
 	return field
+
+func text_input_settled() -> void:
+	if menu_refresh_pending:
+		menu_refresh_pending = false
+		refresh_layout()
+
+func finish_text_input(control: Control = null) -> void:
+	if is_instance_valid(web_layout):
+		web_layout.finish_text_input(control, true)
+	elif is_instance_valid(control) and control.has_focus():
+		control.release_focus()
+
+func change_menu_screen(next_screen: String) -> void:
+	finish_text_input()
+	screen = next_screen
+	refresh()
 
 func section_header(text: String, parent: Node = content, icon: String = "✦") -> Label:
 	var heading := label("%s  %s" % [icon, text], 18, parent)
@@ -319,10 +346,10 @@ func build_menu() -> void:
 	space.custom_minimum_size.y = 0 if short_landscape else 12
 	content.add_child(space)
 	if screen == "main":
-		var create := button("★  TẠO PHÒNG", func(): screen = "host"; refresh())
+		var create := button("★  TẠO PHÒNG", func(): change_menu_screen("host"))
 		create.name = "CreateRoomButton"
 		create.set_variant("primary")
-		var join := button("♠  THAM GIA PHÒNG", func(): screen = "join"; refresh())
+		var join := button("♠  THAM GIA PHÒNG", func(): change_menu_screen("join"))
 		join.name = "JoinRoomButton"
 		join.set_variant("primary")
 		# Stack labelled settings controls on narrow phones so none overflow.
@@ -348,22 +375,32 @@ func build_menu() -> void:
 	form.add_child(form_box)
 	label("TÊN CAO BỒI", 14, form_box).add_theme_color_override("font_color", SaloonTheme.GOLD)
 	name_field = western_input("Nhập tên của bạn", form_box)
-	name_field.text = NetworkManager.local_name
+	if menu_name_draft.is_empty():
+		menu_name_draft = NetworkManager.local_name
+	name_field.text = menu_name_draft
 	name_field.max_length = 24
+	name_field.text_changed.connect(func(value: String): menu_name_draft = value)
 	if screen == "join":
 		label("MÃ PHÒNG", 14, form_box).add_theme_color_override("font_color", SaloonTheme.GOLD)
 		room_field = western_input("AB7KQ2", form_box, true)
 		room_field.name = "RoomCode"
 		room_field.max_length = 6
+		room_field.text = menu_room_draft
+		room_field.text_changed.connect(func(value: String): menu_room_draft = value)
+		name_field.text_submitted.connect(func(_value: String): room_field.grab_focus())
+		room_field.text_submitted.connect(func(_value: String): connect_game())
+	else:
+		name_field.text_submitted.connect(func(_value: String): connect_game())
 	if short_landscape:
 		var actions := HBoxContainer.new()
 		actions.add_theme_constant_override("separation", 10)
 		content.add_child(actions)
 		var submit := button("HOST" if screen == "host" else "JOIN", connect_game, actions)
-		var back := button("BACK", func(): screen = "main"; refresh(), actions)
+		var back := button("BACK", func(): change_menu_screen("main"), actions)
 		submit.name = "SubmitRoomButton"
 		back.name = "BackButton"
 		submit.set_variant("primary")
+		arm_mobile_submit(submit)
 		back.set_variant("quiet")
 		submit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -371,17 +408,33 @@ func build_menu() -> void:
 		var submit := button("TẠO PHÒNG" if screen == "host" else "THAM GIA", connect_game)
 		submit.name = "SubmitRoomButton"
 		submit.set_variant("primary")
-		var back := button("← QUAY LẠI", func(): screen = "main"; refresh())
+		arm_mobile_submit(submit)
+		var back := button("← QUAY LẠI", func(): change_menu_screen("main"))
 		back.name = "BackButton"
 		back.set_variant("quiet")
 
 func connect_game() -> void:
+	var now := Time.get_ticks_msec()
+	if now - last_room_submit_at < 500:
+		return
+	last_room_submit_at = now
 	error_text = ""
-	var title := name_field.text
+	var title := name_field.text.strip_edges()
+	menu_name_draft = title
+	var normalized_room := room_field.text.strip_edges().to_upper() if is_instance_valid(room_field) else ""
+	menu_room_draft = normalized_room
+	finish_text_input()
 	if screen == "host":
 		NetworkManager.create_room(title)
 	else:
-		NetworkManager.join_room(title, room_field.text)
+		NetworkManager.join_room(title, normalized_room)
+
+func arm_mobile_submit(submit: Button) -> void:
+	# Chromium may consume the touch release that dismisses its hidden virtual-
+	# keyboard textarea. button_down guarantees the first tap still submits;
+	# connect_game's time guard suppresses the following pressed signal.
+	if OS.has_feature("web") or OS.has_feature("mobile"):
+		submit.button_down.connect(connect_game)
 
 func local_id() -> int:
 	return NetworkManager.local_player_id()
