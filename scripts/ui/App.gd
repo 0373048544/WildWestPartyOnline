@@ -701,36 +701,40 @@ func show_character_info(player: Dictionary) -> void:
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(frame)
 	var layout: Script = load("res://scripts/ui/MatchLayout.gd")
+	var landscape_phone: bool = layout.mobile_landscape(root)
 	var compact: bool = layout.mobile(root) or root.size.x < 1100
-	var card_width: float = minf(layout.units(root, 210.0), root.size.x * 0.28) if layout.mobile_landscape(root) else (218 if compact else 250)
+	var card_width: float = minf(layout.units(root, 184.0), root.size.x * 0.24) if landscape_phone else (218 if compact else 250)
 	var focus: Rect2 = layout.get_table_focus_rect(root)
 	frame.position = Vector2(focus.position.x + layout.units(root, 8.0), focus.position.y + layout.units(root, 8.0)) if compact else Vector2(root.size.x - card_width - 18, 76)
 	frame.custom_minimum_size.x = card_width
 	frame.z_index = layout.Z_EQUIPMENT
-	frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#3c3028"), Color("#b99058"), 12))
+	frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#3c3028"), Color("#b99058"), 8 if landscape_phone else 12))
 	var column := VBoxContainer.new()
 	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	frame.add_child(column)
 	var portrait: Control = saved_portrait if saved_portrait else load("res://scripts/ui/CharacterPortrait.gd").new()
 	column.add_child(portrait)
+	var portrait_height: int = 58 if landscape_phone else (88 if compact else 115)
 	if not saved_portrait:
-		portrait.configure(player.character_id, 88 if compact else 115)
+		portrait.configure(player.character_id, portrait_height)
 	else:
-		var portrait_height: int = 88 if compact else 115
 		if portrait.custom_minimum_size.y != portrait_height:
 			portrait.custom_minimum_size.y = portrait_height
 			portrait.viewport.size.y = portrait_height
 			portrait.viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
-	label(player.character.display_name, 19 if compact else 22, column)
-	label("%s · %d/%d máu · %d lá" % [player.display_name, player.current_hp, player.max_hp, player.hand_count], 15, column)
+	label(player.character.display_name, 17 if landscape_phone else (19 if compact else 22), column)
+	label("%s · %d/%d máu · %d lá" % [player.display_name, player.current_hp, player.max_hp, player.hand_count], 12 if landscape_phone else 15, column)
 	var equipment: Array = player.get("equipment_ids", []).map(func(key): return CardData.data(key).name)
-	label("%s · Tầm %d\n%s" % [CardData.data(player.get("weapon_id", "")).get("name", "Colt .45"), player.weapon_range, ", ".join(equipment)], 14, column)
+	label("%s · Tầm %d\n%s" % [CardData.data(player.get("weapon_id", "")).get("name", "Colt .45"), player.weapon_range, ", ".join(equipment)], 12 if landscape_phone else 14, column)
 	var role: String = str(player.get("public_role", ""))
 	if int(player.player_id) == local_id():
 		role = str(NetworkManager.private_state.get("role", role))
-	label(TextCatalog.text(role) if not role.is_empty() else "Vai trò bí mật", 14, column)
-	var ability := label(CharacterData.ability_icon(player.character.ability_id) + " " + player.character.ability_description_vi, 15, column)
+	label(TextCatalog.text(role) if not role.is_empty() else "Vai trò bí mật", 12 if landscape_phone else 14, column)
+	var ability := label(CharacterData.ability_icon(player.character.ability_id) + " " + player.character.ability_description_vi, 12 if landscape_phone else 15, column)
 	ability.custom_minimum_size.x = card_width - 28
+	if landscape_phone:
+		ability.max_lines_visible = 2
+		ability.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	for child in column.get_children():
 		if child is Control:
 			child.mouse_filter = Control.MOUSE_FILTER_IGNORE

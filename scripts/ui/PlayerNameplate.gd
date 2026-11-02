@@ -3,6 +3,8 @@ extends Node3D
 var label: Label3D
 var stats: Label3D
 var backing: StandardMaterial3D
+var accent_bar: MeshInstance3D
+var accent_material: StandardMaterial3D
 var sheriff_badge: MeshInstance3D
 var hearts: Array = []
 var hovered: bool = false
@@ -47,6 +49,19 @@ func _ready() -> void:
 	backing.no_depth_test = true
 	panel.material_override = backing
 	add_child(panel)
+	accent_bar = MeshInstance3D.new()
+	var accent_mesh := QuadMesh.new()
+	accent_mesh.size = Vector2(1.70, 0.025)
+	accent_bar.mesh = accent_mesh
+	accent_material = StandardMaterial3D.new()
+	accent_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	accent_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	accent_material.albedo_color = Color(0.91, 0.68, 0.34, 0.92)
+	accent_material.no_depth_test = true
+	accent_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	accent_bar.material_override = accent_material
+	accent_bar.position = Vector3(0, 0.292, 0.025)
+	add_child(accent_bar)
 	label = Label3D.new()
 	label.font_size = 38
 	label.pixel_size = 0.0042
@@ -113,6 +128,7 @@ func update_info(row: Dictionary, local: int, active: int, choosing: bool = fals
 		hearts[index].visible = index < int(row.max_hp)
 		hearts[index].material_override.albedo_color = Color("#ec8d79") if index < int(row.current_hp) else Color("#57616a")
 	backing.albedo_color = Color("#725321") if choosing else (Color("#59472a") if int(row.player_id) == active else Color("#192c35"))
+	accent_material.albedo_color = Color("#ffe080") if choosing else (SaloonTheme.GOLD if int(row.player_id) == active else Color("#a98655"))
 	modulate_plate(row.is_alive)
 
 func modulate_plate(alive: bool) -> void:
@@ -120,6 +136,7 @@ func modulate_plate(alive: bool) -> void:
 	stats.modulate = SaloonTheme.CREAM if alive else Color("#999b99")
 	if not alive:
 		backing.albedo_color = Color("#30383b")
+		accent_material.albedo_color = Color("#69665f")
 
 func flash_hit() -> void:
 	var old_backing: Color = backing.albedo_color

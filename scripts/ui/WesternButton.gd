@@ -5,6 +5,8 @@ var hovered: bool = false
 var variant: String = "secondary"
 
 func _ready() -> void:
+	custom_minimum_size.y = maxf(custom_minimum_size.y, 48.0)
+	text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	resized.connect(func(): pivot_offset = size / 2)
 	mouse_entered.connect(func(): hovered = true; animate_scale(Vector2.ONE * 1.03))
 	mouse_exited.connect(func(): hovered = false; animate_scale(Vector2.ONE))
@@ -42,7 +44,7 @@ func apply_variant(value: String) -> void:
 	add_theme_stylebox_override("normal", SaloonTheme.button_style(normal_color, border))
 	add_theme_stylebox_override("hover", SaloonTheme.button_style(hover_color, border.lightened(0.14)))
 	add_theme_stylebox_override("pressed", SaloonTheme.button_style(normal_color.darkened(0.20), border))
-	add_theme_stylebox_override("focus", SaloonTheme.button_style(Color(0, 0, 0, 0), Color("#ffe2a0"), 12))
+	add_theme_stylebox_override("focus", SaloonTheme.button_style(normal_color.lightened(0.05), Color("#ffe2a0"), 12))
 	add_theme_stylebox_override("disabled", SaloonTheme.button_style(Color("#342f2c"), Color("#655d53")))
 
 func animate_scale(value: Vector2) -> void:

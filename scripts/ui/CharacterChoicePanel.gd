@@ -25,12 +25,18 @@ func configure(owner_app: Node, options: Array) -> void:
 	body.add_child(row)
 	for index in range(options.size()):
 		var data: Dictionary = options[index]
+		var option_accent: Color = SaloonTheme.SEATS[index % SaloonTheme.SEATS.size()]
 		var card := Button.new()
 		card.name = "CharacterOption%d" % index
 		card.set_meta("character_id", data.character_id)
+		card.set_meta("option_accent", option_accent)
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		card.custom_minimum_size = Vector2(0, layout.units(self, 166.0) if landscape_phone else (layout.units(self, 286.0) if portrait_phone else 310.0))
 		card.tooltip_text = data.display_name + "\n" + data.ability_description_vi
+		card.add_theme_stylebox_override("normal", SaloonTheme.panel(Color("#172b37"), option_accent.darkened(0.14), 12))
+		card.add_theme_stylebox_override("hover", SaloonTheme.panel(Color("#223b43"), option_accent.lightened(0.18), 12))
+		card.add_theme_stylebox_override("pressed", SaloonTheme.panel(Color("#10232d"), SaloonTheme.GOLD, 12))
+		card.add_theme_stylebox_override("focus", SaloonTheme.panel(Color(0, 0, 0, 0), SaloonTheme.GOLD, 10))
 		row.add_child(card)
 		var column := VBoxContainer.new()
 		column.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -75,8 +81,11 @@ func select(id: String) -> void:
 	app.character_draft = id
 	for key in cards:
 		var selected: bool = key == id
-		var style := SaloonTheme.panel(Color("#354a4d") if selected else Color("#172b37"), SaloonTheme.GOLD if selected else Color("#627474"), 12)
+		var option_accent: Color = cards[key].get_meta("option_accent", Color("#627474"))
+		var style := SaloonTheme.panel(Color("#354a4d") if selected else Color("#172b37"), SaloonTheme.GOLD if selected else option_accent.darkened(0.14), 12)
 		style.set_border_width_all(4 if selected else 1)
+		style.shadow_color = Color(0, 0, 0, 0.42 if selected else 0.22)
+		style.shadow_size = VisualSettings.ui_shadow_size(8 if selected else 3)
 		cards[key].add_theme_stylebox_override("normal", style)
 		cards[key].add_theme_stylebox_override("focus", style)
 		cards[key].add_theme_stylebox_override("hover", style)

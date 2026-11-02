@@ -33,8 +33,19 @@ func remote_ready() -> bool:
 			return player.ready
 	return false
 
+func visible_text(node: Node) -> String:
+	var result := ""
+	if node is Label or node is Button:
+		result += str(node.text) + "\n"
+	for child in node.get_children():
+		result += visible_text(child)
+	return result
+
+func lobby_control(control_name: String) -> Node:
+	return app.content.find_child(control_name, true, false)
+
 func press_ready() -> void:
-	app.content.get_node("ReadyButton").pressed.emit()
+	lobby_control("ReadyButton").pressed.emit()
 
 func join_from_form(title: String) -> void:
 	# Legacy ENet adapter regression. Production forms now use room codes.
@@ -58,26 +69,26 @@ func test_host() -> void:
 	require(count_players() == 1 and not snapshot().started, "HOST enters lobby without gameplay")
 	require(app.content.name == "Lobby" and not is_instance_valid(app.table), "Lobby scene loaded before table")
 	require(snapshot().players[0].player_id == 1 and snapshot().players[0].display_name == "Lobby Host", "Host registered as Player 1")
-	require(TextCatalog.text("[HOST]") in app.content.get_node("PlayerList/Player1").text, "HOST badge")
-	require(app.content.get_node("StartButton").disabled, "Start disabled with one player")
+	require("CHỦ" in visible_text(app.content.get_node("PlayerList/Player1")), "HOST badge")
+	require(lobby_control("StartButton").disabled, "Start disabled with one player")
 	NetworkManager.send_intent("start")
 	require(not snapshot().started, "Server rejects insufficient player count")
 	await pause()
 	press_ready()
 	await until(func(): return count_players() == 2, "client registration")
 	require(snapshot().players[1].display_name == "Lobby Client", "client name synchronized")
-	require(app.content.get_node("StartButton").disabled, "unready client blocks Start")
+	require(lobby_control("StartButton").disabled, "unready client blocks Start")
 	await until(remote_ready, "client becomes ready")
-	require(TextCatalog.text("READY") in app.content.get_node("PlayerList/Player%d" % snapshot().players[1].player_id).text, "ready UI synchronized")
+	require("SẴN SÀNG" in visible_text(app.content.get_node("PlayerList/Player%d" % snapshot().players[1].player_id)), "ready UI synchronized")
 	await until(func(): return not remote_ready(), "client unready")
-	require(app.content.get_node("StartButton").disabled, "unready synchronization disables Start")
+	require(lobby_control("StartButton").disabled, "unready synchronization disables Start")
 	await until(func(): return count_players() == 1, "client disconnect removed")
 	require(app.content.get_node("PlayerList").get_child_count() >= 2, "disconnected slot available")
 	await until(func(): return count_players() == 2, "client rejoins")
 	require(snapshot().players[1].display_name == "Rejoined Cowboy" and not remote_ready(), "rejoin uses new name and resets ready")
 	await until(remote_ready, "rejoined player ready")
-	require(not app.content.get_node("StartButton").disabled, "two ready players enable production Start")
-	app.content.get_node("StartButton").pressed.emit()
+	require(not lobby_control("StartButton").disabled, "two ready players enable production Start")
+	lobby_control("StartButton").pressed.emit()
 	require(snapshot().started and is_instance_valid(app.table), "host loads GameTable on Start")
 	await choose_character()
 	await get_tree().create_timer(1.0).timeout
@@ -89,11 +100,11 @@ func test_client() -> void:
 	join_from_form("Lobby Client")
 	await until(func(): return count_players() == 2, "joined shared lobby")
 	require(app.content.name == "Lobby" and not snapshot().started, "Join enters lobby without gameplay")
-	require(not app.content.has_node("StartButton"), "client has no Start button")
+	require(not is_instance_valid(lobby_control("StartButton")), "client has no Start button")
 	require(snapshot().server_port == 7000, "selected server port synchronized")
 	await until(func(): return snapshot().players[0].ready, "host ready synchronized")
 	require(snapshot().players[0].display_name == "Lobby Host", "host name synchronized")
-	require(TextCatalog.text("[HOST]") in app.content.get_node("PlayerList/Player1").text, "client sees HOST badge")
+	require("CHỦ" in visible_text(app.content.get_node("PlayerList/Player1")), "client sees HOST badge")
 	NetworkManager.send_intent("start")
 	await pause()
 	require(not snapshot().started, "remote Start request rejected")

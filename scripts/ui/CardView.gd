@@ -46,31 +46,54 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	visual.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(visual)
 	var panel := Panel.new()
+	panel.name = "CardFace"
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var face := SaloonTheme.panel(Color("#ecdbb7") if usable else Color("#a8a28f"), SaloonTheme.GOLD if chosen else accent, 10)
-	face.set_border_width_all(3 if chosen else 2)
-	if usable and not chosen:
-		face.border_color = accent.lightened(0.28)
+	var face_state := "selected" if chosen else ("normal" if usable else "disabled")
+	var face := SaloonTheme.card_face(accent, face_state, 10)
 	panel.add_theme_stylebox_override("panel", face)
 	visual.add_child(panel)
 	var band := ColorRect.new()
-	band.color = accent if usable else accent.darkened(0.3)
+	band.name = "TitleBand"
+	band.color = accent.darkened(0.10) if usable else accent.darkened(0.38)
 	band.position = Vector2(6, 6)
 	band.size = Vector2(198, 31)
 	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visual.add_child(band)
+	var band_glint := ColorRect.new()
+	band_glint.color = Color(1, 0.86, 0.58, 0.26 if usable else 0.10)
+	band_glint.position = Vector2(8, 34)
+	band_glint.size = Vector2(194, 2)
+	band_glint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	visual.add_child(band_glint)
+	var status_rail := ColorRect.new()
+	status_rail.name = "PlayableRail"
+	status_rail.color = (SaloonTheme.GOLD if chosen else accent.lightened(0.18)) if usable else Color("#777268")
+	status_rail.position = Vector2(6, 42)
+	status_rail.size = Vector2(4 if chosen else 3, 157)
+	status_rail.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	visual.add_child(status_rail)
 	add_text(definition.name, Rect2(10, 8, 190, 25), 17, SaloonTheme.CREAM).name = "CardName"
 	var corner := add_text(CardInstance.corner(card), Rect2(10, 39, 62, 32), 22, CardInstance.suit_color(card.suit))
 	corner.name = "RankSuitCorner"
 	corner.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	add_text(TextCatalog.text(CardData.CardType.keys()[definition.type]), Rect2(10, 98, 190, 18), 11, accent.darkened(0.3)).name = "CardType"
+	var type_badge := Panel.new()
+	type_badge.name = "CardTypeBadge"
+	type_badge.position = Vector2(55, 96)
+	type_badge.size = Vector2(100, 21)
+	type_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	type_badge.add_theme_stylebox_override("panel", SaloonTheme.card_badge(accent, usable))
+	visual.add_child(type_badge)
+	var type_text := add_text(TextCatalog.text(CardData.CardType.keys()[definition.type]), Rect2(58, 98, 94, 17), 11, SaloonTheme.CREAM)
+	type_text.name = "CardType"
 	add_text(definition.description, Rect2(12, 115, 186, 72), 13, Color("#29333a")).name = "CardDescription"
 	var lower := add_text(CardInstance.corner(card), Rect2(145, 190, 54, 20), 14, CardInstance.suit_color(card.suit))
 	lower.name = "RankSuitLower"
 	lower.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	var icon := Control.new()
+	icon.name = "EffectIcon"
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	icon.draw.connect(func(): draw_symbol(icon))
 	visual.add_child(icon)
 	if not mouse_entered.is_connected(_hover_entered):
@@ -81,7 +104,7 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 		button_down.connect(_press_started)
 	if not button_up.is_connected(_press_ended):
 		button_up.connect(_press_ended)
-	visual.modulate = Color("#fff0bd") if chosen else Color.WHITE
+	visual.modulate = Color("#fff8e4") if chosen else (Color.WHITE if usable else Color(0.88, 0.88, 0.84, 0.92))
 
 func add_text(value: String, bounds: Rect2, font_size: int, color: Color) -> Label:
 	var text_label := Label.new()
@@ -184,6 +207,7 @@ func touch_compact(width: float) -> void:
 	# belongs to the deliberate 0.45s long-press preview.
 	visual.get_node("CardDescription").visible = false
 	visual.get_node("RankSuitLower").visible = false
+	visual.get_node("CardTypeBadge").position.y = 140.0
 	visual.get_node("CardType").position.y = 142.0
 	visual.get_node("CardType").add_theme_font_size_override("font_size", 14)
 	mouse_filter = Control.MOUSE_FILTER_STOP

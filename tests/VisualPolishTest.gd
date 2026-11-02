@@ -61,9 +61,13 @@ func _ready() -> void:
 			check(controller.pick_object(at) == item.token,"7-player physical ray reaches "+key)
 			if key.begins_with("market:"):
 				check(controller.pick_touch_object(at) == item.token,"touch preserves Store physical ID")
+		# A true Store chooser intentionally blocks character-info popups. Close
+		# only the local presentation modal before auditing the standalone card.
+		app.clear_game_modal()
 		app.table.show_context(2)
 		await settle()
-		var popup: Control = app.root.get_node("PlayerInfoCard")
+		var popup: Control = app.root.get_node_or_null("PlayerInfoCard")
+		check(is_instance_valid(popup),"character info card opens outside a true modal")
 		var center: Vector2 = app.root.size/2
 		check(not popup.get_global_rect().has_point(center),"character card leaves table center open")
 		var portrait_id: int = popup.find_child("CharacterPortrait",true,false).get_instance_id()
@@ -71,6 +75,7 @@ func _ready() -> void:
 		check(app.root.get_node("PlayerInfoCard").find_child("CharacterPortrait",true,false).get_instance_id()==portrait_id,"refresh keeps cached portrait")
 		await capture("table-"+str(viewport_size.x))
 		app.table.hide_context()
+		app.refresh()
 	controller.begin_targeting(999,1,[2],{})
 	controller.update_hover_target(2)
 	var guide_id: int = controller.targeting_arrow.geometry.get_instance_id()

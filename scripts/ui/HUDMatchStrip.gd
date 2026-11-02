@@ -18,6 +18,12 @@ func configure(title: String, phase: String, remaining: float) -> void:
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_theme_constant_override("separation",8 if compact_landscape else 12)
 	add_child(row)
+	var marker := ColorRect.new()
+	marker.name = "TurnMarker"
+	marker.color = SaloonTheme.GOLD
+	marker.custom_minimum_size = Vector2(4, 22 if compact_landscape else 28)
+	marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(marker)
 	var label := Label.new()
 	label.text = title + "  ·  " + phase
 	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -29,6 +35,9 @@ func configure(title: String, phase: String, remaining: float) -> void:
 	countdown = Label.new()
 	countdown.add_theme_font_size_override("font_size",15 if compact_landscape else 17)
 	countdown.add_theme_color_override("font_color",SaloonTheme.GOLD)
+	countdown.add_theme_stylebox_override("normal", SaloonTheme.badge(SaloonTheme.GOLD, 7))
+	countdown.custom_minimum_size.x = 58
+	countdown.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	countdown.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(countdown)
 	deadline = Time.get_ticks_msec()/1000.0 + remaining

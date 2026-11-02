@@ -8,6 +8,9 @@ const PARCHMENT := Color("#e8d29f")
 const LEATHER := Color("#6d422b")
 const WOOD := Color("#3f2a25")
 const BRASS_DARK := Color("#9a6d38")
+const PARCHMENT_LIGHT := Color("#f2e2bd")
+const PARCHMENT_SHADE := Color("#c9aa72")
+const INK_SOFT := Color("#27343a")
 const SUCCESS := Color("#78ae75")
 const WARNING := Color("#d6a552")
 const DANGER := Color("#c86f58")
@@ -74,6 +77,39 @@ static func input_style(focused: bool = false) -> StyleBoxFlat:
 	style.content_margin_top = 11
 	style.content_margin_bottom = 11
 	style.shadow_size = VisualSettings.ui_shadow_size(3)
+	return style
+
+static func card_face(accent: Color, state: String = "normal", padding: float = 10.0) -> StyleBoxFlat:
+	var background := PARCHMENT_LIGHT
+	var border := accent.lightened(0.18)
+	var border_width := 2
+	match state:
+		"selected":
+			background = Color("#fff0c9")
+			border = GOLD.lightened(0.12)
+			border_width = 4
+		"disabled":
+			background = Color("#aaa58f")
+			border = Color("#777163")
+		"preview":
+			background = Color("#ead6aa")
+			border = accent.lightened(0.24)
+			border_width = 3
+	var style := panel(background, border, padding)
+	style.set_border_width_all(border_width)
+	style.set_corner_radius_all(11)
+	style.shadow_color = Color(0.06, 0.035, 0.02, 0.34 if state != "disabled" else 0.18)
+	style.shadow_size = VisualSettings.ui_shadow_size(7 if state == "selected" else 4)
+	style.shadow_offset = Vector2(0, 3)
+	return style
+
+static func card_badge(accent: Color, active: bool = true) -> StyleBoxFlat:
+	var style := badge(accent if active else Color("#777163"), 7)
+	style.bg_color = (accent.darkened(0.34) if active else Color("#625f57"))
+	style.border_color = accent.lightened(0.24) if active else Color("#817d72")
+	style.set_corner_radius_all(7)
+	style.content_margin_top = 2
+	style.content_margin_bottom = 2
 	return style
 
 static func create() -> Theme:

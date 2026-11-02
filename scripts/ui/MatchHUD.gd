@@ -1100,11 +1100,7 @@ func show_preview(card: Dictionary) -> void:
 	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.z_index = layout.Z_PREVIEW
 
-	var style: StyleBoxFlat = SaloonTheme.panel(
-		Color(0.055, 0.075, 0.075, 0.97),
-		accent,
-		14.0 * unit
-	)
+	var style: StyleBoxFlat = SaloonTheme.card_face(accent, "preview", 14.0 * unit)
 	style.set_corner_radius_all(int(15.0 * unit))
 	style.shadow_color = Color(0, 0, 0, 0.35)
 	style.shadow_size = VisualSettings.ui_shadow_size(int(7.0 * unit))
@@ -1164,12 +1160,26 @@ func show_preview(card: Dictionary) -> void:
 	preview.offset_right = left + preview_width
 	preview.offset_bottom = top + preview_height
 
+	var title_band := ColorRect.new()
+	title_band.name = "PreviewTitleBand"
+	title_band.color = accent.darkened(0.16)
+	title_band.position = Vector2(7.0, 7.0) * unit
+	title_band.size = Vector2(preview_width / unit - 14.0, 31.0) * unit
+	title_band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview.add_child(title_band)
+	var title_glint := ColorRect.new()
+	title_glint.color = Color(1, 0.86, 0.58, 0.28)
+	title_glint.position = Vector2(9.0, 37.0) * unit
+	title_glint.size = Vector2(preview_width / unit - 18.0, 2.0) * unit
+	title_glint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	preview.add_child(title_glint)
+
 	var card_name := Label.new()
 	card_name.text = str(data.get("name", ""))
 	card_name.position = Vector2(14.0, 10.0) * unit
 	card_name.size = Vector2(preview_width / unit - 92.0, 26.0) * unit
 	card_name.add_theme_font_size_override("font_size", int(18.0 * unit))
-	card_name.add_theme_color_override("font_color", accent.lightened(0.22))
+	card_name.add_theme_color_override("font_color", SaloonTheme.CREAM)
 	card_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.add_child(card_name)
 
@@ -1190,7 +1200,7 @@ func show_preview(card: Dictionary) -> void:
 	type_label.position = Vector2(14.0, 39.0) * unit
 	type_label.size = Vector2(preview_width / unit - 28.0, 18.0) * unit
 	type_label.add_theme_font_size_override("font_size", int(12.0 * unit))
-	type_label.add_theme_color_override("font_color", accent.lightened(0.12))
+	type_label.add_theme_color_override("font_color", accent.darkened(0.28))
 	type_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.add_child(type_label)
 
@@ -1203,7 +1213,7 @@ func show_preview(card: Dictionary) -> void:
 	) * unit
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	description.add_theme_font_size_override("font_size", int(14.0 * unit))
-	description.add_theme_color_override("font_color", SaloonTheme.CREAM)
+	description.add_theme_color_override("font_color", SaloonTheme.INK_SOFT)
 	description.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.add_child(description)
 
@@ -1214,7 +1224,7 @@ func show_preview(card: Dictionary) -> void:
 		reason_label.size = Vector2(preview_width / unit - 28.0, 26.0) * unit
 		reason_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		reason_label.add_theme_font_size_override("font_size", int(12.0 * unit))
-		reason_label.add_theme_color_override("font_color", Color("#ffb995"))
+		reason_label.add_theme_color_override("font_color", Color("#8f3328"))
 		reason_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		preview.add_child(reason_label)
 
