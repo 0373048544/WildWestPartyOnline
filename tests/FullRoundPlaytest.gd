@@ -358,20 +358,31 @@ func run_round(layout_name: String, viewport_size: Vector2i) -> void:
 		await settle(0.10)
 	giver_order.append(int(GameManager.reactions.active.target_player_id))
 	check(giver_order == [3, 4, 1], layout_name + ": Bách Hóa giver order remains 3→4→1")
-	check(is_instance_valid(app.overlay), layout_name + ": local Bách Hóa giver receives choice panel")
+	var give_panel: Control = app.match_hud.get_node_or_null("DepartmentStoreGivePanel") as Control
+	check(not is_instance_valid(app.overlay) and is_instance_valid(give_panel), layout_name + ": local Bách Hóa giver receives compact non-modal panel")
+	if is_instance_valid(give_panel):
+		check(not give_panel.get_global_rect().intersects(app.match_hud.hand.get_global_rect()), "%s: compact Bách Hóa panel stays above the real hand panel=%s local=%s custom=%s min=%s scale=%s hand=%s" % [layout_name, give_panel.get_global_rect(), give_panel.size, give_panel.custom_minimum_size, give_panel.get_combined_minimum_size(), give_panel.scale, app.match_hud.hand.get_global_rect()])
 	check_ui_bounds(layout_name + " Bách Hóa choosing")
 	await screenshot(layout_name, "06-department-giver-choosing")
 	var give_options: Array = GameManager.reactions.active.payload.cards
 	var safe_give_options: Array = give_options.filter(func(card): return str(card.get("card_data_id", "")) != "iced_tea")
 	var local_give: Dictionary = safe_give_options[0] if not safe_give_options.is_empty() else give_options[0]
 	var local_give_name: String = str(CardData.data(local_give.card_data_id).name)
-	var give_button := find_card_button(local_give_name)
-	check(is_instance_valid(give_button), layout_name + ": Bách Hóa card button exists")
+	var give_button: Button
+	for card_view in app.match_hud.hand.cards:
+		if int(card_view.get_meta("mobile_uid", -1)) == int(local_give.instance_id):
+			give_button = card_view
+			break
+	check(is_instance_valid(give_button), layout_name + ": Bách Hóa card remains selectable in the real hand")
 	if is_instance_valid(give_button): give_button.pressed.emit()
 	await settle(0.05)
-	check(press_button_text("ĐƯA"), layout_name + ": Bách Hóa confirmation button exists and is enabled")
+	give_panel = app.match_hud.get_node_or_null("DepartmentStoreGivePanel") as Control
+	var confirm_give: Button = give_panel.get_node_or_null("Padding/Content/Actions/ConfirmGive") as Button if is_instance_valid(give_panel) else null
+	check(is_instance_valid(confirm_give) and not confirm_give.disabled, layout_name + ": compact Bách Hóa confirmation button exists and is enabled")
+	if is_instance_valid(confirm_give) and not confirm_give.disabled:
+		confirm_give.pressed.emit()
 	await settle(0.35)
-	check(GameManager.reactions.active.is_empty() and not is_instance_valid(app.overlay), layout_name + ": Bách Hóa finishes without stuck modal/reaction")
+	check(GameManager.reactions.active.is_empty() and not is_instance_valid(app.overlay) and not is_instance_valid(app.match_hud.get_node_or_null("DepartmentStoreGivePanel")), layout_name + ": Bách Hóa finishes without stuck panel/reaction")
 	check(GameManager.players[2].department_store_used_this_match, layout_name + ": Bách Hóa per-game limit recorded")
 	var public_transfers: Array = net.public_events.filter(func(e): return bool(e.get("department_store", false)) and e.get("kind", "") == "transfer")
 	check(public_transfers.size() == 3 and public_transfers.all(func(e): return not e.has("card")), layout_name + ": public Bách Hóa transfers never leak identity")

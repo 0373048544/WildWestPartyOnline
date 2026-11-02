@@ -7,6 +7,7 @@ const INTENTS: Dictionary = {
 	"SET_READY": "ready", "START_MATCH": "start", "SELECT_CHARACTER": "character",
 	"PLAY_CARD": "play", "END_TURN": "end", "DISCARD_CARD": "discard",
 	"REACTION": "reaction", "ABILITY_ACTION": "ability",
+	"SPECTATE_MATCH": "spectate", "REMATCH_READY": "rematch",
 	"RESTART_MATCH": "restart", "RETURN_TO_LOBBY": "lobby"
 }
 

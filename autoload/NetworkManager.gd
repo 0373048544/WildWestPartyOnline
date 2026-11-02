@@ -338,7 +338,7 @@ func valid_arguments(action: String, args: Dictionary) -> bool:
 	if args.size() > 5:
 		return false
 	match action:
-		"ready", "start", "restart", "lobby", "end":
+		"ready", "start", "spectate", "rematch", "restart", "lobby", "end":
 			return args.is_empty()
 		"play":
 			return args.get("card") is int and args.get("target") is int

@@ -15,6 +15,8 @@ var choice_status_signature: String = ""
 var target_picker: Control
 var loadout_panel: Control
 var dismissed_picker_request: int = -1
+var department_give_request_id: int = -1
+var department_give_selected: int = -1
 
 
 func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> void:
@@ -26,6 +28,18 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 	# Remaining time is rendered locally. It must not invalidate the UI tree on
 	# every authoritative countdown snapshot.
 	request_identity.erase("remaining")
+	var department_give_active: bool = str(request.get("reaction_type", "")) == "department_store_give"
+	var next_department_request: int = int(request.get("request_id", -1)) if department_give_active else -1
+	if next_department_request != department_give_request_id:
+		department_give_request_id = next_department_request
+		department_give_selected = -1
+	if not department_give_active:
+		_free_named("DepartmentStoreGivePanel")
+	var local_row: Dictionary = {}
+	for row in state.get("players", []):
+		if int(row.get("player_id", 0)) == app.local_id():
+			local_row = row
+			break
 	var next_top_signature := JSON.stringify([
 		state.get("current_player", 0),
 		state.get("phase", ""),
@@ -42,6 +56,8 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 		state.get("phase", ""), state.get("winner", ""), request_identity,
 		app.menu_open, app.seen_role, state.get("match_id", 0),
 		own.get("role", ""), own.get("character_chosen", false),
+		own.get("spectating", false), local_row.get("is_alive", true),
+		state.get("players", []).map(func(row): return [row.get("player_id", 0), row.get("ready", false), row.get("is_connected", true)]),
 		own.get("character_options", []),
 		NetworkManager.mode == "websocket" and NetworkManager.room_client.reconnecting
 	])
@@ -56,6 +72,8 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 
 	if flow_changed:
 		app.clear_game_modal()
+	if not local_row.is_empty() and bool(local_row.get("is_alive", true)):
+		_free_named("SpectatorBar")
 
 	if app.sid_mode:
 		app.sid_cards = app.sid_cards.filter(
@@ -155,6 +173,19 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 			build_result()
 		return
 
+	if not local_row.is_empty() and not bool(local_row.get("is_alive", true)):
+		app.table.targeting.blocked = true
+		app.selected = -1
+		_free_named("HandActions")
+		if is_instance_valid(hand):
+			hand.visible = false
+		if bool(own.get("spectating", false)):
+			if flow_changed or not has_node("SpectatorBar"):
+				build_spectator_bar()
+		elif flow_changed:
+			build_death_prompt()
+		return
+
 	if hand_changed or not is_instance_valid(hand):
 		build_hand()
 	elif is_instance_valid(hand):
@@ -204,6 +235,10 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 					"▣",
 					2.0
 				)
+
+		elif reaction_type == "department_store_give":
+			app.table.targeting.blocked = true
+			_sync_department_store_give_panel()
 
 		elif flow_changed:
 			app.table.targeting.blocked = true
@@ -276,6 +311,133 @@ func _sync_choice_status() -> void:
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.get_child(0).name = "Title"
 	subtitle.name = "Detail"
+
+
+func _department_give_card_ids() -> Array:
+	return request.get("cards", []).map(func(card): return int(card.get("instance_id", -1)))
+
+
+func _department_give_selected_name() -> String:
+	for card in request.get("cards", []):
+		if int(card.get("instance_id", -1)) == department_give_selected:
+			return str(CardData.data(str(card.get("card_data_id", ""))).get("name", "LÁ BÀI"))
+	return ""
+
+
+func _sync_department_store_give_panel() -> void:
+	if str(request.get("reaction_type", "")) != "department_store_give":
+		_free_named("DepartmentStoreGivePanel")
+		return
+	var panel: PanelContainer = get_node_or_null("DepartmentStoreGivePanel") as PanelContainer
+	if not is_instance_valid(panel):
+		panel = PanelContainer.new()
+		panel.name = "DepartmentStoreGivePanel"
+		panel.z_index = layout.Z_REACTION
+		panel.mouse_filter = Control.MOUSE_FILTER_STOP
+		panel.add_theme_stylebox_override("panel", SaloonTheme.panel(Color(0.09, 0.075, 0.055, 0.97), SaloonTheme.GOLD, 11))
+		add_child(panel)
+		var padding := MarginContainer.new()
+		padding.name = "Padding"
+		for side in ["left", "right"]:
+			padding.add_theme_constant_override("margin_" + side, int(layout.units(self, 12.0)))
+		for side in ["top", "bottom"]:
+			padding.add_theme_constant_override("margin_" + side, int(layout.units(self, 7.0)))
+		panel.add_child(padding)
+		var content := HBoxContainer.new()
+		content.name = "Content"
+		content.add_theme_constant_override("separation", int(layout.units(self, 10.0)))
+		padding.add_child(content)
+		var copy := VBoxContainer.new()
+		copy.name = "Copy"
+		copy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		copy.add_theme_constant_override("separation", int(layout.units(self, 3.0)))
+		content.add_child(copy)
+		var heading := text("BÁCH HÓA", 18, copy)
+		heading.name = "Title"
+		heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		heading.add_theme_color_override("font_color", SaloonTheme.GOLD)
+		var question := text("", 14, copy)
+		question.name = "Question"
+		question.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		question.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		var buttons := HBoxContainer.new()
+		buttons.name = "Actions"
+		buttons.add_theme_constant_override("separation", int(layout.units(self, 8.0)))
+		content.add_child(buttons)
+		var confirm := action("ĐƯA", _confirm_department_store_give, buttons, true)
+		confirm.name = "ConfirmGive"
+		confirm.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		confirm.set_variant("primary")
+		var reset := action("CHỌN LẠI", _reset_department_store_give, buttons, true)
+		reset.name = "ResetGive"
+		reset.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var selected_name := _department_give_selected_name()
+	var question_label: Label = panel.get_node("Padding/Content/Copy/Question") as Label
+	question_label.text = (
+		str(request.get("confirm_question", "Đưa {card}?")).replace("{card}", selected_name)
+		if not selected_name.is_empty()
+		else str(request.get("detail", "Chọn 1 lá trên tay để đưa."))
+	)
+	var confirm_button: Button = panel.get_node("Padding/Content/Actions/ConfirmGive") as Button
+	var reset_button: Button = panel.get_node("Padding/Content/Actions/ResetGive") as Button
+	confirm_button.disabled = selected_name.is_empty()
+	reset_button.disabled = selected_name.is_empty()
+	var action_touch_height: float = maxf(44.0, layout.units(self, 44.0))
+	confirm_button.custom_minimum_size.y = action_touch_height
+	reset_button.custom_minimum_size.y = action_touch_height
+	var safe: Rect2 = layout.safe_rect(self, 8.0 if layout.mobile(self) else 18.0)
+	var targeting_hand: bool = department_give_selected >= 0
+	var action_zone: Rect2 = layout.action_rect(self, targeting_hand)
+	var panel_width: float = (
+		minf(layout.units(self, 560.0), safe.size.x * 0.92)
+		if layout.mobile_portrait(self)
+		else minf(layout.units(self, 540.0), safe.size.x * (0.68 if layout.mobile_landscape(self) else 0.58))
+	)
+	var panel_height: float = minf(
+		layout.units(self, 112.0 if layout.mobile_landscape(self) else (126.0 if layout.mobile_portrait(self) else 138.0)),
+		safe.size.y * (0.30 if layout.mobile_landscape(self) else 0.22)
+	)
+	var panel_bottom: float = action_zone.position.y - layout.units(self, 7.0)
+	var desired_size := Vector2(panel_width, panel_height)
+	# Clear the previous orientation's minimum first; Control otherwise clamps the
+	# new size to the old minimum and a portrait panel can never shrink in landscape.
+	panel.custom_minimum_size = desired_size
+	panel.reset_size()
+	panel.size = desired_size
+	var desired_position := Vector2(safe.get_center().x - panel_width * 0.5, maxf(safe.position.y, panel_bottom - panel_height))
+	panel.position = desired_position
+	# PanelContainer can still be inside a pending minimum-size sort after the
+	# previous Store modal closes. Reapply the compact rect after that sort so an
+	# old large Control size cannot survive even though its minimum is now small.
+	panel.set_deferred("size", desired_size)
+	panel.set_deferred("position", desired_position)
+
+
+func _select_department_store_give(uid: int) -> void:
+	if not _department_give_card_ids().has(uid):
+		return
+	department_give_selected = uid
+	build_hand()
+	_sync_department_store_give_panel()
+
+
+func _reset_department_store_give() -> void:
+	department_give_selected = -1
+	build_hand()
+	_sync_department_store_give_panel()
+
+
+func _confirm_department_store_give() -> void:
+	if not _department_give_card_ids().has(department_give_selected):
+		return
+	var confirm: Button = get_node_or_null("DepartmentStoreGivePanel/Padding/Content/Actions/ConfirmGive") as Button
+	if is_instance_valid(confirm):
+		confirm.disabled = true
+	app.intent("reaction", {
+		"request": int(request.get("request_id", -1)),
+		"accept": true,
+		"cards": [department_give_selected]
+	})
 
 func set_modal_blocked(value: bool) -> void:
 	if is_instance_valid(loadout_panel):
@@ -419,6 +581,10 @@ func build_top() -> void:
 		if state.current_player == app.local_id()
 		else "LƯỢT HÀNH ĐỘNG CỦA " + current_player_name
 	)
+	for player in state.players:
+		if int(player.player_id) == app.local_id() and not bool(player.get("is_alive", true)):
+			title = "ĐANG XEM · LƯỢT CỦA " + current_player_name
+			break
 
 	var phase: String = TextCatalog.text(
 		state.phase
@@ -574,6 +740,8 @@ func build_log() -> void:
 func build_hand() -> void:
 	_free_named("HandActions")
 	var local: Dictionary = {}
+	var department_give_active: bool = str(request.get("reaction_type", "")) == "department_store_give"
+	var hand_selection_active: bool = app.selected >= 0 or (department_give_active and department_give_selected >= 0)
 
 	for player in state.players:
 		if player.player_id == app.local_id():
@@ -602,7 +770,7 @@ func build_hand() -> void:
 	var visible_hand: float = float(
 		load("res://scripts/ui/MatchLayout.gd").hand_height(
 			self,
-			app.selected >= 0
+			hand_selection_active
 		)
 	)
 
@@ -791,6 +959,8 @@ func build_hand() -> void:
 				_reopen_target_picker,
 				footer
 			).name = "OpenTargetCardPicker"
+		elif reaction_type == "department_store_give":
+			prompt.text = "BÁCH HÓA · CHỌN 1 LÁ TRỰC TIẾP TRÊN TAY"
 
 	elif app.selected >= 0:
 		action(
@@ -814,6 +984,7 @@ func build_hand() -> void:
 
 	if (
 		local.get("is_alive", false)
+		and not department_give_active
 		and own.get("ability_id", "") == "discard_heal"
 		and int(local.get("current_hp", 0))
 		< int(local.get("max_hp", 4))
@@ -833,7 +1004,7 @@ func build_hand() -> void:
 	var selected_ids: Array = (
 		app.sid_cards.duplicate()
 		if app.sid_mode
-		else [app.selected]
+		else ([department_give_selected] if department_give_active else [app.selected])
 	)
 
 	var usable: Array = []
@@ -870,6 +1041,10 @@ func build_hand() -> void:
 				).has(
 					card.instance_id
 				)
+			)
+			or (
+				department_give_active
+				and _department_give_card_ids().has(int(card.instance_id))
 			)
 			or (
 				request.is_empty()
@@ -918,7 +1093,7 @@ func build_hand() -> void:
 			- float(
 				layout.hand_lift(
 					self,
-					app.selected >= 0
+					hand_selection_active
 				)
 			)
 		)
@@ -927,7 +1102,7 @@ func build_hand() -> void:
 
 		hand.set_meta(
 			"target_mode",
-			app.selected >= 0
+			hand_selection_active
 		)
 
 	hand.configure(
@@ -973,6 +1148,9 @@ func handle_card(uid: int) -> void:
 		return
 
 	if not request.is_empty():
+		if str(request.get("reaction_type", "")) == "department_store_give":
+			_select_department_store_give(uid)
+			return
 		if request.get(
 			"allowed_card_types",
 			[]
@@ -1421,69 +1599,98 @@ func show_rules() -> void:
 	)
 
 
+func compact_modal_frame(preferred_width: float, preferred_height: float) -> void:
+	if not is_instance_valid(app.overlay):
+		return
+	var frame: PanelContainer = app.overlay.get_node_or_null("ModalFrame")
+	if not is_instance_valid(frame):
+		return
+	var available: Rect2 = layout.modal_rect(self)
+	var frame_size := Vector2(
+		minf(preferred_width, available.size.x * (0.92 if layout.mobile(self) else 0.78)),
+		minf(preferred_height, available.size.y * (0.82 if layout.mobile_landscape(self) else 0.88))
+	)
+	frame.custom_minimum_size = frame_size
+	frame.size = frame_size
+	frame.position = available.get_center() - frame_size * 0.5
+
+
+func build_death_prompt() -> void:
+	var box: VBoxContainer = app.modal()
+	app.overlay.color = Color(0.025, 0.03, 0.04, 0.58)
+	compact_modal_frame(520.0, 310.0)
+	var heading := text("☠  BẠN ĐÃ BỊ HẠ", 28, box)
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_color_override("font_color", Color("#e7b86d"))
+	var detail := text("Bạn vẫn ở trong phòng và có thể xem phần còn lại của ván chơi.", 17, box)
+	detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var watch := action("XEM TIẾP", func(): app.intent("spectate"), box)
+	watch.name = "SpectateButton"
+	watch.set_variant("primary")
+	var leave_button := action("RỜI PHÒNG", app.leave, box)
+	leave_button.name = "DeathLeaveButton"
+	leave_button.set_variant("danger")
+
+
+func build_spectator_bar() -> void:
+	_free_named("SpectatorBar")
+	var bar := PanelContainer.new()
+	bar.name = "SpectatorBar"
+	bar.z_index = layout.Z_ACTION
+	bar.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	var safe: Vector4 = layout.safe_insets(self) if layout.mobile(self) else Vector4.ZERO
+	bar.offset_left = safe.x + 12.0
+	bar.offset_right = -safe.z - 12.0
+	bar.offset_top = -safe.w - (58.0 if layout.mobile_landscape(self) else 68.0)
+	bar.offset_bottom = -safe.w - 8.0
+	bar.add_theme_stylebox_override("panel", SaloonTheme.panel(Color(0.08, 0.12, 0.14, 0.94), SaloonTheme.GOLD, 10))
+	add_child(bar)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	bar.add_child(row)
+	var notice := text("☠  Bạn đã bị hạ · Đang xem trận đấu", 14 if layout.mobile(self) else 16, row)
+	notice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	notice.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	var leave_button := action("RỜI PHÒNG", app.leave, row)
+	leave_button.name = "SpectatorLeaveButton"
+	leave_button.set_variant("danger")
+	leave_button.custom_minimum_size.x = layout.units(self, 126.0) if layout.mobile(self) else 150.0
+
+
 func build_result() -> void:
 	app.table.targeting.blocked = true
-
+	_free_named("SpectatorBar")
 	var box: VBoxContainer = app.modal()
-
-	text(
-		"✦ AI CÒN MŨ, NGƯỜI ĐÓ THẮNG! ✦",
-		21,
-		box
-	)
-
-	text(
-		TextCatalog.text(
-			state.winner
-		),
-		30,
-		box
-	)
-
+	app.overlay.color = Color(0.025, 0.03, 0.04, 0.64)
+	compact_modal_frame(620.0, 500.0)
+	var heading := text("✦  KẾT THÚC VÁN  ✦", 24, box)
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_color_override("font_color", SaloonTheme.GOLD)
+	var winner_label := text(TextCatalog.text(state.winner), 30, box)
+	winner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	for player in state.players:
-		text(
-			"%s · %s"
-			% [
-				player.display_name,
-				TextCatalog.text(
-					player.public_role
-				)
-			],
-			17,
-			box
-		)
-
-	if app.local_id() == state.get(
-		"host_player_id",
-		1
-	):
-		action(
-			"PLAY AGAIN",
-			func():
-				app.intent(
-					"restart"
-				),
-			box
-		)
-
-		action(
-			"RETURN TO LOBBY",
-			func():
-				app.intent(
-					"lobby"
-				),
-			box
-		)
-
+		var status := " · SẴN SÀNG VÁN MỚI" if bool(player.get("ready", false)) and bool(player.get("is_connected", true)) else ""
+		var row := text("%s · %s%s" % [player.display_name, TextCatalog.text(player.public_role), status], 15, box)
+		row.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var local_ready := false
+	var connected_count := 0
+	var ready_count := 0
+	for player in state.players:
+		if bool(player.get("is_connected", true)):
+			connected_count += 1
+			ready_count += int(bool(player.get("ready", false)))
+		if int(player.player_id) == app.local_id():
+			local_ready = bool(player.get("ready", false))
+	if local_ready:
+		var ready_label := text("✓  BẠN ĐÃ SẴN SÀNG", 19, box)
+		ready_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ready_label.add_theme_color_override("font_color", SaloonTheme.SUCCESS.lightened(0.18))
+		var waiting := text("Đang chờ người chơi khác...  %d/%d" % [ready_count, connected_count], 15, box)
+		waiting.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	else:
-		text(
-			"Đang chờ chủ phòng...",
-			17,
-			box
-		)
-
-	action(
-		"RỜI TRẬN",
-		app.leave,
-		box
-	)
+		var continue_button := action("TIẾP TỤC", func(): app.intent("rematch"), box)
+		continue_button.name = "RematchReadyButton"
+		continue_button.set_variant("primary")
+	var leave_button := action("RỜI PHÒNG", app.leave, box)
+	leave_button.name = "ResultLeaveButton"
+	leave_button.set_variant("danger")

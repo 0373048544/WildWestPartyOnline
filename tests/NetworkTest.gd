@@ -5,7 +5,6 @@ var elapsed: float = 0.0
 var tick: float = 0.0
 var started_at: float = -1.0
 var checked: bool = false
-var restarted: bool = false
 var app: Node
 var stage: int = 0
 var overflow: bool = false
@@ -71,12 +70,6 @@ func _process(delta: float) -> void:
 		return
 	var id := multiplayer.get_unique_id()
 	if not state.started:
-		if restarted or stage == 2:
-			print("PASS: ENet lobby returned, peer ", id)
-			set_process(false)
-			await get_tree().create_timer(0.8).timeout
-			get_tree().quit()
-			return
 		for p in state.players:
 			if p.player_id == id and not p.ready:
 				NetworkManager.send_intent("ready")
@@ -86,6 +79,13 @@ func _process(delta: float) -> void:
 		return
 	var own: Dictionary = NetworkManager.private_state
 	if not own.has("role"):
+		return
+	if stage == 2:
+		if state.phase == "CHARACTER_SELECTION" and own.get("character_options", []).size() == 2:
+			print("PASS: per-player ENet rematch readiness produced a fresh private character draft, peer ", id)
+			set_process(false)
+			await get_tree().create_timer(0.8).timeout
+			get_tree().quit()
 		return
 	if state.phase == "CHARACTER_SELECTION":
 		require(state.players.all(func(p): return not p.has("character_options")), "private character pairs never public")
@@ -111,21 +111,13 @@ func _process(delta: float) -> void:
 	if not state.winner.is_empty():
 		if stage == 0:
 			stage = 1
-			if is_host:
-				# Let every peer observe the terminal snapshot before replacing it.
-				set_process(false)
-				await get_tree().create_timer(1.0).timeout
-				NetworkManager.send_intent("restart")
-				set_process(true)
-			return
-		if is_host and stage == 2:
+			# Every remaining player independently votes to continue. No host can
+			# force a rematch or return the whole room to a lobby.
 			set_process(false)
 			await get_tree().create_timer(1.0).timeout
-			restarted = true
-			NetworkManager.send_intent("lobby")
+			NetworkManager.send_intent("rematch")
 			set_process(true)
-			print("PASS: ENet match, game over, restart and return to lobby")
-		return
+			return
 	if stage == 1:
 		stage = 2
 		print("PASS: fresh match restart, peer ", id)

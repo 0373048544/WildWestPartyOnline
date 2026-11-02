@@ -17,6 +17,7 @@ var equipment: Dictionary = {}
 var dynamite: Dictionary = {}
 var is_alive: bool = true
 var is_connected: bool = true
+var spectating: bool = false
 var shoot_used_this_action_turn: bool = false
 var panic_used_this_action_turn: bool = false
 var cat_balou_used_this_action_turn: bool = false
@@ -41,11 +42,11 @@ func public_snapshot(reveal: bool = false, show_character: bool = true) -> Dicti
 		"weapon_id": weapon.get("card_data_id", ""), "equipment_ids": equipment.keys(),
 		"weapon_card": weapon.duplicate(true), "equipment_cards": equipment.values().duplicate(true),
 		"delayed_cards": [] if dynamite.is_empty() else [dynamite.duplicate(true)],
-		"is_alive": is_alive, "is_connected": is_connected, "ready": ready,
+		"is_alive": is_alive, "is_connected": is_connected, "spectating": spectating, "ready": ready,
 		"character_id": character_id if show_character else "",
 		"weapon_range": DistanceManager.weapon_range(self),
 		"character": CharacterData.get_data(character_id).duplicate(true) if show_character else {},
 		"public_role": ROLE_NAMES[role] if reveal or not is_alive or role == Role.SHERIFF else ""}
 
 func private_snapshot() -> Dictionary:
-	return {"role": ROLE_NAMES[role], "hand": hand.duplicate(true)}
+	return {"role": ROLE_NAMES[role], "hand": hand.duplicate(true), "spectating": spectating}

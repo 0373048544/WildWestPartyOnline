@@ -77,6 +77,16 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	var corner := add_text(CardInstance.corner(card), Rect2(10, 39, 62, 32), 22, CardInstance.suit_color(card.suit))
 	corner.name = "RankSuitCorner"
 	corner.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	if CardData.is_quick_equipment(str(card.get("card_data_id", ""))):
+		var quick_badge := Panel.new()
+		quick_badge.name = "QuickEquipBadge"
+		quick_badge.position = Vector2(78, 42)
+		quick_badge.size = Vector2(120, 20)
+		quick_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		quick_badge.add_theme_stylebox_override("panel", SaloonTheme.card_badge(SaloonTheme.GOLD, usable))
+		visual.add_child(quick_badge)
+		var quick_text := add_text("TRANG BỊ NHANH", Rect2(80, 44, 116, 16), 9, SaloonTheme.CREAM)
+		quick_text.name = "QuickEquipText"
 	var type_badge := Panel.new()
 	type_badge.name = "CardTypeBadge"
 	type_badge.position = Vector2(55, 96)

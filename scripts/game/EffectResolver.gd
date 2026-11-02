@@ -18,13 +18,24 @@ func effective_effect(game: Node, sender: int, card: Dictionary) -> int:
 		return CardData.EffectType.ATTACK
 	return effect
 
+func has_blocking_prompt(game: Node, sender: int) -> bool:
+	return not game.reactions.active.is_empty() and int(game.reactions.active.get("target_player_id", 0)) == sender
+
 func valid_targets(game: Node, sender: int, card: Dictionary) -> Array:
 	var definition: Dictionary = CardData.data(card.get("card_data_id", ""))
 	var result: Array = []
-	if definition.is_empty() or not game.living(sender) or not game.reactions.active.is_empty() or game.turns.phase != "ACTION_PHASE" or game.turns.current_player != sender:
+	if definition.is_empty() or not game.living(sender):
 		return result
 	var effect: int = effective_effect(game, sender, card)
 	var p: PlayerState = game.players[sender]
+	var quick_equipment: bool = CardData.is_quick_equipment(str(card.get("card_data_id", "")))
+	if quick_equipment:
+		if has_blocking_prompt(game, sender) or p.equipment.has(card.card_data_id):
+			return result
+		result.append(sender)
+		return result
+	if not game.reactions.active.is_empty() or game.turns.phase != "ACTION_PHASE" or game.turns.current_player != sender:
+		return result
 	if effect == CardData.EffectType.DODGE:
 		return result
 	if effect == CardData.EffectType.ATTACK and not game.abilities.can_shoot(p):
@@ -107,6 +118,14 @@ func play(game: Node, sender: int, uid: int, target: int) -> void:
 func disabled_reason(game: Node, sender: int, card: Dictionary) -> String:
 	if not game.living(sender):
 		return "Bạn đã bị loại."
+	var p: PlayerState = game.players[sender]
+	var quick_equipment: bool = CardData.is_quick_equipment(str(card.get("card_data_id", "")))
+	if quick_equipment:
+		if has_blocking_prompt(game, sender):
+			return "Bạn phải hoàn tất phản ứng hoặc lựa chọn hiện tại trước."
+		if p.equipment.has(card.card_data_id):
+			return "Bạn đã có %s trên bàn." % CardData.data(card.card_data_id).name
+		return "" if valid_targets(game, sender, card).has(sender) else "Không thể trang bị nhanh lúc này."
 	if not game.reactions.active.is_empty():
 		var prompt: Dictionary = game.reactions.private_prompt(sender)
 		return "" if prompt.get("allowed_card_types", []).has(card.instance_id) else "Đang chờ đáp trả hoặc lựa chọn hợp lệ."
@@ -116,7 +135,6 @@ func disabled_reason(game: Node, sender: int, card: Dictionary) -> String:
 		return "Chọn lá bài để bỏ xuống chồng bỏ."
 	if game.turns.phase != "ACTION_PHASE":
 		return "Không thể dùng bài trong giai đoạn này."
-	var p: PlayerState = game.players[sender]
 	var effect := effective_effect(game, sender, card)
 	if effect == CardData.EffectType.ATTACK and not game.abilities.can_shoot(p):
 		return "Bạn đã dùng BẮN trong lượt hành động này."

@@ -143,6 +143,15 @@ func advance_turn() -> void:
 	turns.phase = "TURN_END"
 	begin_turn(turns.next_living(players))
 
+func try_start_rematch() -> bool:
+	if winner.is_empty():
+		return false
+	var connected: Array = players.values().filter(func(p): return p.is_connected)
+	if connected.size() < 2 or connected.size() > 7 or connected.any(func(p): return not p.ready):
+		return false
+	start_match()
+	return winner.is_empty() and turns.phase == "CHARACTER_SELECTION"
+
 func handle_intent(sender: int, action: String, args: Dictionary) -> void:
 	if not network.is_authority() or not players.has(sender):
 		return
@@ -150,26 +159,17 @@ func handle_intent(sender: int, action: String, args: Dictionary) -> void:
 	if now - int(rate_limits.get(sender, -1000)) < 80:
 		return
 	rate_limits[sender] = now
-	if action == "ready" and not started:
+	if action == "spectate" and started and winner.is_empty() and not players[sender].is_alive:
+		players[sender].spectating = true
+	elif action in ["rematch", "restart"] and started and not winner.is_empty() and players[sender].is_connected:
+		players[sender].ready = true
+		try_start_rematch()
+	elif action == "ready" and not started:
 		players[sender].ready = not players[sender].ready
 	elif action == "start" and network.is_room_host(sender) and not started:
 		start_match()
-	elif action == "restart" and network.is_room_host(sender) and not winner.is_empty():
-		for p in players.values():
-			p.ready = true
-		start_match()
 	elif action == "lobby" and network.is_room_host(sender) and not winner.is_empty():
-		started = false
-		winner = ""
-		reactions.active = {}
-		flow.jobs.clear()
-		flow.market.clear()
-		turns.phase = "WAITING"
-		for id in players.keys():
-			if not players[id].is_connected:
-				players.erase(id)
-			else:
-				players[id].ready = false
+		fail(sender, "Mỗi người chơi hãy chọn TIẾP TỤC hoặc RỜI PHÒNG.")
 	elif action == "character" and started and winner.is_empty():
 		if args.get("match_id", -1) == match_id:
 			selection.choose(self, sender, str(args.get("character", "")))
@@ -208,6 +208,9 @@ func handle_intent(sender: int, action: String, args: Dictionary) -> void:
 						else:
 							reactions.active = {}
 							offer_survival(sender, survival_source)
+	elif started and winner.is_empty() and not players[sender].is_alive:
+		if action in ["play", "end", "discard", "reaction", "ability"]:
+			fail(sender, "Bạn đã bị hạ và chỉ có thể xem tiếp hoặc rời phòng.")
 	flow.run()
 	if started and winner.is_empty() and turns.phase == "DISCARD_PHASE" and reactions.active.is_empty() and players.has(turns.current_player) and players[turns.current_player].hand.size() <= players[turns.current_player].current_hp:
 		advance_turn()
@@ -337,6 +340,7 @@ func kill_player(id: int, source: int) -> void:
 	var p: PlayerState = players[id]
 	p.is_alive = false
 	p.current_hp = 0
+	p.spectating = false
 	emit_event("PLAYER_DIED", id, {"kind": "death", "source": source})
 	emit_event("ROLE_REVEALED", id, {"kind": "role", "role": PlayerState.ROLE_NAMES[p.role]})
 	pass_dynamite(id)
@@ -373,6 +377,9 @@ func check_win() -> String:
 			winner = "SHERIFF TEAM WINS"
 	if not winner.is_empty():
 		turns.phase = "GAME_OVER"
+		for player in players.values():
+			if player.is_connected:
+				player.ready = false
 		for reserved in reactions.active.get("context", {}).get("cards", []):
 			deck.discard(reserved)
 			emit_event("CARD_DISCARDED", int(reactions.active.get("target_player_id", 0)), {"kind": "judgement_discard" if reactions.active.get("reaction_type", "") == "judge" else "discard", "card": reserved.duplicate(), "from_zone": "reserved"})
@@ -410,6 +417,8 @@ func disconnect_player(id: int) -> void:
 		if turns.phase == "CHARACTER_SELECTION" and selection.chosen.size() == players.size() and winner.is_empty():
 			selection.finish(self)
 		flow.run()
+		if not winner.is_empty():
+			try_start_rematch()
 	publish()
 
 func card_text(card: Dictionary) -> String:

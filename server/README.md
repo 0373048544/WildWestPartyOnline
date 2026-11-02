@@ -18,7 +18,7 @@ Authenticated gameplay intents require a unique nonempty `intent_id` (maximum 64
 
 Handshake: CREATE_ROOM {player_name}, JOIN_ROOM {player_name,room_code}, RESUME_SESSION {session_token}. Reply: ROOM_CREATED, JOIN_ACCEPTED or SESSION_RESUMED with {player_id,room_code,host_player_id,session_token}. Only the admitted connection gets the token.
 
-Intents: SET_READY, START_MATCH, SELECT_CHARACTER {character}, PLAY_CARD, END_TURN, DISCARD_CARD {card_instance_id}, REACTION {request,accept,card_instance_id?,cards?,option?}, ABILITY_ACTION {cards:[id,id]}, RESTART_MATCH, RETURN_TO_LOBBY, LEAVE_ROOM. The server derives player identity from the connection and validates intents through the existing GameManager.
+Intents: SET_READY, START_MATCH, SELECT_CHARACTER {character}, PLAY_CARD, END_TURN, DISCARD_CARD {card_instance_id}, REACTION {request,accept,card_instance_id?,cards?,option?}, ABILITY_ACTION {cards:[id,id]}, SPECTATE_MATCH, REMATCH_READY, LEAVE_ROOM. The server derives player identity from the connection and validates intents through the existing GameManager. The legacy RESTART_MATCH intent is treated only as that sender's rematch-ready vote; it cannot force other players into a new match. RETURN_TO_LOBBY no longer changes the room for everyone after game over.
 
 STATE {public,private} is a per-connection atomic envelope. public is the sanitized shared snapshot plus room_code, host_player_id and revision. private is only that recipient's hand/role/options/reaction/valid targets. This prevents UI from mixing public and private revisions. A STATE envelope is constructed and sent separately for each recipient; it is never broadcast with a list of all private states.
 

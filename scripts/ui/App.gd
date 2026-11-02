@@ -469,12 +469,15 @@ func build_game(state: Dictionary) -> void:
 		# A toast that began before an urgent reaction must never cover its title or
 		# buttons. Its own lifetime continues invisibly and the queue resumes after.
 		personal_toasts.visible = reaction_kind not in ["dodge", "duel", "indians", "survive"] and not is_instance_valid(overlay)
-	if is_instance_valid(chat_panel):
-		chat_panel.sync_state(state, own, is_instance_valid(overlay))
 	if not is_instance_valid(match_hud):
 		match_hud = load("res://scripts/ui/MatchHUD.gd").new()
 		root.add_child(match_hud)
 	match_hud.initialize(self, state, own)
+	# MatchHUD may create or clear a blocking modal for this exact snapshot.
+	# Synchronize chat afterwards so its input state reflects the final overlay,
+	# including the transition from the death prompt into spectator mode.
+	if is_instance_valid(chat_panel):
+		chat_panel.sync_state(state, own, is_instance_valid(overlay))
 	if NetworkManager.mode == "websocket" and NetworkManager.room_client.reconnecting:
 		table.targeting.blocked = true
 		var box := modal()
@@ -604,9 +607,15 @@ func show_role(role: String, match_number: int) -> void:
 	button("CONTINUE", func(): seen_role = match_number; refresh(), box)
 
 func show_reaction(request: Dictionary) -> void:
-	var box := modal()
 	var kind: String = request.reaction_type
-	if kind in ["department_store_give", "store"]:
+	# Bách Hóa giver selection is intentionally owned by the persistent MatchHUD:
+	# cards are selected from the real hand and no fullscreen modal is created.
+	if kind == "department_store_give":
+		if is_instance_valid(match_hud):
+			match_hud._sync_department_store_give_panel()
+		return
+	var box := modal()
+	if kind == "store":
 		overlay.color = Color(0.02, 0.025, 0.03, 0.62)
 		var choice_layout: Script = load("res://scripts/ui/MatchLayout.gd")
 		var available: Rect2 = choice_layout.modal_rect(root)

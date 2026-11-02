@@ -6,6 +6,7 @@ var backing: StandardMaterial3D
 var accent_bar: MeshInstance3D
 var accent_material: StandardMaterial3D
 var sheriff_badge: MeshInstance3D
+var hand_card_icon: MeshInstance3D
 var hearts: Array = []
 var hovered: bool = false
 var base_height: float = 3.2
@@ -106,30 +107,32 @@ func _ready() -> void:
 		heart.position = Vector3(-0.55 + index * 0.175, -0.14, 0.03)
 		add_child(heart)
 		hearts.append(heart)
-	var card := MeshInstance3D.new()
+	hand_card_icon = MeshInstance3D.new()
 	var card_mesh := QuadMesh.new()
 	card_mesh.size = Vector2(0.1, 0.15)
-	card.mesh = card_mesh
+	hand_card_icon.mesh = card_mesh
 	var card_mat := backing.duplicate()
 	card_mat.albedo_color = SaloonTheme.GOLD
 	card_mat.no_depth_test = true
-	card.material_override = card_mat
-	card.position = Vector3(0.4, -0.15, 0.03)
-	card.rotation.z = 0.15
-	add_child(card)
+	hand_card_icon.material_override = card_mat
+	hand_card_icon.position = Vector3(0.4, -0.15, 0.03)
+	hand_card_icon.rotation.z = 0.15
+	add_child(hand_card_icon)
 
 func update_info(row: Dictionary, local: int, active: int, choosing: bool = false) -> void:
 	sheriff_badge.visible = row.public_role == "SHERIFF"
+	var alive: bool = bool(row.get("is_alive", true))
 	var badges: String = "⌛ " if choosing else ("BẠN · " if int(row.player_id) == local else "")
-	label.text = badges + str(row.display_name).left(12)
-	label.font_size = 40 if label.text.length() > 16 else 48
-	stats.text = str(row.hand_count)
+	label.text = badges + str(row.display_name).left(12) if alive else "☠ %s\n%s" % [str(row.display_name).left(11), TextCatalog.text(str(row.get("public_role", "")))]
+	label.font_size = (40 if label.text.length() > 16 else 48) if alive else 30
+	stats.text = str(row.hand_count) if alive else ""
+	hand_card_icon.visible = alive
 	for index in range(hearts.size()):
-		hearts[index].visible = index < int(row.max_hp)
+		hearts[index].visible = alive and index < int(row.max_hp)
 		hearts[index].material_override.albedo_color = Color("#ec8d79") if index < int(row.current_hp) else Color("#57616a")
 	backing.albedo_color = Color("#725321") if choosing else (Color("#59472a") if int(row.player_id) == active else Color("#192c35"))
 	accent_material.albedo_color = Color("#ffe080") if choosing else (SaloonTheme.GOLD if int(row.player_id) == active else Color("#a98655"))
-	modulate_plate(row.is_alive)
+	modulate_plate(alive)
 
 func modulate_plate(alive: bool) -> void:
 	label.modulate = SaloonTheme.CREAM if alive else Color("#999b99")

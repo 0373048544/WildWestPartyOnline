@@ -1,6 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
+const EXPECTED_CARD_COUNT=JSON.parse(fs.readFileSync('resources/cards/base_manifest.json','utf8')).expected_count;
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 const endpoint=process.env.WWPO_TEST_URL||'ws://127.0.0.1:17075';
 const peers=[];
@@ -20,7 +21,7 @@ function verify(group){
  for(const p of group){assert.equal(p.state.public.revision,pub.revision);const row=pub.players.find(x=>x.player_id===p.session.player_id);assert.equal(row.hand_count,p.state.private.hand.length);ids.push(...p.state.private.hand.map(c=>c.instance_id));const r=p.state.private.reaction;if(r&&['judge','draw_choose'].includes(r.reaction_type)){ids.push(...r.cards.map(c=>c.instance_id));reserved+=r.cards.length;}}
  for(const row of pub.players){assert(!('hand'in row)&&!('role'in row)&&!('character_options'in row));if(row.weapon_card?.instance_id)ids.push(row.weapon_card.instance_id);ids.push(...(row.equipment_cards||[]).map(c=>c.instance_id));ids.push(...(row.delayed_cards||[]).map(c=>c.instance_id));}
  ids.push(...pub.market.map(c=>c.instance_id));assert.equal(new Set(ids).size,ids.length,'no duplicate physical cards across owners/in-play/reserved/market');
- assert.equal(ids.length+pub.draw_count+pub.discard_count,80,'80-card conservation over actual client views');assert(!('draw_pile'in pub)&&!('character_options'in pub));
+ assert.equal(ids.length+pub.draw_count+pub.discard_count,EXPECTED_CARD_COUNT,`${EXPECTED_CARD_COUNT}-card conservation over actual client views`);assert(!('draw_pile'in pub)&&!('character_options'in pub));
 }
 async function match(count){
  const host=await peer('Host'+count);host.send('CREATE_ROOM',{player_name:host.name});await until(()=>host.session&&host.state,'create');const group=[host];
@@ -61,7 +62,7 @@ async function match(count){
   else await p.intent('END_TURN');
  }
  assert(host.state.public.winner,'complete game must finish');await sync(group);verify(group);
- const before=host.state.public.match_id;const rematchHost=group.find(p=>p.session.player_id===host.state.public.host_player_id);await rematchHost.intent('RESTART_MATCH');await sync(group);assert(host.state.public.match_id>before);assert(group.every(p=>p.state.private.character_options.length===2));assert.equal(new Set(group.flatMap(p=>p.state.private.character_options.map(c=>c.character_id))).size,count*2);
+ const before=host.state.public.match_id;await Promise.all(group.map(p=>p.intent('REMATCH_READY')));await sync(group);assert(host.state.public.match_id>before);assert(group.every(p=>p.state.private.character_options.length===2));assert.equal(new Set(group.flatMap(p=>p.state.private.character_options.map(c=>c.character_id))).size,count*2);
  for(const p of group)p.send('LEAVE_ROOM');
  const result={players:count,actions,coverage,reconnectContexts:[...checked],rematch:true};console.log('PASS full WebSocket match '+JSON.stringify(result));return result;
 }
