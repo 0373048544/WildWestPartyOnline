@@ -93,6 +93,14 @@ func configure(kind: String, data: Dictionary, metadata: Dictionary) -> void:
 			title.text += "\n%s %s" % [TextCatalog.text(data.get("suit", "")), str(data.get("rank_label", ""))]
 			title.font_size = 24
 			set_face({"rank": data.get("rank_label", ""), "suit": data.get("suit", "")})
+			var artwork := Sprite3D.new()
+			artwork.name = "CardArtwork"
+			artwork.texture = CardArt.texture(str(data.get("card_data_id", data.get("id", ""))))
+			artwork.pixel_size = 0.001
+			artwork.position = Vector3(0, 0.074, -0.09)
+			artwork.rotation.x = -PI / 2.0
+			artwork.no_depth_test = true
+			add_child(artwork)
 		"hand":
 			for index in range(3):
 				var back := box(Vector3(0.26, 0.04, 0.4), Vector3(-0.16 + index * 0.16, 0.09 + index * 0.025, -0.12), Color("#844e46"))

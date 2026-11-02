@@ -24,7 +24,7 @@ func _ready() -> void:
 		Vector2i(412, 915), Vector2i(430, 932), Vector2i(640, 360),
 		Vector2i(844, 390), Vector2i(915, 412)
 	]
-	var desktop_sizes := [Vector2i(1366, 768), Vector2i(1440, 900), Vector2i(1920, 1080)]
+	var desktop_sizes := [Vector2i(1280, 720), Vector2i(1366, 768), Vector2i(1600, 900), Vector2i(1712, 870), Vector2i(1920, 1080)]
 	for css in phone_sizes + desktop_sizes:
 		get_window().size = css
 		get_viewport().set_meta("match_css_size", Vector2(css))
@@ -84,6 +84,14 @@ func _ready() -> void:
 			check(not frame.get_meta("character_choice_fullscreen", false), "desktop remains a centered modal at %s" % css)
 			check(frame.size.x < logical.x, "desktop modal does not occupy full width at %s" % css)
 			check(not panel.carousel_mode and panel.cards.values().all(func(card): return card.visible), "desktop keeps both cards visible at %s" % css)
+			var desktop_keys: Array = panel.cards.keys()
+			var first_card: Control = panel.cards[desktop_keys[0]]
+			var second_card: Control = panel.cards[desktop_keys[1]]
+			var options_row: Control = panel.get_node("CharacterCardArea/CharacterOptionsRow")
+			check(first_card.size.x >= 280.0 and second_card.size.x >= 280.0, "desktop cards retain readable width at %s" % css)
+			check(options_row.custom_minimum_size.x >= 660.0, "desktop row reserves both 320px cards and gap at %s" % css)
+			check(first_card.global_position.x < second_card.global_position.x and not first_card.get_global_rect().intersects(second_card.get_global_rect()), "desktop cards remain separate at %s" % css)
+			check(not scroll.get_v_scroll_bar().visible, "desktop character choice fits without vertical scroll at %s" % css)
 	app.clear_game_modal()
 	print("PASS: %d responsive character-choice checks across %d phone and %d desktop viewports" % [checks, phone_sizes.size(), desktop_sizes.size()])
 	get_tree().quit(1 if failures > 0 else 0)

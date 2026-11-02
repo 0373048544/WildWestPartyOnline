@@ -29,7 +29,21 @@ func configure(owner_app: Node, options: Array) -> void:
 	var row := HBoxContainer.new()
 	row.name = "CharacterOptionsRow"
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", int(layout.units(self, 8.0 if landscape_phone else 14.0)))
+	var css: Vector2 = layout.css_size(self)
+	var gap_css: float = 10.0 if mobile else 20.0
+	var card_width_css: float
+	if carousel_mode:
+		card_width_css = minf(360.0, maxf(240.0, css.x - 48.0))
+	elif mobile:
+		var horizontal_reserve_css: float = 48.0 if landscape_phone else 60.0
+		card_width_css = clampf((css.x - horizontal_reserve_css - gap_css) * 0.5, 150.0, 215.0)
+	else:
+		card_width_css = 320.0
+	var card_width: float = layout.units(self, card_width_css) if mobile else card_width_css
+	var card_gap: float = layout.units(self, gap_css) if mobile else gap_css
+	row.add_theme_constant_override("separation", int(card_gap))
+	var visible_card_count: int = 1 if carousel_mode else options.size()
+	row.custom_minimum_size.x = card_width * visible_card_count + card_gap * maxi(0, visible_card_count - 1)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_child(row)
@@ -44,9 +58,7 @@ func configure(owner_app: Node, options: Array) -> void:
 		card.set_meta("option_accent", option_accent)
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		card.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		var css: Vector2 = layout.css_size(self)
 		if mobile:
-			var card_width_css: float = minf(360.0, maxf(240.0, css.x - 82.0)) if carousel_mode else 0.0
 			var card_height_css: float
 			if landscape_phone:
 				card_height_css = clampf(css.y - 190.0, 154.0, 236.0)
@@ -54,9 +66,9 @@ func configure(owner_app: Node, options: Array) -> void:
 				card_height_css = clampf(css.y - 255.0, 360.0, 510.0)
 			else:
 				card_height_css = clampf(css.y - 215.0, 410.0, 640.0)
-			card.custom_minimum_size = Vector2(layout.units(self, card_width_css), layout.units(self, card_height_css))
+			card.custom_minimum_size = Vector2(card_width, layout.units(self, card_height_css))
 		else:
-			card.custom_minimum_size = Vector2(0, 310.0)
+			card.custom_minimum_size = Vector2(card_width, 370.0)
 		card.tooltip_text = data.display_name + "\n" + data.ability_description_vi
 		card.add_theme_stylebox_override("normal", SaloonTheme.panel(Color("#172b37"), option_accent.darkened(0.14), 12))
 		card.add_theme_stylebox_override("hover", SaloonTheme.panel(Color("#223b43"), option_accent.lightened(0.18), 12))

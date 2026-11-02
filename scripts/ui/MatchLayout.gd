@@ -62,7 +62,7 @@ static func action_height(node: Node) -> float:
 		return units(node, 48.0)
 	if mobile_landscape(node):
 		return units(node, 46.0)
-	return 42.0
+	return 44.0
 
 static func get_mobile_banner_height(node: Node) -> float:
 	return units(node, 46.0 if mobile_landscape(node) else 52.0)

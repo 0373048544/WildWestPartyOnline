@@ -14,6 +14,7 @@ var block_activation: bool = false
 var holding: bool = false
 var hold_time: float = 0.0
 var glow: Tween
+var chosen_state: bool = false
 
 func _ready() -> void:
 	set_process(false)
@@ -27,6 +28,7 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 		visual.free()
 	compact_mode = false
 	touch_layout = false
+	chosen_state = chosen
 	selected_lift = 0.0
 	holding = false
 	set_process(false)
@@ -87,16 +89,36 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 		visual.add_child(quick_badge)
 		var quick_text := add_text("TRANG BỊ NHANH", Rect2(80, 44, 116, 16), 9, SaloonTheme.CREAM)
 		quick_text.name = "QuickEquipText"
+	var artwork_frame := Panel.new()
+	artwork_frame.name = "ArtworkFrame"
+	artwork_frame.position = Vector2(12, 62)
+	artwork_frame.size = Vector2(186, 76)
+	artwork_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	artwork_frame.clip_contents = true
+	artwork_frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#2d2722"), accent.darkened(0.15), 3))
+	visual.add_child(artwork_frame)
+	var artwork := TextureRect.new()
+	artwork.name = "CardArtwork"
+	artwork.position = Vector2(3, 3)
+	artwork.size = Vector2(180, 70)
+	artwork.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	artwork.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	artwork.texture = CardArt.texture(str(card.get("card_data_id", definition.get("id", ""))))
+	artwork.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	artwork_frame.add_child(artwork)
 	var type_badge := Panel.new()
 	type_badge.name = "CardTypeBadge"
-	type_badge.position = Vector2(55, 96)
+	type_badge.position = Vector2(55, 141)
 	type_badge.size = Vector2(100, 21)
 	type_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	type_badge.add_theme_stylebox_override("panel", SaloonTheme.card_badge(accent, usable))
 	visual.add_child(type_badge)
-	var type_text := add_text(TextCatalog.text(CardData.CardType.keys()[definition.type]), Rect2(58, 98, 94, 17), 11, SaloonTheme.CREAM)
+	var type_text := add_text(TextCatalog.text(CardData.CardType.keys()[definition.type]), Rect2(58, 143, 94, 17), 11, SaloonTheme.CREAM)
 	type_text.name = "CardType"
-	add_text(definition.description, Rect2(12, 115, 186, 72), 13, Color("#29333a")).name = "CardDescription"
+	var description := add_text(definition.description, Rect2(12, 163, 186, 25), 11, Color("#29333a"))
+	description.name = "CardDescription"
+	description.max_lines_visible = 2
+	description.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	var lower := add_text(CardInstance.corner(card), Rect2(145, 190, 54, 20), 14, CardInstance.suit_color(card.suit))
 	lower.name = "RankSuitLower"
 	lower.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -105,7 +127,10 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	icon.draw.connect(func(): draw_symbol(icon))
+	icon.visible = not CardArt.has_dedicated(str(card.get("card_data_id", definition.get("id", ""))))
 	visual.add_child(icon)
+	visual.pivot_offset = Vector2(105, 107)
+	visual.scale = Vector2.ONE * (1.05 if chosen else 1.0)
 	if not mouse_entered.is_connected(_hover_entered):
 		mouse_entered.connect(_hover_entered)
 	if not mouse_exited.is_connected(_hover_exited):
@@ -160,7 +185,7 @@ func compact(chosen: bool, reaction: bool) -> void:
 	size = custom_minimum_size
 	visual.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	visual.size = Vector2(210, 214)
-	visual.scale = Vector2.ONE * 0.75
+	visual.scale = Vector2.ONE * 0.75 * (1.05 if chosen_state else 1.0)
 	selected_lift = -30 if chosen else 0
 	visual.position.y = selected_lift
 	if reaction:
@@ -201,7 +226,7 @@ func touch_compact(width: float) -> void:
 	custom_minimum_size = Vector2(width,width*214/210)
 	size = custom_minimum_size
 	var touch_scale: float = width / 210.0
-	visual.scale = Vector2.ONE * touch_scale
+	visual.scale = Vector2.ONE * touch_scale * (1.05 if chosen_state else 1.0)
 	visual.position = Vector2.ZERO
 	# Compensate the source font before scaling so landscape text remains at
 	# least ~13 logical pixels even though the whole card becomes narrower.

@@ -541,6 +541,7 @@ func modal() -> VBoxContainer:
 	frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#172b37"), SaloonTheme.GOLD, 18 if layout.mobile(root) else 28))
 	overlay.add_child(frame)
 	var padding := MarginContainer.new()
+	padding.name = "ModalPadding"
 	for side in ["left", "right", "top", "bottom"]:
 		padding.add_theme_constant_override("margin_" + side, int(layout.units(root, 10.0 if layout.mobile_landscape(root) else 16.0)))
 	frame.add_child(padding)
@@ -678,10 +679,15 @@ func show_character_selection(own: Dictionary) -> void:
 		frame.size = choice_rect.size
 		frame.custom_minimum_size = choice_rect.size
 		frame.set_meta("character_choice_fullscreen", true)
+		frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#172b37"), SaloonTheme.GOLD, 4.0))
+		var padding: MarginContainer = frame.get_node("ModalPadding") as MarginContainer
+		var padding_css: float = 6.0 if landscape_phone else 8.0
+		for side in ["left", "right", "top", "bottom"]:
+			padding.add_theme_constant_override("margin_" + side, int(layout.units(root, padding_css)))
 		var scroll: ScrollContainer = frame.find_child("ModalScroll", true, false) as ScrollContainer
 		if is_instance_valid(scroll):
 			scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		var content_padding: float = layout.units(root, 10.0 if landscape_phone else 16.0)
+		var content_padding: float = layout.units(root, padding_css)
 		box.custom_minimum_size.y = maxf(1.0, choice_rect.size.y - content_padding * 2.0 - 20.0)
 		box.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		box.add_theme_constant_override("separation", int(layout.units(root, 6.0 if landscape_phone else 9.0)))

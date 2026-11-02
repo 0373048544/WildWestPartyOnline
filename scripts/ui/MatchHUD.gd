@@ -758,11 +758,6 @@ func build_hand() -> void:
 		Control.PRESET_BOTTOM_WIDE
 	)
 
-	footer.offset_left = 18
-	footer.offset_right = -18
-	footer.offset_top = -224
-	footer.offset_bottom = -182
-
 	var mobile_layout: bool = bool(
 		load("res://scripts/ui/MatchLayout.gd").mobile(self)
 	)
@@ -779,25 +774,24 @@ func build_hand() -> void:
 		if mobile_layout
 		else Vector4.ZERO
 	)
-
-	if mobile_layout:
-		footer.offset_left = safe.x + 12
-		footer.offset_right = -safe.z - 12
-
-		footer.offset_top = (
-			-safe.w
-			- visible_hand
-			- float(layout.action_height(self))
-			- 4.0
-		)
-
-		footer.offset_bottom = (
-			-safe.w
-			- visible_hand
-			- 4.0
-		)
-
+	var phone_layout: bool = bool(layout.mobile_portrait(self) or layout.mobile_landscape(self))
+	if phone_layout:
+		# Preserve the existing phone placement; it is coordinated with the compact
+		# equipment chip and mobile browser safe area.
+		footer.offset_left = safe.x + 12.0
+		footer.offset_right = -safe.z - 12.0
+		footer.offset_top = -safe.w - visible_hand - float(layout.action_height(self)) - 4.0
+		footer.offset_bottom = -safe.w - visible_hand - 4.0
 		footer.z_index = layout.Z_ACTION
+	else:
+		# Desktop/tablet action controls follow the actual top of the hand instead
+		# of the obsolete -224/-182 fixed offsets.
+		var hand_lift: float = float(layout.hand_lift(self, hand_selection_active)) if mobile_layout else 0.0
+		var hand_top_offset: float = -safe.w - visible_hand - hand_lift
+		footer.offset_left = 18.0
+		footer.offset_right = -18.0
+		footer.offset_top = hand_top_offset - float(layout.action_height(self)) - 8.0
+		footer.offset_bottom = hand_top_offset - 8.0
 
 	footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -971,7 +965,7 @@ func build_hand() -> void:
 
 	elif state.current_player == app.local_id() and state.phase == "ACTION_PHASE":
 		var end_turn := action(
-			"END TURN",
+			"KẾT THÚC LƯỢT",
 			func():
 				app.intent("end"),
 			footer
@@ -981,6 +975,8 @@ func build_hand() -> void:
 			end_turn.custom_minimum_size = Vector2(layout.units(self, 128.0), layout.units(self, 46.0))
 		elif layout.mobile_portrait(self):
 			end_turn.custom_minimum_size.x = minf(layout.units(self, 180.0), size.x * 0.46)
+		else:
+			end_turn.custom_minimum_size = Vector2(180.0, 44.0)
 
 	if (
 		local.get("is_alive", false)
