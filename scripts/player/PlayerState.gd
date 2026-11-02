@@ -16,16 +16,17 @@ var weapon: Dictionary = {}
 var equipment: Dictionary = {}
 var is_alive: bool = true
 var is_connected: bool = true
-var shoot_used_this_turn: bool = false
-var panic_used_this_turn: bool = false
-var department_store_used_this_game: bool = false
-var general_store_used_this_game: bool = false
+var shoot_used_this_action_turn: bool = false
+var panic_used_this_action_turn: bool = false
+var cat_balou_used_this_action_turn: bool = false
+var department_store_used_this_match: bool = false
+var general_store_used_this_match: bool = false
 # Descriptive alias over the existing authoritative flag, never separate state.
-var bang_played_this_turn: bool:
+var bang_played_this_action_turn: bool:
 	get:
-		return shoot_used_this_turn
+		return shoot_used_this_action_turn
 	set(value):
-		shoot_used_this_turn = value
+		shoot_used_this_action_turn = value
 var ready: bool = false
 
 func _init(id: int = 1, title: String = "Cowboy", seat: int = 0) -> void:

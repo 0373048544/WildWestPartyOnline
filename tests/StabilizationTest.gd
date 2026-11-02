@@ -67,7 +67,7 @@ func _ready() -> void:
 	conserved()
 	# This fixture exercises a second Store cleanup path independently; the
 	# per-match usage restriction itself is covered by CustomCardsTest.
-	GameManager.players[1].general_store_used_this_game = false
+	GameManager.players[1].general_store_used_this_match = false
 	store = take(1, "general_store")
 	GameManager.resolver.play(GameManager, 1, store.instance_id, 1)
 	for _index in range(4):

@@ -180,7 +180,7 @@ func setup_round() -> Dictionary:
 		p.max_hp = 4
 		p.current_hp = 4
 		p.role = PlayerState.Role.OUTLAW
-		p.shoot_used_this_turn = false
+		p.shoot_used_this_action_turn = false
 	GameManager.players[1].role = PlayerState.Role.SHERIFF
 	GameManager.players[4].role = PlayerState.Role.RENEGADE
 	var cards := {
@@ -278,7 +278,7 @@ func run_round(layout_name: String, viewport_size: Vector2i) -> void:
 	GameManager.resolver.play(GameManager, 2, cards.panic_stolen.instance_id, 3)
 	check(GameManager.players[2].hand.size() == panic_hand_before and GameManager.deck.discard_pile.size() == panic_discard_before and GameManager.reactions.active.is_empty(),
 		layout_name + ": authority rejects stolen Panic in same action turn without consuming it")
-	check(GameManager.private_snapshot(2).disabled_reasons[cards.panic_stolen.instance_id] == "Bạn đã dùng HOẢNG LOẠN trong lượt này.",
+	check(GameManager.private_snapshot(2).disabled_reasons[cards.panic_stolen.instance_id] == "Bạn đã dùng HOẢNG LOẠN trong lượt hành động này.",
 		layout_name + ": stolen Panic exposes exact disabled reason")
 
 	# Successful tea, then rejected full-HP Beer must stay silent and remain in hand.
@@ -329,7 +329,7 @@ func run_round(layout_name: String, viewport_size: Vector2i) -> void:
 	await settle(0.25)
 	check(GameManager.flow.market.is_empty() and GameManager.reactions.active.is_empty(), layout_name + ": Store finishes without stuck reaction")
 	check(not is_instance_valid(app.overlay) and app.match_hud.hand.visible, layout_name + ": Store modal closes and hand/input returns")
-	check(GameManager.players[2].general_store_used_this_game, layout_name + ": Store per-game limit recorded")
+	check(GameManager.players[2].general_store_used_this_match, layout_name + ": Store per-game limit recorded")
 	verify_physical_cards(layout_name + " after Store")
 	# A human Store selection lasts longer than its short accepted-card intro. Let
 	# that presentation drain so the following Bách Hóa screenshot validates the
@@ -370,7 +370,7 @@ func run_round(layout_name: String, viewport_size: Vector2i) -> void:
 	check(press_button_text("ĐƯA"), layout_name + ": Bách Hóa confirmation button exists and is enabled")
 	await settle(0.35)
 	check(GameManager.reactions.active.is_empty() and not is_instance_valid(app.overlay), layout_name + ": Bách Hóa finishes without stuck modal/reaction")
-	check(GameManager.players[2].department_store_used_this_game, layout_name + ": Bách Hóa per-game limit recorded")
+	check(GameManager.players[2].department_store_used_this_match, layout_name + ": Bách Hóa per-game limit recorded")
 	var public_transfers: Array = net.public_events.filter(func(e): return bool(e.get("department_store", false)) and e.get("kind", "") == "transfer")
 	check(public_transfers.size() == 3 and public_transfers.all(func(e): return not e.has("card")), layout_name + ": public Bách Hóa transfers never leak identity")
 	for giver in [3, 4, 1]:
@@ -428,7 +428,7 @@ func run_round(layout_name: String, viewport_size: Vector2i) -> void:
 	check(GameManager.reactions.active.is_empty() and not is_instance_valid(app.overlay), layout_name + ": next turn has no stale reaction/modal")
 	check(not GameManager.find_card(2, cards.store.instance_id).is_empty() == false, layout_name + ": played Store card is absent from hand")
 	check(GameManager.players[3].weapon.get("card_data_id", "") == "winchester", layout_name + ": unrelated weapon state remains intact")
-	check(GameManager.players[2].general_store_used_this_game and GameManager.players[2].department_store_used_this_game, layout_name + ": per-game limits survive turn transition")
+	check(GameManager.players[2].general_store_used_this_match and GameManager.players[2].department_store_used_this_match, layout_name + ": per-game limits survive turn transition")
 	verify_physical_cards(layout_name + " next turn")
 	check_ui_bounds(layout_name + " next turn")
 	await screenshot(layout_name, "09-next-player")
@@ -441,10 +441,10 @@ func run_round(layout_name: String, viewport_size: Vector2i) -> void:
 	GameManager.flow.jobs.clear()
 	GameManager.reactions.active = {}
 	GameManager.turns.phase = "ACTION_PHASE"
-	check(not GameManager.players[2].panic_used_this_turn, layout_name + ": next own turn resets Panic allowance")
+	check(not GameManager.players[2].panic_used_this_action_turn, layout_name + ": next own turn resets Panic allowance")
 	take_card(3, "dodge")
 	GameManager.resolver.play(GameManager, 2, cards.panic_stolen.instance_id, 3)
-	check(GameManager.find_card(2, cards.panic_stolen.instance_id).is_empty() and GameManager.players[2].panic_used_this_turn,
+	check(GameManager.find_card(2, cards.panic_stolen.instance_id).is_empty() and GameManager.players[2].panic_used_this_action_turn,
 		layout_name + ": retained stolen Panic succeeds next own turn")
 	check(GameManager.flow.resolve({"accept":true, "option":"hand"}), layout_name + ": next-turn Panic transfer resolves normally")
 	verify_physical_cards(layout_name + " after next-turn Panic")

@@ -28,7 +28,7 @@ func setup() -> void:
 		player.ability_id = ""
 		player.current_hp = 4
 		player.max_hp = 4
-		player.panic_used_this_turn = false
+		player.panic_used_this_action_turn = false
 	GameManager.turns.current_player = 1
 	GameManager.turns.phase = "ACTION_PHASE"
 	GameManager.rate_limits.clear()
@@ -60,11 +60,11 @@ func _ready() -> void:
 	give(2, "dodge")
 	play(1, first, 2)
 	choose_hand()
-	check(GameManager.players[1].panic_used_this_turn, "successful Panic sets per-player turn flag")
+	check(GameManager.players[1].panic_used_this_action_turn, "successful Panic sets per-player turn flag")
 	var before_discard := GameManager.deck.discard_pile.size()
 	var before_events := events.size()
 	play(1, second, 2)
-	check(last_error == "Bạn đã dùng HOẢNG LOẠN trong lượt này.", "server returns exact second-Panic rejection")
+	check(last_error == "Bạn đã dùng HOẢNG LOẠN trong lượt hành động này.", "server returns exact second-Panic rejection")
 	check(not GameManager.find_card(1, second.instance_id).is_empty(), "rejected second Panic remains in hand")
 	check(GameManager.deck.discard_pile.size() == before_discard and events.size() == before_events and GameManager.reactions.active.is_empty(), "rejection creates no discard, event, targeting or animation")
 	var private := GameManager.private_snapshot(1)
@@ -82,7 +82,7 @@ func _ready() -> void:
 
 	# Only the owner's next turn resets it; the retained physical card is then legal.
 	GameManager.begin_turn(2)
-	check(GameManager.players[1].panic_used_this_turn and not GameManager.players[2].panic_used_this_turn, "another player's turn does not reset A and has its own allowance")
+	check(GameManager.players[1].panic_used_this_action_turn and not GameManager.players[2].panic_used_this_action_turn, "another player's turn does not reset A and has its own allowance")
 	GameManager.flow.jobs.clear()
 	GameManager.reactions.active = {}
 	give(2, "panic")
@@ -97,14 +97,14 @@ func _ready() -> void:
 	GameManager.flow.jobs.clear()
 	GameManager.reactions.active = {}
 	GameManager.turns.phase = "ACTION_PHASE"
-	check(not GameManager.players[1].panic_used_this_turn, "A's next turn lifecycle resets Panic allowance")
+	check(not GameManager.players[1].panic_used_this_action_turn, "A's next turn lifecycle resets Panic allowance")
 	give(2, "dodge")
 	play(1, stolen, 2)
-	check(GameManager.find_card(1, stolen.instance_id).is_empty() and GameManager.players[1].panic_used_this_turn, "retained stolen Panic succeeds on A's next turn")
+	check(GameManager.find_card(1, stolen.instance_id).is_empty() and GameManager.players[1].panic_used_this_action_turn, "retained stolen Panic succeeds on A's next turn")
 
 	# Any transfer mechanism preserves the already-used flag; no UID-based bypass.
 	setup()
-	GameManager.players[1].panic_used_this_turn = true
+	GameManager.players[1].panic_used_this_action_turn = true
 	var transferred := give(2, "panic")
 	GameManager.flow.complete_department_store_give(2, {"receiver":1, "batch":{"count":0}}, transferred.instance_id)
 	check(GameManager.players[1].hand.has(transferred), "Bách Hóa can transfer a new Panic instance")
@@ -113,7 +113,7 @@ func _ready() -> void:
 	# BANG-only exceptions must not override Panic.
 	for exception in ["unlimited_shoot", "volcanic"]:
 		setup()
-		GameManager.players[1].panic_used_this_turn = true
+		GameManager.players[1].panic_used_this_action_turn = true
 		if exception == "unlimited_shoot":
 			GameManager.players[1].ability_id = exception
 		else:

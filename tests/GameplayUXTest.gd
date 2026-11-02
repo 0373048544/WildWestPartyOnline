@@ -164,7 +164,7 @@ func _ready() -> void:
 	await capture("reaction")
 	await click_hand(converted.instance_id)
 	check(GameManager.reactions.active.is_empty() and GameManager.players[1].current_hp == 4, "actual hand card resolves reaction")
-	check(not GameManager.players[1].shoot_used_this_turn, "reaction keeps normal Shoot limit")
+	check(not GameManager.players[1].shoot_used_this_action_turn, "reaction keeps normal Shoot limit")
 	# Without a Dodge the same banner remains actionable, but its primary button is disabled.
 	setup()
 	GameManager.turns.current_player = 2

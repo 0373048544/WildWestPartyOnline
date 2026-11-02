@@ -232,10 +232,10 @@ func test_per_game_limits_and_reset() -> void:
 	var other := give(2, "department_store")
 	give(1, "dodge")
 	GameManager.resolver.play(GameManager, 2, other.instance_id, 2)
-	check(GameManager.players[2].department_store_used_this_game,
+	check(GameManager.players[2].department_store_used_this_match,
 		"different player retains their independent BÁCH HÓA allowance")
 	setup(2)
-	check(not GameManager.players[1].department_store_used_this_game,
+	check(not GameManager.players[1].department_store_used_this_match,
 		"new match resets BÁCH HÓA per-game state")
 
 func resolve_store_all() -> void:
@@ -268,11 +268,11 @@ func test_general_store_unchanged_and_limited() -> void:
 	GameManager.turns.phase = "ACTION_PHASE"
 	var other := give(2, "general_store")
 	GameManager.resolver.play(GameManager, 2, other.instance_id, 2)
-	check(GameManager.players[2].general_store_used_this_game,
+	check(GameManager.players[2].general_store_used_this_match,
 		"different player retains an independent CỬA HÀNG allowance")
 	resolve_store_all()
 	setup(2)
-	check(not GameManager.players[1].general_store_used_this_game,
+	check(not GameManager.players[1].general_store_used_this_match,
 		"new match resets CỬA HÀNG per-game state")
 
 	setup(4)

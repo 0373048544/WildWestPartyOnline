@@ -85,7 +85,7 @@ func test_conversion_and_combat() -> void:
 	setup(); GameManager.players[1].ability_id = "double_dodge"; var gatling: Dictionary = give(1, "gatling")
 	GameManager.resolver.play(GameManager, 1, gatling.instance_id, 1)
 	check(GameManager.reactions.active.required_count == 1, "Slab does not amplify Gatling")
-	setup(); GameManager.players[1].shoot_used_this_turn = true; GameManager.players[1].ability_id = "unlimited_shoot"
+	setup(); GameManager.players[1].shoot_used_this_action_turn = true; GameManager.players[1].ability_id = "unlimited_shoot"
 	check(GameManager.abilities.can_shoot(GameManager.players[1]), "Willy may keep shooting without Volcanic")
 	GameManager.players[1].ability_id = ""
 	check(not GameManager.abilities.can_shoot(GameManager.players[1]), "normal character remains limited to one BANG")

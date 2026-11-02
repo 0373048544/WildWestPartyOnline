@@ -130,7 +130,7 @@ func judged(job: Dictionary) -> void:
 			game.emit_event("CARD_DISCARDED", id, {"kind": "discard", "card": game.players[id].equipment.get("jail", {}).duplicate(), "from_zone": "equipment"})
 			game.players[id].equipment.erase("jail")
 			if card.get("suit", "") != "HEART":
-				game.record(game.players[id].display_name + " bị giam, mất lượt.")
+				game.record(game.players[id].display_name + " bị giam, mất lượt hành động.")
 				game.network.broadcast_table_event({"kind": "jail_result", "player": id, "escaped": false})
 				jobs.clear()
 				game.advance_turn()
@@ -190,7 +190,7 @@ func store_pick(job: Dictionary) -> void:
 		return
 	prompt(job.target, "store", {"source": job.source}, {"cards": market.duplicate(true),
 		"pick_count": 1, "title": "CỬA HÀNG",
-		"detail": "ĐẾN LƯỢT BẠN CHỌN • Mỗi người lần lượt chọn 1 lá."})
+		"detail": "ĐẾN PHẦN BẠN CHỌN • Mỗi người lần lượt chọn 1 lá."})
 
 func department_store_give(job: Dictionary) -> void:
 	var giver: int = int(job.giver)

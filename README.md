@@ -29,7 +29,7 @@ Chạy hai terminal tại thư mục project:
 
 Hoặc chạy tools/Run-Local-Web.ps1 -Godot "C:/path/to/Godot.exe" để khởi động hai tiến trình ẩn và in PID. Dừng đúng hai PID được in khi không cần nữa. Server mặc định chỉ lắng nghe 127.0.0.1:7000; HTTP chỉ lắng nghe 127.0.0.1:8080.
 
-Mặc định 4–7 người; chỉ server có --development trong debug build mới cho phép đúng 2 người. Host là chủ phòng và có thể chuyển sang người đang kết nối khác; vai trò trong game được xáo riêng, không đổi khi chuyển chủ phòng.
+Hỗ trợ 2–7 người. Host là chủ phòng và có thể chuyển sang người đang kết nối khác; vai trò trong ván chơi được xáo riêng, không đổi khi chuyển chủ phòng.
 
 Endpoint tập trung trong config/network.cfg (desktop client), web/network-config.js (Web), hoặc WWPO_SERVER_URL (desktop). HTTPS dùng WSS; cấu hình mẫu trỏ WSS cùng origin /ws để dùng với TLS reverse proxy sau này. Mốc hiện tại chỉ chạy local, chưa có triển khai cloud hay public.
 
@@ -43,15 +43,15 @@ Chi tiết kiến trúc phòng, giao thức, riêng tư và khôi phục: [serve
 
 Mở project.godot và nhấn F5. Khi bấm TẠO PHÒNG, client desktop kết nối máy chủ đã chạy; nếu chưa có máy chủ ở địa chỉ mặc định ws://127.0.0.1:7000, game tự khởi động dịch vụ phòng cục bộ rồi vào PHÒNG CHỜ. Client desktop khác và browser có thể tham gia bằng mã phòng trên cùng máy. Dịch vụ cục bộ dừng khi đóng tiến trình game đã khởi động nó. Địa chỉ máy chủ tùy chỉnh và bản Web vẫn cần chạy dedicated server riêng.
 
-HOST luôn vào PHÒNG CHỜ trước. Tất cả bấm sẵn sàng, chủ phòng bấm BẮT ĐẦU. Bình thường hỗ trợ 4–7 người; debug cho phép đúng 2 người. Không hỗ trợ 3 người. Host chỉ có quyền quản lý phòng, không được ưu tiên vai trò, máu hoặc lượt.
+HOST luôn vào PHÒNG CHỜ trước. Tất cả bấm sẵn sàng, chủ phòng bấm BẮT ĐẦU. Game hỗ trợ 2–7 người. Host chỉ có quyền quản lý phòng, không được ưu tiên vai trò, máu hoặc lượt hành động.
 
-Mỗi ván server xáo đủ 16 nhân vật, chia mỗi người đúng hai lựa chọn riêng không trùng giữa các người chơi. Giao diện hiện hai thẻ cạnh nhau: chọn tạm rồi xác nhận. Chỉ nhân vật đã xác nhận được công khai ngay; lựa chọn bỏ lại luôn kín. Hết 25 giây, server chọn ngẫu nhiên một trong đúng hai lựa chọn của người đó. Chơi lại xáo lại toàn bộ. Host không được ưu tiên. Cảnh sát trưởng ngẫu nhiên mở lượt sau khi mọi người chọn xong.
+Mỗi ván chơi server xáo đủ 16 nhân vật, chia mỗi người đúng hai lựa chọn riêng không trùng giữa các người chơi. Giao diện hiện hai thẻ cạnh nhau: chọn tạm rồi xác nhận. Chỉ nhân vật đã xác nhận được công khai ngay; lựa chọn bỏ lại luôn kín. Hết 25 giây, server chọn ngẫu nhiên một trong đúng hai lựa chọn của người đó. Chơi lại xáo lại toàn bộ. Host không được ưu tiên. Cảnh sát trưởng bắt đầu lượt hành động đầu tiên ở chế độ 4–7 người.
 
 Trong Godot, có thể dùng Debug > Customize Run Instances và chạy 4 client kết nối server chung. API host_game/join_game ENet vẫn còn cho test desktop cũ; UI chính không gọi API này. Người chơi browser không cần UDP, VPN hoặc port forwarding.
 
 ## Âm thanh
 
-Trong lượt chơi **không có nhạc nền**. AudioManager dùng music_allowed để fade Music bus về im lặng trong 0,4 giây và dừng nguồn phát piano ở mọi phase đang chơi, kể cả reconnect, phản ứng, Đấu súng, Cửa hàng và phán định. Chỉ menu/lobby/chọn nhân vật/kết thúc cho phép nhạc trở lại; cài đặt âm lượng người dùng được giữ nguyên.
+Trong ván chơi đang hoạt động **không có nhạc nền**. AudioManager dùng music_allowed để fade Music bus về im lặng trong 0,4 giây và dừng nguồn phát piano ở mọi phase đang chơi, kể cả reconnect, phản ứng, Đấu súng, Cửa hàng và phán định. Chỉ menu/lobby/chọn nhân vật/kết thúc cho phép nhạc trở lại; cài đặt âm lượng người dùng được giữ nguyên.
 
 Nền trận là gió/phòng thưa, thêm tiếng gỗ hoặc ly rất nhỏ cách nhau 11–24 giây. Đấu súng và phán định Thuốc nổ giảm nền mạnh; an toàn/nổ dừng dây cháy. Weapons và Cards là bus riêng. Colt, Schofield, Remington, Carabine, Winchester, Volcanic có mẫu tiếng riêng; cò súng đi trước phát bắn, Né dùng whoosh/ricochet thay cho va chạm. AudioReworkTest kiểm tra chính sách nhạc và chuyển trạng thái. Không có thay đổi luật gameplay.
 
@@ -81,9 +81,9 @@ CharacterVisualTest kiểm tra 16 preset, tối đa 65 mesh/avatar, hoạt ảnh
 - Hoảng loạn/Cat Balou: sau khi chọn cao bồi, chạm vùng TAY KÍN (server chọn ngẫu nhiên, không lộ tên bài), vũ khí hoặc trang bị đang sáng trước ghế.
 - Cat Balou có thể bỏ cả Ngựa, Ống nhòm, Thùng, Nhà giam, Thuốc nổ và vũ khí dù tay đối thủ trống. Mỗi lựa chọn trên bàn khóa vào instance_id cụ thể; server từ chối lá đã bị thay thế và không bỏ nhầm bản sao mới. Hiệu lực trang bị mất ngay, kỹ năng bẩm sinh của nhân vật vẫn giữ. DiscardZonesTest kiểm tra riêng các trường hợp này.
 - Cửa hàng: bài ngửa xuất hiện giữa bàn; người đang có quyền chọn chạm lá muốn lấy. Những người khác chỉ xem.
-- Jesse/Pedro chọn chồng rút/chồng bỏ trực tiếp trên bàn. Jesse cũng có thể chạm vùng tay kín của đối thủ. Rút đầu lượt bình thường hoàn toàn tự động.
-- Bỏ bài cuối lượt: hiện BỎ X LÁ; chạm từng lá để bỏ. Server tự chuyển lượt khi đủ giới hạn theo máu.
-- KẾT THÚC LƯỢT chỉ xuất hiện gần tay bài trong giai đoạn hành động của bạn.
+- Jesse/Pedro chọn chồng rút/chồng bỏ trực tiếp trên bàn. Jesse cũng có thể chạm vùng tay kín của đối thủ. Rút đầu lượt hành động bình thường hoàn toàn tự động.
+- Bỏ bài cuối lượt hành động: hiện BỎ X LÁ; chạm từng lá để bỏ. Server tự chuyển sang lượt hành động tiếp theo khi đủ giới hạn theo máu.
+- KẾT THÚC LƯỢT HÀNH ĐỘNG chỉ xuất hiện gần tay bài trong giai đoạn hành động của bạn.
 - Chạm cao bồi khi không nhắm mục tiêu để xem thẻ thông tin: nhân vật, kỹ năng, máu, số bài, vũ khí, trang bị, khoảng cách và vai trò công khai. Chạm chỗ trống để đóng. Vai trò bí mật của đối thủ không hiện.
 - Menu ☰ hoặc Esc khi không chọn bài mở TIẾP TỤC / LUẬT CHƠI / RỜI TRẬN. Đồng hồ và trận online vẫn tiếp tục trong menu.
 - Nhật ký mặc định chỉ hiện hai hành động gần nhất, có thể mở rộng. Debug chỉ hiện cho host trong bản debug, nằm sau nút DEBUG ở menu tạm dừng.
@@ -99,7 +99,7 @@ Bộ bài 80 lá có định nghĩa và số lượng trong resources/cards/defi
 
 Chất/số của cả 80 lá khớp [danh sách chính thức](https://bang.dvgiochi.com/cardslist.php?id=1&lang=en), lưu trong base_manifest.json và base_deck.json. Rank là chuỗi 2–10/J/Q/K/A; hai Tiếp tế 9♠ có ID riêng. Server kiểm tra mọi tổ hợp tên/chất/số và số lượng trước khi bắt đầu; lỗi dữ liệu sẽ chặn ván trong cả bản release. tools/generate_base_data.py đọc manifest này, không tạo chất/số prototype. BaseCorrectionTest có oracle riêng đối chiếu đủ 80 lá, thử dữ liệu hỏng và chơi hết 16 ván tự động, kiểm tra bảo toàn bài sau mỗi hành động.
 
-Tay đầu bằng máu tối đa của nhân vật, gồm thưởng Cảnh sát trưởng. Rút hai mỗi lượt trừ kỹ năng. Bình thường chỉ một lá Bắn trong giai đoạn hành động; dùng sai mục tiêu không tiêu giới hạn. Volcanic/Willy cho bắn nhiều; đáp trả Đấu súng/Thổ dân không tiêu giới hạn. Bắn chuyển đổi của Janet có tiêu giới hạn khi tấn công.
+Tay đầu bằng máu tối đa của nhân vật, gồm thưởng Cảnh sát trưởng. Rút hai lá ở đầu mỗi lượt hành động trừ kỹ năng. Bình thường chỉ một lá Bắn trong lượt hành động; dùng sai mục tiêu không tiêu giới hạn. Volcanic/Willy cho bắn nhiều; BẮN dùng trong phản ứng Đấu súng/Thổ dân không tiêu giới hạn. Bắn chuyển đổi của Janet có tiêu giới hạn khi tấn công.
 
 Khoảng cách vòng bỏ qua người chết; Ngựa/Paul và Ống nhòm/Rose cộng dồn. Vũ khí chỉ tăng tầm, không thay khoảng cách. Rượu không hồi khi chỉ còn hai người; sát thương chết người có thể cần nhiều Rượu. Thuốc nổ được phán định trước Nhà giam. Server quản lý hàng đợi phản ứng, giới hạn thời gian và mọi lựa chọn.
 
@@ -108,7 +108,7 @@ Khoảng cách vòng bỏ qua người chết; Ngựa/Paul và Ống nhòm/Rose 
 - autoload/NetworkManager.gd: facade client/desktop debug, snapshot và sự kiện; WebSocket dùng RoomClient/NetworkTransport, ENet dùng adapter debug.
 - server/DedicatedServer.gd và RoomBridge.gd: danh bạ phòng/phiên, host, khôi phục, mỗi phòng có GameManager độc lập dùng chung luật. Server không phải người chơi.
 - scripts/network/: WebSocketTransport, ENetTransport, RoomProtocol, NetworkConfig và RoomClient. JSON STATE gửi riêng từng connection với public + private đúng người trong cùng revision.
-- autoload/GameManager.gd: match lifecycle, lượt, ý định hợp lệ, máu/chết/thắng và snapshot.
+- autoload/GameManager.gd: vòng đời ván chơi, lượt hành động, vòng chơi, ý định hợp lệ, máu/chết/thắng và snapshot.
 - scripts/game/RoleData.gd, CharacterSelection.gd, AbilityResolver.gd, DrawPhaseResolver.gd, RulesFlow.gd: phân vai, chọn nhân vật, kỹ năng, rút bài, hàng đợi phản ứng/phán định.
 - scripts/ui/App.gd: menu/phòng chờ và điều phối. MatchHUD.gd: HUD gọn, tay bài, phản ứng theo ngữ cảnh và menu tạm dừng.
 - scripts/ui/HandFan.gd và CardView.gd / scenes/ui/CardUI.tscn: bài xếp chồng, chọn, xem trước và nhấn giữ.
@@ -133,7 +133,7 @@ Các lệnh sau không cần framework ngoài:
     godot --headless --path . tests/PresentationTest.tscn
     godot --headless --path . tests/VisualEffectsTest.tscn
 
-RulesTest kiểm tra 1.934 điều kiện, gồm 100 lần phân vai cho từng cấu hình 4–7 người, kỹ năng, bài, thưởng/phạt, thắng và riêng tư. GameplayUXTest kiểm tra trực tiếp tay bài, Janet, Sid, lựa chọn trên bàn, menu, preview và ngăn chọn ngoài lượt. TargetingTest dùng sự kiện chuột/chạm thực qua ray picking 3D.
+RulesTest kiểm tra phân vai, kỹ năng, bài, thưởng/phạt, thắng và riêng tư. GameplayUXTest kiểm tra trực tiếp tay bài, Janet, Sid, lựa chọn trên bàn, menu, preview và ngăn chọn ngoài lượt hành động. TargetingTest dùng sự kiện chuột/chạm thực qua ray picking 3D.
 
 Có thể thêm -- --capture khi chạy không headless với GameplayUXTest, TargetingTest, LocalizationTest hoặc VisualEffectsTest để lưu ảnh cục bộ vào tests/artifacts (bỏ qua bởi Git và Godot importer).
 

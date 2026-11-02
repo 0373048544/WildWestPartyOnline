@@ -126,12 +126,13 @@ func begin_turn(id: int) -> void:
 		check_win()
 		return
 	turns.current_player = id
-	turns.round_number += 1
+	turns.record_action_turn(id, players)
 	turns.phase = "TURN_START"
-	players[id].shoot_used_this_turn = false
+	players[id].shoot_used_this_action_turn = false
 	# Card-specific action-turn allowance. It belongs to this player and resets
-	# only when that player's next turn begins, never on transfers or reactions.
-	players[id].panic_used_this_turn = false
+	# only when that player's next action turn begins, never on transfers or reactions.
+	players[id].panic_used_this_action_turn = false
+	players[id].cat_balou_used_this_action_turn = false
 	flow.push({"kind": "dynamite", "target": id})
 	flow.push({"kind": "jail", "target": id})
 	flow.push({"kind": "draw", "target": id})
@@ -408,7 +409,8 @@ func public_snapshot() -> Dictionary:
 		rows.append(p.public_snapshot(not winner.is_empty(), not p.character_id.is_empty()))
 	return {"players": rows, "started": started, "match_id": match_id, "winner": winner,
 		"server_port": network.session_port, "host_player_id": network.host_player_id(), "minimum_players": 2, "max_players": 7,
-		"current_player": turns.current_player, "phase": turns.phase, "round": turns.round_number,
+		"current_player": turns.current_player, "phase": turns.phase,
+		"action_turn": turns.action_turn_number, "round": turns.round_number,
 		"draw_count": deck.draw_pile.size(), "discard_count": deck.discard_pile.size(),
 		"discard_top": deck.discard_pile.back() if not deck.discard_pile.is_empty() else {},
 		"market": flow.market.duplicate(true), "choice_player": reactions.active.get("target_player_id", 0),
@@ -471,7 +473,7 @@ func debug_action(args: Dictionary) -> void:
 		"Heal Player":
 			if living(target):
 				heal(target, 1)
-		"Next Turn":
+		"Next Action Turn":
 			if reactions.active.is_empty():
 				advance_turn()
 		"Force Win Check":

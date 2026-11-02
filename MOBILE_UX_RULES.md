@@ -17,8 +17,9 @@ The current room architecture, authoritative ownership, role pool, private two-c
 
 ## Server validation
 
-- The existing `shoot_used_this_turn` remains the sole stored turn flag. `PlayerState.bang_played_this_turn` is an alias over that flag, so it cannot diverge or reset on animation/reconnect.
-- `EffectResolver.gd` rejects ordinary play during a pending reaction and reports specific BANG/duplicate-equipment/range reasons before removing a card or applying an effect. The existing Willy/Volcanic exceptions and weapon replacement/discard behavior remain in force. Other legal brown cards are not limited to once per turn; reaction handlers remain separate.
+- `shoot_used_this_action_turn` is the authoritative BẮN allowance. `PlayerState.bang_played_this_action_turn` is an alias over that flag, so it cannot diverge or reset on animation/reconnect.
+- `panic_used_this_action_turn` and `cat_balou_used_this_action_turn` are separate, card-specific limits. Willy/Volcanic override only BẮN. Reaction handlers remain separate and never consume the normal BẮN action-turn allowance.
+- `department_store_used_this_match` and `general_store_used_this_match` persist for the entire match and never reset on a new action turn or round.
 - Three corrupted Vietnamese admission messages in `DedicatedServer.gd` were repaired. Admission rules and authority were not changed.
 
 ## Verification

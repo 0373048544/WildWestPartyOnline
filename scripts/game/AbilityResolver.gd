@@ -5,7 +5,7 @@ var refilling: bool = false
 var damage_handlers: Dictionary = {"damage_draw": damage_draw, "damage_steal": damage_steal}
 
 func can_shoot(player: PlayerState) -> bool:
-	return not player.shoot_used_this_turn or player.ability_id == "unlimited_shoot" or player.weapon.get("card_data_id", "") == "volcanic"
+	return not player.shoot_used_this_action_turn or player.ability_id == "unlimited_shoot" or player.weapon.get("card_data_id", "") == "volcanic"
 
 func response_cards(game: Node, id: int, required: String) -> Array:
 	var result: Array = []

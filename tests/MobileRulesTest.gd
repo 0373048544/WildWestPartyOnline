@@ -52,7 +52,7 @@ func _ready() -> void:
 	var second := give(1,"shoot")
 	GameManager.resolver.play(GameManager,1,shot.instance_id,2)
 	finish_attack()
-	check(GameManager.players[1].bang_played_this_turn,"authoritative BANG flag set after accepted shot")
+	check(GameManager.players[1].bang_played_this_action_turn,"authoritative BANG flag set after accepted shot")
 	var hp: int = GameManager.players[2].current_hp
 	for _spam in range(20):
 		GameManager.resolver.play(GameManager,1,second.instance_id,2)
@@ -60,7 +60,7 @@ func _ready() -> void:
 	check(GameManager.resolver.disabled_reason(GameManager,1,second).contains("BẮN"),"private reason explains BANG restriction")
 	GameManager.players[1].is_connected = false
 	GameManager.players[1].is_connected = true
-	check(GameManager.players[1].shoot_used_this_turn and GameManager.resolver.valid_targets(GameManager,1,second).is_empty(),"reconnect leaves authoritative turn restriction intact")
+	check(GameManager.players[1].shoot_used_this_action_turn and GameManager.resolver.valid_targets(GameManager,1,second).is_empty(),"reconnect leaves authoritative turn restriction intact")
 	for key in ["supply","wells_fargo"]:
 		var brown := give(1,key)
 		GameManager.resolver.play(GameManager,1,brown.instance_id,1)

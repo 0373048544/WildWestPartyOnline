@@ -369,7 +369,7 @@ func observe_state() -> void:
 	if current.get("winner", "") != previous.get("winner", "") and not str(current.get("winner", "")).is_empty():
 		play_gameplay({"SHERIFF TEAM WINS": "sheriff_win", "DEPUTY WINS": "sheriff_win",
 			"OUTLAWS WIN": "outlaw_win", "OUTLAW WINS": "outlaw_win", "RENEGADE WINS": "renegade_win"}.get(current.winner, "start"))
-	if current.get("round", 0) != previous.get("round", 0) and current.get("current_player", 0) == NetworkManager.local_player_id():
+	if current.get("action_turn", 0) != previous.get("action_turn", 0) and current.get("current_player", 0) == NetworkManager.local_player_id():
 		play_ui("turn")
 	var reaction: Dictionary = NetworkManager.private_state.get("reaction", {})
 	local_threat = reaction.get("reaction_type", "") in ["dodge", "duel", "indians", "survive"]

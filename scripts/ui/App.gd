@@ -753,7 +753,7 @@ func build_debug(parent: Node, state: Dictionary) -> void:
 	var grid := GridContainer.new()
 	grid.columns = 2
 	box.add_child(grid)
-	for operation in ["Reveal Roles", "Give Shoot", "Draw Card", "Damage Player", "Heal Player", "Next Turn", "Force Win Check"]:
+	for operation in ["Reveal Roles", "Give Shoot", "Draw Card", "Damage Player", "Heal Player", "Next Action Turn", "Force Win Check"]:
 		var debug_button := button(operation, func(): intent("debug", {"operation": operation, "target": debug_target}), grid)
 		debug_button.add_theme_font_size_override("font_size", 15)
 	if OS.is_debug_build() and NetworkManager.is_authority():

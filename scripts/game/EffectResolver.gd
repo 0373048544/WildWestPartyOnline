@@ -31,11 +31,13 @@ func valid_targets(game: Node, sender: int, card: Dictionary) -> Array:
 		return result
 	if effect == CardData.EffectType.HEAL and (p.current_hp >= p.max_hp or (card.card_data_id == "drink" and not game.beer_enabled())):
 		return result
-	if effect == CardData.EffectType.DEPARTMENT_STORE and p.department_store_used_this_game:
+	if effect == CardData.EffectType.DEPARTMENT_STORE and p.department_store_used_this_match:
 		return result
-	if effect == CardData.EffectType.STORE and p.general_store_used_this_game:
+	if effect == CardData.EffectType.STORE and p.general_store_used_this_match:
 		return result
-	if card.get("card_data_id", "") == "panic" and p.panic_used_this_turn:
+	if card.get("card_data_id", "") == "panic" and p.panic_used_this_action_turn:
+		return result
+	if card.get("card_data_id", "") == "cat_balou" and p.cat_balou_used_this_action_turn:
 		return result
 	if [CardData.EffectType.EQUIP_PASSIVE, CardData.EffectType.DYNAMITE].has(effect) and p.equipment.has(card.card_data_id):
 		return result
@@ -65,10 +67,13 @@ func play(game: Node, sender: int, uid: int, target: int) -> void:
 		return
 	var effect: int = effective_effect(game, sender, card)
 	if effect == CardData.EffectType.ATTACK and game.turns.phase == "ACTION_PHASE" and game.turns.current_player == sender and not game.abilities.can_shoot(game.players[sender]):
-		game.fail(sender, "Bạn đã dùng BẮN trong lượt này.")
+		game.fail(sender, "Bạn đã dùng BẮN trong lượt hành động này.")
 		return
-	if card.get("card_data_id", "") == "panic" and game.turns.phase == "ACTION_PHASE" and game.turns.current_player == sender and game.players[sender].panic_used_this_turn:
-		game.fail(sender, "Bạn đã dùng HOẢNG LOẠN trong lượt này.")
+	if card.get("card_data_id", "") == "panic" and game.turns.phase == "ACTION_PHASE" and game.turns.current_player == sender and game.players[sender].panic_used_this_action_turn:
+		game.fail(sender, "Bạn đã dùng HOẢNG LOẠN trong lượt hành động này.")
+		return
+	if card.get("card_data_id", "") == "cat_balou" and game.turns.phase == "ACTION_PHASE" and game.turns.current_player == sender and game.players[sender].cat_balou_used_this_action_turn:
+		game.fail(sender, "Bạn đã dùng BỎ BÀI trong lượt hành động này.")
 		return
 	if not valid_targets(game, sender, card).has(target):
 		var reason: String = disabled_reason(game,sender,card)
@@ -87,7 +92,9 @@ func play(game: Node, sender: int, uid: int, target: int) -> void:
 	game.record("%s dùng %s%s." % [game.players[sender].display_name, definition.name,
 		" vào " + game.players[target].display_name if target != sender else ""])
 	if card.get("card_data_id", "") == "panic":
-		game.players[sender].panic_used_this_turn = true
+		game.players[sender].panic_used_this_action_turn = true
+	elif card.get("card_data_id", "") == "cat_balou":
+		game.players[sender].cat_balou_used_this_action_turn = true
 	handlers[effect].call(game, sender, target, card)
 	game.flow.run()
 
@@ -98,7 +105,7 @@ func disabled_reason(game: Node, sender: int, card: Dictionary) -> String:
 		var prompt: Dictionary = game.reactions.private_prompt(sender)
 		return "" if prompt.get("allowed_card_types", []).has(card.instance_id) else "Đang chờ đáp trả hoặc lựa chọn hợp lệ."
 	if game.turns.current_player != sender:
-		return "Không phải lượt của bạn."
+		return "Không phải lượt hành động của bạn."
 	if game.turns.phase == "DISCARD_PHASE":
 		return "Chọn lá bài để bỏ xuống chồng bỏ."
 	if game.turns.phase != "ACTION_PHASE":
@@ -106,18 +113,20 @@ func disabled_reason(game: Node, sender: int, card: Dictionary) -> String:
 	var p: PlayerState = game.players[sender]
 	var effect := effective_effect(game, sender, card)
 	if effect == CardData.EffectType.ATTACK and not game.abilities.can_shoot(p):
-		return "Bạn đã dùng BẮN trong lượt này."
+		return "Bạn đã dùng BẮN trong lượt hành động này."
 	if effect == CardData.EffectType.HEAL:
 		if card.card_data_id == "drink" and not game.beer_enabled():
 			return "Bia không có tác dụng khi chỉ còn 2 người chơi."
 		if p.current_hp >= p.max_hp:
 			return "Bạn đã đầy máu."
-	if effect == CardData.EffectType.DEPARTMENT_STORE and p.department_store_used_this_game:
+	if effect == CardData.EffectType.DEPARTMENT_STORE and p.department_store_used_this_match:
 		return "Bạn đã dùng BÁCH HÓA trong ván này."
-	if effect == CardData.EffectType.STORE and p.general_store_used_this_game:
+	if effect == CardData.EffectType.STORE and p.general_store_used_this_match:
 		return "Bạn đã dùng CỬA HÀNG trong ván này."
-	if card.get("card_data_id", "") == "panic" and p.panic_used_this_turn:
-		return "Bạn đã dùng HOẢNG LOẠN trong lượt này."
+	if card.get("card_data_id", "") == "panic" and p.panic_used_this_action_turn:
+		return "Bạn đã dùng HOẢNG LOẠN trong lượt hành động này."
+	if card.get("card_data_id", "") == "cat_balou" and p.cat_balou_used_this_action_turn:
+		return "Bạn đã dùng BỎ BÀI trong lượt hành động này."
 	if effect == CardData.EffectType.DODGE:
 		return "Chỉ dùng lá Né khi đáp trả hiệu ứng Bắn."
 	if effect in [CardData.EffectType.EQUIP_PASSIVE, CardData.EffectType.DYNAMITE] and p.equipment.has(card.card_data_id):
@@ -125,7 +134,7 @@ func disabled_reason(game: Node, sender: int, card: Dictionary) -> String:
 	return "Không có mục tiêu hợp lệ trong tầm." if valid_targets(game, sender, card).is_empty() else ""
 
 func attack(game: Node, sender: int, target: int, _card: Dictionary) -> void:
-	game.players[sender].shoot_used_this_turn = true
+	game.players[sender].shoot_used_this_action_turn = true
 	game.emit_event("BANG_FIRED", sender, {"kind": "bang", "target": target, "card_data_id": "shoot", "amount": 1, "result": "pending"})
 	game.network.broadcast_animation(sender, "shoot", target)
 	game.flow.push({"kind": "attack", "source": sender, "target": target, "required": 2 if game.players[sender].ability_id == "double_dodge" else 1})
@@ -170,7 +179,7 @@ func saloon(game: Node, _sender: int, _target: int, _card: Dictionary) -> void:
 			game.heal(id, 1)
 
 func store(game: Node, sender: int, _target: int, _card: Dictionary) -> void:
-	game.players[sender].general_store_used_this_game = true
+	game.players[sender].general_store_used_this_match = true
 	game.emit_event("GENERAL_STORE_STARTED", sender, {
 		"kind": "store_started", "message": "Mỗi người lần lượt chọn 1 lá."
 	})
@@ -186,7 +195,7 @@ func indians(game: Node, sender: int, _target: int, _card: Dictionary) -> void:
 		game.flow.push({"kind": "indians", "source": sender, "target": id})
 
 func department_store(game: Node, sender: int, _target: int, _card: Dictionary) -> void:
-	game.players[sender].department_store_used_this_game = true
+	game.players[sender].department_store_used_this_match = true
 	var batch := {"receiver": sender, "count": 0}
 	game.emit_event("DEPARTMENT_STORE_STARTED", sender, {
 		"kind": "department_store", "receiver": sender,

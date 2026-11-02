@@ -415,9 +415,9 @@ func build_top() -> void:
 			current_player_name = player.display_name
 
 	var title: String = (
-		"LƯỢT CỦA BẠN"
+		"LƯỢT HÀNH ĐỘNG CỦA BẠN"
 		if state.current_player == app.local_id()
-		else "LƯỢT CỦA " + current_player_name
+		else "LƯỢT HÀNH ĐỘNG CỦA " + current_player_name
 	)
 
 	var phase: String = TextCatalog.text(
@@ -649,7 +649,7 @@ func build_hand() -> void:
 			"department_store_give":
 				message = "BÁCH HÓA · ĐANG CHỜ %s ĐƯA BÀI..." % chooser_name
 			_:
-				message = "ĐẾN LƯỢT %s CHỌN BÀI" % chooser_name
+				message = "ĐẾN PHẦN %s CHỌN BÀI" % chooser_name
 
 	elif app.sid_mode:
 		message = (
@@ -1397,7 +1397,7 @@ func show_rules() -> void:
 	)
 
 	text(
-		"Chọn bài → chạm cao bồi. Mỗi lượt bình thường dùng 1 lá Bắn. Tầm súng và khoảng cách được máy chủ kiểm tra.\nKhi bị tấn công, chạm lá phản ứng sáng trên tay hoặc chịu đòn.\nKết thúc lượt: bỏ bớt bài để số bài không quá máu.\nChạm trang bị/tay kín khi Hoảng loạn hoặc Cat Balou yêu cầu. Chạm bài giữa bàn để chọn trong Cửa hàng.\nEsc, chuột phải, nút Hủy hoặc chạm lại lá đã chọn để hủy nhắm mục tiêu.",
+		"Chọn bài → chạm cao bồi. Mỗi lượt hành động bình thường dùng 1 lá Bắn. Tầm súng và khoảng cách được máy chủ kiểm tra.\nKhi bị tấn công, chạm lá phản ứng sáng trên tay hoặc chịu đòn.\nKết thúc lượt hành động: bỏ bớt bài để số bài không quá máu.\nChạm trang bị/tay kín khi Hoảng loạn hoặc Cat Balou yêu cầu. Chạm bài giữa bàn để chọn trong Cửa hàng.\nEsc, chuột phải, nút Hủy hoặc chạm lại lá đã chọn để hủy nhắm mục tiêu.",
 		18,
 		box
 	)

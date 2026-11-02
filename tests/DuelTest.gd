@@ -57,7 +57,7 @@ func setup(count: int = 4) -> void:
 		player.max_hp = 4
 		player.current_hp = 4
 		player.role = PlayerState.Role.OUTLAW
-		player.shoot_used_this_turn = false
+		player.shoot_used_this_action_turn = false
 	GameManager.players[1].role = PlayerState.Role.SHERIFF
 	GameManager.players[count].role = PlayerState.Role.RENEGADE
 	GameManager.turns.current_player = 1
@@ -169,7 +169,7 @@ func test_duel_ignores_weapon_range() -> void:
 
 func test_duel_reaction_bang_ignores_normal_bang_limit() -> void:
 	setup()
-	GameManager.players[2].shoot_used_this_turn = true
+	GameManager.players[2].shoot_used_this_action_turn = true
 	var bang := give(2, "shoot")
 	start_duel()
 	check(GameManager.reactions.active.allowed_card_types.has(bang.instance_id), "Reaction BANG remains legal after normal BANG limit is used")
@@ -183,7 +183,7 @@ func test_duel_reaction_bang_does_not_consume_action_bang_limit() -> void:
 	start_duel()
 	respond(2, responder_bang)
 	respond(1, source_bang)
-	check(not GameManager.players[1].shoot_used_this_turn and not GameManager.players[2].shoot_used_this_turn, "Duel responses never set normal BANG flags")
+	check(not GameManager.players[1].shoot_used_this_action_turn and not GameManager.players[2].shoot_used_this_action_turn, "Duel responses never set normal BANG flags")
 	GameManager.turns.current_player = 2
 	GameManager.turns.phase = "ACTION_PHASE"
 	var normal := give(2, "shoot")
@@ -308,7 +308,7 @@ func test_duel_hand_consumption_and_full_playtest() -> void:
 	check(GameManager.players[1].current_hp == 3 and GameManager.players[2].current_hp == 4, "Full Duel final HP is A=3, B=4")
 	check(GameManager.reactions.active.is_empty() and GameManager.flow.jobs.is_empty(), "Full Duel closes reaction and flow state")
 	check(GameManager.turns.current_player == 1 and GameManager.turns.phase == "ACTION_PHASE", "Full Duel returns to A Action Phase")
-	check(not GameManager.players[1].shoot_used_this_turn and not GameManager.players[2].shoot_used_this_turn, "Full Duel leaves normal BANG allowances untouched")
+	check(not GameManager.players[1].shoot_used_this_action_turn and not GameManager.players[2].shoot_used_this_action_turn, "Full Duel leaves normal BANG allowances untouched")
 	check(GameManager.log_lines.any(func(line): return "Player 2 dùng BẮN" in line), "Log records Duel BANG response")
 	check(GameManager.log_lines.any(func(line): return "Player 1 không thể đáp trả" in line), "Log records exhausted loser")
 	var follow_up := give(1, "supply")

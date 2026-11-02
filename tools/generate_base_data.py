@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 cards = [
-("shoot","BẮN","Tấn công trong tầm súng. Bình thường chỉ 1 lá mỗi lượt.",0,1,0,1,25,"weapon"),
+("shoot","BẮN","Tấn công trong tầm súng. Bình thường chỉ 1 lá mỗi lượt hành động.",0,1,0,1,25,"weapon"),
 ("dodge","NÉ","Đáp trả một hiệu ứng Bắn. Janet có thể đổi thành Bắn.",3,0,1,1,12,"none"),
 ("drink","UỐNG RƯỢU","Hồi 1 máu; cứu mạng khi hấp hối. Không có tác dụng khi chỉ còn 2 người.",0,0,2,1,6,"none"),
 ("panic","HOẢNG LOẠN","Lấy 1 lá trên tay hoặc đang đặt trước người cách bạn tối đa 1.",0,1,5,1,4,"distance_one"),
@@ -14,7 +14,7 @@ cards = [
 ("schofield","SCHOFIELD","Vũ khí tầm 2. Thay thế vũ khí hiện tại.",1,0,6,2,3,"none"),
 ("barrel","THÙNG MAY MẮN","Khi bị Bắn, lật bài: Cơ tính là một lần Né.",2,0,7,1,2,"none"),
 ("horse","NGỰA MUSTANG","Đối thủ tính khoảng cách đến bạn tăng 1.",2,0,7,1,2,"none"),
-("volcanic","VOLCANIC","Tầm 1. Được dùng không giới hạn lá Bắn trong lượt.",1,0,6,1,2,"none"),
+("volcanic","VOLCANIC","Tầm 1. Được dùng không giới hạn lá Bắn trong lượt hành động.",1,0,6,1,2,"none"),
 ("supply","TIẾP TẾ","Rút 2 lá bài.",0,0,3,2,2,"none"),
 ("general_store","CỬA HÀNG","Lật bài theo số người sống. Mỗi người chọn 1, bắt đầu từ bạn.",0,0,10,1,2,"none"),
 ("indians","THỔ DÂN","Mỗi đối thủ bỏ 1 lá Bắn hoặc mất 1 máu. Không dùng Thùng để né.",0,2,12,1,2,"none"),
@@ -54,7 +54,7 @@ characters = [
 ("slab_the_killer","Slab the Killer",4,"double_dodge","Đối thủ cần 2 lần Né để tránh lá Bắn của bạn."),
 ("suzy_lafayette","Suzy Lafayette",4,"empty_draw","Khi hết bài trên tay, lập tức rút 1 lá."),
 ("vulture_sam","Vulture Sam",4,"death_collect","Khi người khác chết, thu toàn bộ bài trên tay và trang bị của họ vào tay."),
-("willy_the_kid","Willy the Kid",4,"unlimited_shoot","Dùng không giới hạn lá Bắn trong lượt; vẫn tuân thủ tầm súng."),
+("willy_the_kid","Willy the Kid",4,"unlimited_shoot","Dùng không giới hạn lá Bắn trong lượt hành động; vẫn tuân thủ tầm súng."),
 ]
 def save(path,data):
     dest=ROOT/path

@@ -1,4 +1,4 @@
-﻿extends Node
+extends Node
 
 var checks: int = 0
 var last_error: String = ""
@@ -191,7 +191,7 @@ func test_shoot() -> void:
 	setup()
 	var p: Dictionary = GameManager.players
 	var invalid := play(1, "shoot", 3)
-	check(p[1].hand.has(invalid) and not p[1].shoot_used_this_turn, "invalid range consumes neither card nor Shoot")
+	check(p[1].hand.has(invalid) and not p[1].shoot_used_this_action_turn, "invalid range consumes neither card nor Shoot")
 	give(2, "dodge")
 	GameManager.resolver.play(GameManager, 1, invalid.instance_id, 2)
 	check(GameManager.reactions.active.reaction_type == "dodge", "Dodge prompt")
@@ -202,15 +202,15 @@ func test_shoot() -> void:
 	GameManager.handle_intent(2, "reaction", {"request": request - 1, "accept": true})
 	check(GameManager.reactions.active.request_id == request, "stale reaction ignored")
 	respond()
-	check(p[2].current_hp == 4 and p[1].shoot_used_this_turn, "Dodge prevents hit but keeps Shoot limit")
+	check(p[2].current_hp == 4 and p[1].shoot_used_this_action_turn, "Dodge prevents hit but keeps Shoot limit")
 	var again := play(1, "shoot", 2)
-	check(p[1].hand.has(again) and last_error == "Bạn đã dùng BẮN trong lượt này.", "second Shoot rejected with Vietnamese message")
+	check(p[1].hand.has(again) and last_error == "Bạn đã dùng BẮN trong lượt hành động này.", "second Shoot rejected with Vietnamese message")
 	GameManager.begin_turn(1)
 	for _i in range(20):
 		if GameManager.reactions.active.is_empty():
 			break
 		respond(false)
-	check(not p[1].shoot_used_this_turn, "new turn resets Shoot")
+	check(not p[1].shoot_used_this_action_turn, "new action turn resets Shoot")
 	GameManager.resolver.play(GameManager, 1, again.instance_id, 2)
 	check(GameManager.reactions.active.reaction_type == "dodge" and GameManager.reactions.active.payload.allowed_cards.is_empty(), "Shoot without Dodge still offers skippable reaction")
 	respond(false)
@@ -229,7 +229,7 @@ func test_shoot() -> void:
 	setup()
 	GameManager.players[1].ability_id = "convert"
 	var janet := play(1, "dodge", 2)
-	check(not GameManager.players[1].hand.has(janet) and GameManager.players[1].shoot_used_this_turn, "Janet Dodge as Shoot counts")
+	check(not GameManager.players[1].hand.has(janet) and GameManager.players[1].shoot_used_this_action_turn, "Janet Dodge as Shoot counts")
 	give(1, "dodge")
 	check(GameManager.resolver.valid_targets(GameManager, 1, GameManager.players[1].hand.back()).is_empty(), "Janet second attack rejected")
 	setup()
@@ -409,14 +409,14 @@ func test_cards() -> void:
 	check(GameManager.reactions.active.required_count == 1, "Slab does not amplify Gatling")
 	respond()
 	respond(false)
-	check(not GameManager.players[1].shoot_used_this_turn and GameManager.players[3].current_hp == 3, "Gatling hits all others without Shoot limit")
+	check(not GameManager.players[1].shoot_used_this_action_turn and GameManager.players[3].current_hp == 3, "Gatling hits all others without Shoot limit")
 	setup()
 	GameManager.players[2].ability_id = "convert"
 	give(2, "dodge")
 	play(1, "indians")
 	check(GameManager.reactions.active.reaction_type == "indians", "Indians demands Shoot response")
 	respond()
-	check(GameManager.players[2].current_hp == 4 and GameManager.players[3].current_hp == 3 and not GameManager.players[2].shoot_used_this_turn, "Janet conversion against Indians; no Shoot limit")
+	check(GameManager.players[2].current_hp == 4 and GameManager.players[3].current_hp == 3 and not GameManager.players[2].shoot_used_this_action_turn, "Janet conversion against Indians; no Shoot limit")
 	setup()
 	give(1, "shoot")
 	give(2, "shoot")
@@ -425,7 +425,7 @@ func test_cards() -> void:
 	respond()
 	check(GameManager.reactions.active.target_player_id == 1, "Duel alternates")
 	respond()
-	check(GameManager.players[2].current_hp == 3 and not GameManager.players[1].shoot_used_this_turn and not GameManager.players[2].shoot_used_this_turn, "Duel discards never consume Shoot limit")
+	check(GameManager.players[2].current_hp == 3 and not GameManager.players[1].shoot_used_this_action_turn and not GameManager.players[2].shoot_used_this_action_turn, "Duel discards never consume Shoot limit")
 	setup()
 	var illegal_jail := play(2, "jail", 1)
 	check(GameManager.players[2].hand.has(illegal_jail), "Jail cannot target Sheriff")
