@@ -227,13 +227,13 @@ func run_round(layout_name: String, viewport_size: Vector2i) -> void:
 	# Mobile-first chat stays above action/hand zones and releases input on close.
 	var chat: ChatPanel = app.chat_panel
 	check(chat.toggle_button.visible, layout_name + ": collapsed chat button is visible in active match")
-	var journal_button: Button = app.match_hud.get_node("MatchLog").get_child(0)
+	var journal_button: Button = app.match_hud.get_node("MatchLog").find_child("ToggleHistory", true, false)
 	var journal_rect := journal_button.get_global_rect()
 	var chat_button_rect := chat.toggle_button.get_global_rect()
 	check(absf(chat_button_rect.position.x - journal_rect.position.x) <= 1.0 and chat_button_rect.position.y >= journal_rect.end.y,
-		layout_name + ": collapsed Chat is stacked directly below Journal")
+		layout_name + ": collapsed Chat is stacked directly below Journal (chat=%s journal=%s)" % [chat_button_rect, journal_rect])
 	check(chat_button_rect.size.x <= journal_rect.size.x + 1.0 and chat_button_rect.size.y >= load("res://scripts/ui/MatchLayout.gd").units(chat, 40.0),
-		layout_name + ": Chat button matches Journal width and remains touch-friendly")
+		layout_name + ": Chat button matches Journal width and remains touch-friendly (chat=%s journal=%s)" % [chat_button_rect, journal_rect])
 	chat.append_message({"message_id":"round:%s" % layout_name, "sender_id":3, "sender_name":"Cao Bồi Không Bao Giờ Ngủ", "text":"coi chừng ông bên trái 😂", "timestamp":1}, true)
 	chat.open_chat()
 	await settle(0.05)

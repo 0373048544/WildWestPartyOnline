@@ -122,24 +122,28 @@ func _ready() -> void:
 func update_info(row: Dictionary, local: int, active: int, choosing: bool = false) -> void:
 	sheriff_badge.visible = row.public_role == "SHERIFF"
 	var alive: bool = bool(row.get("is_alive", true))
-	var badges: String = "⌛ " if choosing else ("BẠN · " if int(row.player_id) == local else "")
+	var connected: bool = bool(row.get("is_connected", true))
+	var badges: String = "⌁ " if not connected else ("⌛ " if choosing else ("BẠN · " if int(row.player_id) == local else ""))
 	label.text = badges + str(row.display_name).left(12) if alive else "☠ %s\n%s" % [str(row.display_name).left(11), TextCatalog.text(str(row.get("public_role", "")))]
 	label.font_size = (40 if label.text.length() > 16 else 48) if alive else 30
-	stats.text = str(row.hand_count) if alive else ""
+	stats.text = ("⌁ %d" % int(row.hand_count)) if alive and not connected else (str(row.hand_count) if alive else "")
 	hand_card_icon.visible = alive
 	for index in range(hearts.size()):
 		hearts[index].visible = alive and index < int(row.max_hp)
 		hearts[index].material_override.albedo_color = Color("#ec8d79") if index < int(row.current_hp) else Color("#57616a")
 	backing.albedo_color = Color("#725321") if choosing else (Color("#59472a") if int(row.player_id) == active else Color("#192c35"))
 	accent_material.albedo_color = Color("#ffe080") if choosing else (SaloonTheme.GOLD if int(row.player_id) == active else Color("#a98655"))
-	modulate_plate(alive)
+	modulate_plate(alive, connected)
 
-func modulate_plate(alive: bool) -> void:
-	label.modulate = SaloonTheme.CREAM if alive else Color("#999b99")
-	stats.modulate = SaloonTheme.CREAM if alive else Color("#999b99")
+func modulate_plate(alive: bool, connected: bool = true) -> void:
+	label.modulate = SaloonTheme.CREAM if alive and connected else Color("#999b99")
+	stats.modulate = SaloonTheme.CREAM if alive and connected else Color("#999b99")
 	if not alive:
 		backing.albedo_color = Color("#30383b")
 		accent_material.albedo_color = Color("#69665f")
+	elif not connected:
+		backing.albedo_color = Color("#273034")
+		accent_material.albedo_color = Color("#9b6f4e")
 
 func flash_hit() -> void:
 	var old_backing: Color = backing.albedo_color

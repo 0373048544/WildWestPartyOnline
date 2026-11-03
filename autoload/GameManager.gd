@@ -6,6 +6,8 @@ var started: bool = false
 var match_id: int = 0
 var winner: String = ""
 var log_lines: Array[String] = []
+var history_events: Array[Dictionary] = []
+var history_sequence: int = 0
 var deck := DeckManager.new()
 var turns := TurnManager.new()
 var reactions := ReactionManager.new()
@@ -26,6 +28,8 @@ func clear() -> void:
 	started = false
 	winner = ""
 	log_lines.clear()
+	history_events.clear()
+	history_sequence = 0
 	reactions.active = {}
 	turns = TurnManager.new()
 	rate_limits.clear()
@@ -47,6 +51,9 @@ func _process(_delta: float) -> void:
 		publish()
 	elif not flow.jobs.is_empty() and reactions.active.is_empty():
 		flow.run()
+		publish()
+	elif reactions.active.is_empty() and flow.jobs.is_empty() and turns.phase in ["ACTION_PHASE", "DISCARD_PHASE"] and turns.action_deadline > 0 and Time.get_ticks_msec() >= turns.action_deadline:
+		resolve_action_timeout()
 		publish()
 
 func role_distribution(count: int) -> Array:
@@ -80,6 +87,8 @@ func start_match(force: bool = false) -> void:
 	reactions.active = {}
 	rate_limits.clear()
 	log_lines.clear()
+	history_events.clear()
+	history_sequence = 0
 	winner = ""
 	started = true
 	if OS.is_debug_build() and log_role_assignments:
@@ -140,8 +149,21 @@ func begin_turn(id: int) -> void:
 	flow.run()
 
 func advance_turn() -> void:
+	turns.action_deadline = 0
 	turns.phase = "TURN_END"
 	begin_turn(turns.next_living(players))
+
+func resolve_action_timeout() -> void:
+	var id: int = turns.current_player
+	if not living(id):
+		advance_turn()
+		return
+	var player: PlayerState = players[id]
+	while player.hand.size() > player.current_hp:
+		var card: Dictionary = player.hand.pick_random()
+		consume(id, card)
+	record("%s hết thời gian lượt hành động." % player.display_name)
+	advance_turn()
 
 func try_start_rematch() -> bool:
 	if winner.is_empty():
@@ -154,6 +176,9 @@ func try_start_rematch() -> bool:
 
 func handle_intent(sender: int, action: String, args: Dictionary) -> void:
 	if not network.is_authority() or not players.has(sender):
+		return
+	if args.has("match_id") and int(args.get("match_id", -1)) != match_id:
+		fail(sender, "Hành động thuộc ván cũ và đã bị từ chối.")
 		return
 	var now := Time.get_ticks_msec()
 	if now - int(rate_limits.get(sender, -1000)) < 80:
@@ -181,8 +206,10 @@ func handle_intent(sender: int, action: String, args: Dictionary) -> void:
 				resolver.play(self, sender, int(args.get("card", -1)), int(args.get("target", sender)))
 			"end":
 				if turns.current_player == sender and turns.phase == "ACTION_PHASE":
+					record("%s đã kết thúc lượt hành động." % players[sender].display_name)
 					if players[sender].hand.size() > players[sender].current_hp:
 						turns.phase = "DISCARD_PHASE"
+						turns.action_deadline = Time.get_ticks_msec() + TurnManager.DISCARD_TIMEOUT_MS
 					else:
 						advance_turn()
 			"discard":
@@ -362,6 +389,7 @@ func kill_player(id: int, source: int) -> void:
 func check_win() -> String:
 	if not started:
 		return ""
+	var previous_winner := winner
 	var survivors: Array = players.values().filter(func(p): return p.is_alive)
 	if players.size() <= 3:
 		# The small-table variant has no Sheriff. It ends only with one survivor,
@@ -376,6 +404,8 @@ func check_win() -> String:
 		elif not survivors.any(func(p): return p.role == PlayerState.Role.OUTLAW or p.role == PlayerState.Role.RENEGADE):
 			winner = "SHERIFF TEAM WINS"
 	if not winner.is_empty():
+		if previous_winner.is_empty():
+			record("Ván chơi kết thúc: %s." % TextCatalog.text(winner))
 		turns.phase = "GAME_OVER"
 		for player in players.values():
 			if player.is_connected:
@@ -397,6 +427,7 @@ func finish_resolution() -> void:
 		advance_turn()
 	elif turns.phase != "DISCARD_PHASE":
 		turns.phase = "ACTION_PHASE"
+		turns.action_deadline = Time.get_ticks_msec() + TurnManager.ACTION_TIMEOUT_MS
 
 func disconnect_player(id: int) -> void:
 	if not players.has(id):
@@ -431,6 +462,14 @@ func record(message: String) -> void:
 	log_lines.append(message)
 	if log_lines.size() > 12:
 		log_lines.pop_front()
+	history_sequence += 1
+	history_events.append({
+		"event_id": "history:%d:%d" % [match_id, history_sequence],
+		"match_id": match_id,
+		"text": message
+	})
+	while history_events.size() > 150:
+		history_events.pop_front()
 
 func fail(id: int, message: String) -> void:
 	network.send_notice(id, message)
@@ -447,7 +486,8 @@ func public_snapshot() -> Dictionary:
 		"discard_top": deck.discard_pile.back() if not deck.discard_pile.is_empty() else {},
 		"market": flow.market.duplicate(true), "choice_player": reactions.active.get("target_player_id", 0),
 		"choice_type": reactions.active.get("reaction_type", ""),
-		"log": log_lines.duplicate(), "debug": OS.is_debug_build()}
+		"log": log_lines.duplicate(), "history": history_events.duplicate(true),
+		"debug": OS.is_debug_build()}
 
 func private_snapshot(id: int) -> Dictionary:
 	var result: Dictionary = players[id].private_snapshot() if started else {}

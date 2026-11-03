@@ -26,7 +26,9 @@ static func mode(node: Node) -> String:
 	var is_mobile := css.x <= 768 or (css.x <= 1180 and css.y <= 720)
 	if is_mobile:
 		return MOBILE_PORTRAIT if css.y >= css.x else MOBILE_LANDSCAPE
-	if minf(css.x, css.y) <= 900.0 and maxf(css.x, css.y) <= 1366.0:
+	# 1366×768 is a common desktop/laptop viewport; treating it as tablet
+	# compresses the center equipment and action controls into each other.
+	if minf(css.x, css.y) <= 900.0 and maxf(css.x, css.y) <= 1280.0:
 		return TABLET
 	return DESKTOP
 

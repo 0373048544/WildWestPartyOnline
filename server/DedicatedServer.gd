@@ -189,6 +189,12 @@ func dispatch(connection_id: int, message: Dictionary) -> void:
 	if decoded.is_empty() or not NetworkManager.valid_arguments(decoded.action, decoded.args):
 		reject(connection_id, "HÃ nh Ä‘á»™ng hoáº·c dá»¯ liá»‡u khÃ´ng há»£p lá»‡.", false)
 		return
+	# Scope every authenticated gameplay request to the snapshot/match that
+	# produced it. A delayed pre-rematch packet is rejected even if it carries a
+	# fresh intent ID and otherwise-valid card/player identifiers.
+	if not decoded.args.has("match_id") or int(decoded.args.match_id) != int(room.game.match_id):
+		reject(connection_id, "Hành động thuộc ván cũ và đã bị từ chối.", false)
+		return
 	# Keep duplicate suppression on the authenticated session, including reconnect.
 	if not message.has("intent_id"):
 		reject(connection_id, "Thiáº¿u mÃ£ hÃ nh Ä‘á»™ng.", false)

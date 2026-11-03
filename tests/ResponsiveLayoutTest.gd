@@ -52,7 +52,7 @@ func _ready() -> void:
 		GameManager.players[1].hand.append(CardInstance.make(9100+index,"shoot","HEART",7))
 	GameManager.publish()
 	app.seen_role = GameManager.match_id
-	for css in [Vector2i(360,800),Vector2i(390,844),Vector2i(393,852),Vector2i(412,915),Vector2i(430,932),Vector2i(844,390),Vector2i(915,412),Vector2i(932,430),Vector2i(1024,768),Vector2i(1180,820),Vector2i(1440,900),Vector2i(1920,1080)]:
+	for css in [Vector2i(360,640),Vector2i(360,800),Vector2i(375,667),Vector2i(390,844),Vector2i(393,852),Vector2i(412,915),Vector2i(430,932),Vector2i(844,390),Vector2i(915,412),Vector2i(932,430),Vector2i(1024,768),Vector2i(1180,820),Vector2i(1366,768),Vector2i(1440,900),Vector2i(1920,1080)]:
 		get_window().size = css
 		get_viewport().set_meta("match_css_size",Vector2(css))
 		var layout_mode: String = LAYOUT.mode(app)
@@ -80,7 +80,9 @@ func _ready() -> void:
 		var reaction := {"request_id": 700+css.x, "reaction_type": "dodge", "source_player_id": 2,
 			"allowed_card_types": [9100], "remaining": 8.0}
 		app.reaction_banner.present(app,reaction,NetworkManager.public_state)
-		await get_tree().process_frame
+		# Nameplate avoidance is deliberately deferred so a banner resize cannot
+		# mutate the 3D table hierarchy during its layout pass.
+		await settle()
 		var banner_panel: Control = app.reaction_banner.get_node("Banner")
 		var banner_rect: Rect2 = banner_panel.get_global_rect()
 		check(app.reaction_banner.visible and "Cao bồi 2" in app.reaction_banner.get_node("Banner/Content/TitleRow/Title").text,"reaction banner names attacker "+str(css))

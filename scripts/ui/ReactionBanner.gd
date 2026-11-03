@@ -182,12 +182,19 @@ func _apply_layout() -> void:
 	var short_landscape := mobile and size.x > size.y
 	var safe: Vector4 = layout.safe_insets(self) if mobile else Vector4.ZERO
 	var width: float = minf(layout.units(self, 420 if short_landscape else 540), size.x - safe.x - safe.z - layout.units(self, 20))
-	var height: float = layout.units(self, 108 if short_landscape else (150 if mobile else 138))
-	var top: float = safe.y + (
-		layout.get_mobile_banner_height(self) + layout.units(self, 4.0)
-		if short_landscape
-		else layout.units(self, 62 if mobile else 58)
-	)
+	# On short portrait phones (360x640 / 375x667), 150 CSS px reached the
+	# upper table nameplates. The content fits in 120 px while preserving the
+	# 44 px touch actions and two-line detail, so keep the gameplay view clear.
+	var height: float = layout.units(self, 108 if short_landscape else (120 if mobile else 138))
+	var top: float
+	if short_landscape:
+		top = safe.y + layout.get_mobile_banner_height(self) + layout.units(self, 4.0)
+	elif mobile:
+		# The reaction is the highest-priority HUD information. On portrait it may
+		# temporarily cover the phase strip, but must not cover player name/HP.
+		top = safe.y + layout.units(self, 4.0)
+	else:
+		top = layout.units(self, 58)
 	primary_button.custom_minimum_size.y = layout.units(self, 44 if mobile else 40)
 	secondary_button.custom_minimum_size.y = primary_button.custom_minimum_size.y
 	skip_button.custom_minimum_size.y = primary_button.custom_minimum_size.y

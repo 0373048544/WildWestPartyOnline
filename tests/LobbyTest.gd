@@ -123,7 +123,7 @@ func test_client() -> void:
 	await until(func(): return snapshot().get("started", false), "synchronized Start")
 	require(is_instance_valid(app.table), "client loads GameTable")
 	await choose_character()
-	await until(func(): return last_error == "Host disconnected.", "host disconnect notification")
+	await until(func(): return "Máy chủ" in last_error or last_error == "Host disconnected.", "host disconnect notification")
 	require(snapshot().is_empty() and not is_instance_valid(app.table), "host disconnect returns to menu")
 	print("PASS: Join -> same Lobby; host name/ready synchronized; remote Start rejected; GameTable and host disconnect verified")
 

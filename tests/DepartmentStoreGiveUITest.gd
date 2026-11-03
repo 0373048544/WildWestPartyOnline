@@ -108,11 +108,17 @@ func _ready() -> void:
 	var confirm: Button = panel().get_node("Padding/Content/Actions/ConfirmGive") as Button
 	check(app.match_hud.department_give_selected == first.instance_id, "tap selects a card directly from HandFan")
 	check(is_instance_valid(first_view) and bool(first_view.get_meta("chosen_card", false)) and first_view.visual.position.y < 0, "selected hand card receives raised/highlighted state")
+	check(is_instance_valid(first_view) and first_view.visual.scale.x <= 1.08 and first_view.visual.scale.y <= 1.08, "selected hand card never uses an oversized preview scale")
+	check(not is_instance_valid(app.match_hud.preview) and not is_instance_valid(app.match_hud.get_node_or_null("CardPreview")), "tap-to-give does not open or leave a CardPreview")
+	check(app.match_hud.hand.get_global_rect().encloses(first_view.visual.get_global_rect()), "selected card face remains inside the HandFan bounds hand=%s card=%s" % [app.match_hud.hand.get_global_rect(), first_view.visual.get_global_rect()])
 	check(not confirm.disabled and "BẮN" in str(panel().get_node("Padding/Content/Copy/Question").text), "compact panel asks confirmation using selected card name")
 	check(GameManager.players[1].hand.has(first) and not GameManager.players[2].hand.has(first), "selection alone does not transfer a private card")
 	panel().get_node("Padding/Content/Actions/ResetGive").pressed.emit()
 	await settle()
 	check(app.match_hud.department_give_selected == -1 and confirm.disabled, "CHỌN LẠI clears local selection without resolving prompt")
+	first_view = selected_view(first.instance_id)
+	check(is_instance_valid(first_view) and not bool(first_view.get_meta("chosen_card", false)) and is_zero_approx(first_view.visual.position.y), "reset restores the selected card visual transform")
+	check(not is_instance_valid(app.match_hud.preview) and app.match_hud.hand.cards.size() == GameManager.players[1].hand.size(), "reset leaves no preview or duplicate hand CardView")
 
 	app.match_hud.handle_card(second.instance_id)
 	await settle()
@@ -122,9 +128,10 @@ func _ready() -> void:
 	check(GameManager.reactions.active.is_empty(), "ĐƯA resolves the existing authoritative prompt")
 	check(not GameManager.players[1].hand.has(second) and GameManager.players[2].hand.has(second), "confirmed card transfer remains server-authoritative")
 	check(not is_instance_valid(panel()) and not is_instance_valid(app.overlay), "compact panel disappears immediately after resolution")
+	check(not is_instance_valid(app.match_hud.preview) and not is_instance_valid(app.match_hud.get_node_or_null("CardPreview")), "resolved prompt cleans all temporary preview visuals")
 
 	prompt_giver()
-	for css in [Vector2i(390, 844), Vector2i(844, 390)]:
+	for css in [Vector2i(360, 640), Vector2i(375, 667), Vector2i(390, 844), Vector2i(412, 915), Vector2i(430, 932), Vector2i(844, 390)]:
 		configure_viewport(css)
 		await settle()
 		var compact: Control = panel()

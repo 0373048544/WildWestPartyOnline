@@ -304,13 +304,13 @@ func _journal_button_rect(layout: Script) -> Rect2:
 	if is_instance_valid(hud):
 		var holder: Node = hud.get_node_or_null("MatchLog")
 		if is_instance_valid(holder):
-			for child in holder.get_children():
-				if child is Button and child.is_visible_in_tree():
-					var journal: Rect2 = child.get_global_rect()
-					return Rect2(
-						Vector2(journal.position.x, journal.end.y + layout.units(self, 4.0)),
-						Vector2(journal.size.x, maxf(layout.units(self, 42.0), journal.size.y))
-					)
+			var child := holder.find_child("ToggleHistory", true, false) as Button
+			if is_instance_valid(child) and child.is_visible_in_tree():
+				var journal: Rect2 = child.get_global_rect()
+				return Rect2(
+					Vector2(journal.position.x, journal.end.y + layout.units(self, 4.0)),
+					Vector2(journal.size.x, maxf(layout.units(self, 42.0), journal.size.y))
+				)
 	return layout.chat_button_rect(self)
 
 func _keyboard_shift() -> float:

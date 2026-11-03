@@ -346,7 +346,8 @@ func arrange() -> void:
 		view.position = Vector2(
 			(size.x - width) / 2.0
 			+ float(index) * gap,
-			absf(fraction) * 7.0 + 16.0
+			absf(fraction) * 7.0
+			- 6.0
 		)
 
 		view.rotation = (

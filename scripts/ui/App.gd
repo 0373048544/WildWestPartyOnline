@@ -35,11 +35,14 @@ var layout_refresh_queued: bool = false
 var personal_toasts: Control
 var reaction_banner: Control
 var chat_panel: Control
+var connection_banner: Control
 var web_layout: Node
 var menu_name_draft := ""
 var menu_room_draft := ""
 var menu_refresh_pending := false
 var last_room_submit_at := -1000
+var connection_roster_key := ""
+var known_player_connections: Dictionary = {}
 
 func _ready() -> void:
 	set_process(false)
@@ -60,6 +63,9 @@ func _ready() -> void:
 	chat_panel = load("res://scenes/ui/ChatPanel.tscn").instantiate()
 	canvas.add_child(chat_panel)
 	chat_panel.setup(self)
+	connection_banner = load("res://scripts/ui/ConnectionStatusBanner.gd").new()
+	canvas.add_child(connection_banner)
+	connection_banner.setup(self)
 	root.resized.connect(func():
 		if not layout_refresh_queued:
 			layout_refresh_queued = true
@@ -201,6 +207,7 @@ func show_help() -> void:
 
 func refresh() -> void:
 	var state: Dictionary = NetworkManager.public_state
+	_observe_player_connections(state)
 	var in_game: bool = not state.is_empty() and state.get("started", false)
 	# Network snapshots are frequent. Keep the table and HUD alive for the whole
 	# match; MatchHUD invalidates only the sections whose input changed.
@@ -439,8 +446,49 @@ func arm_mobile_submit(submit: Button) -> void:
 func local_id() -> int:
 	return NetworkManager.local_player_id()
 
-func intent(action: String, args: Dictionary = {}) -> void:
-	NetworkManager.send_intent(action, args)
+func intent(action: String, args: Dictionary = {}) -> bool:
+	return NetworkManager.send_intent(action, args)
+
+func _observe_player_connections(state: Dictionary) -> void:
+	if state.is_empty():
+		return
+	var next_key := str(state.get("room_code", "ENET"))
+	if connection_roster_key != next_key:
+		connection_roster_key = next_key
+		known_player_connections.clear()
+		for row in state.get("players", []):
+			known_player_connections[int(row.get("player_id", 0))] = {
+				"name": str(row.get("display_name", "Cao bồi")),
+				"connected": bool(row.get("is_connected", true))
+			}
+		return
+	var present: Dictionary = {}
+	for row in state.get("players", []):
+		var id := int(row.get("player_id", 0))
+		var connected := bool(row.get("is_connected", true))
+		var title := str(row.get("display_name", "Cao bồi"))
+		present[id] = true
+		if known_player_connections.has(id):
+			var was_connected := bool(known_player_connections[id].get("connected", true))
+			if was_connected != connected and id != local_id():
+				_connection_notice(
+					"%s đã kết nối lại." % title
+					if connected
+					else "%s mất kết nối." % title,
+					"positive" if connected else "warning"
+				)
+		known_player_connections[id] = {"name": title, "connected": connected}
+	for old_id in known_player_connections.keys().duplicate():
+		if not present.has(old_id):
+			if int(old_id) != local_id():
+				_connection_notice("%s đã rời phòng." % str(known_player_connections[old_id].get("name", "Cao bồi")), "warning")
+			known_player_connections.erase(old_id)
+
+func _connection_notice(message: String, tone: String) -> void:
+	if is_instance_valid(personal_toasts) and NetworkManager.public_state.get("started", false):
+		personal_toasts.show_notice(message, "", tone, "⌁", 2.0)
+	else:
+		show_outgame_toast(message, tone)
 
 func build_lobby(state: Dictionary) -> void:
 	content.configure(self, state)
@@ -457,6 +505,8 @@ func leave() -> void:
 	if is_instance_valid(reaction_banner):
 		reaction_banner.hide_banner()
 	NetworkManager.leave()
+	connection_roster_key = ""
+	known_player_connections.clear()
 
 func build_game(state: Dictionary) -> void:
 	var own: Dictionary = NetworkManager.private_state
@@ -478,11 +528,8 @@ func build_game(state: Dictionary) -> void:
 	# including the transition from the death prompt into spectator mode.
 	if is_instance_valid(chat_panel):
 		chat_panel.sync_state(state, own, is_instance_valid(overlay))
-	if NetworkManager.mode == "websocket" and NetworkManager.room_client.reconnecting:
-		table.targeting.blocked = true
-		var box := modal()
-		label("ĐANG KẾT NỐI LẠI...", 26, box)
-		label("Ván chơi và vai trò được giữ trong thời gian chờ.", 18, box)
+	if is_instance_valid(table):
+		table.targeting.blocked = menu_open or is_instance_valid(overlay) or not NetworkManager.can_submit_intents()
 
 func choose_card(uid: int) -> void:
 	if is_instance_valid(match_hud):

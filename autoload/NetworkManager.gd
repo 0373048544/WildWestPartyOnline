@@ -7,6 +7,14 @@ signal table_event(event: Dictionary)
 signal chat_message(message: Dictionary)
 signal chat_history(messages: Array)
 signal chat_error(message: String)
+signal connection_status_changed(status: String)
+
+const CONNECTION_IDLE := "IDLE"
+const CONNECTION_CONNECTED := "CONNECTED"
+const CONNECTION_RECONNECTING := "RECONNECTING"
+const CONNECTION_DISCONNECTED := "DISCONNECTED"
+const CONNECTION_SESSION_EXPIRED := "SESSION_EXPIRED"
+const CONNECTION_SERVER_UNAVAILABLE := "SERVER_UNAVAILABLE"
 var public_state: Dictionary = {}
 var private_state: Dictionary = {}
 var local_name: String = "Cao bồi"
@@ -22,6 +30,7 @@ var chat_room: String = ""
 var chat_messages: Array[Dictionary] = []
 var seen_chat_messages: Dictionary = {}
 var enet_chat := ChatRoomState.new("ENET")
+var connection_status: String = CONNECTION_IDLE
 
 func stamp_audio(event: Dictionary) -> Dictionary:
 	audio_sequence += 1
@@ -39,8 +48,14 @@ func _ready() -> void:
 	multiplayer.peer_connected.connect(_peer_connected)
 	multiplayer.peer_disconnected.connect(_peer_disconnected)
 	multiplayer.connected_to_server.connect(func(): register_player.rpc_id(1, local_name))
-	multiplayer.connection_failed.connect(func(): leave(); error_received.emit("Connection failed. Check IP, port and firewall."))
-	multiplayer.server_disconnected.connect(func(): leave(); error_received.emit("Host disconnected."))
+	multiplayer.connection_failed.connect(func():
+		leave()
+		set_connection_status(CONNECTION_SERVER_UNAVAILABLE)
+		error_received.emit("Không thể liên lạc với máy chủ. Hãy kiểm tra địa chỉ, cổng và tường lửa."))
+	multiplayer.server_disconnected.connect(func():
+		leave()
+		set_connection_status(CONNECTION_SERVER_UNAVAILABLE)
+		error_received.emit("Máy chủ đã đóng kết nối."))
 	room_client = load("res://scripts/network/RoomClient.gd").new()
 	room_client.manager = self
 	add_child(room_client)
@@ -57,6 +72,25 @@ func is_room_host(id: int) -> bool:
 
 func allow_two_players() -> bool:
 	return true
+
+func set_connection_status(next_status: String) -> void:
+	if connection_status == next_status:
+		return
+	connection_status = next_status
+	connection_status_changed.emit(connection_status)
+	updated.emit()
+
+func can_submit_intents() -> bool:
+	if mode == "websocket":
+		return (
+			connection_status == CONNECTION_CONNECTED
+			and is_instance_valid(room_client)
+			and room_client.can_send_gameplay()
+			and not public_state.is_empty()
+		)
+	if mode == "enet":
+		return multiplayer.is_server() or (not connecting and multiplayer.has_multiplayer_peer())
+	return mode == "offline"
 
 func local_player_id() -> int:
 	return room_client.player_id if mode == "websocket" else multiplayer.get_unique_id()
@@ -156,6 +190,7 @@ func leave() -> void:
 	private_state = {}
 	clear_chat()
 	GameManager.clear()
+	set_connection_status(CONNECTION_IDLE)
 	updated.emit()
 
 func clean_name(title: String) -> String:
@@ -211,17 +246,18 @@ func rejected(reason: String) -> void:
 	leave()
 	error_received.emit(reason)
 
-func send_intent(action: String, args: Dictionary = {}) -> void:
-	if action == "character":
-		args = args.duplicate(true)
-		args["match_id"] = int(public_state.get("match_id", 0))
+func send_intent(action: String, args: Dictionary = {}) -> bool:
+	if not can_submit_intents():
+		return false
+	args = args.duplicate(true)
+	args["match_id"] = int(public_state.get("match_id", GameManager.match_id))
 	if mode == "websocket":
-		room_client.send_intent(action, args)
-		return
+		return room_client.send_intent(action, args)
 	if multiplayer.is_server():
 		GameManager.handle_intent(1, action, args)
 	else:
 		request.rpc_id(1, action, args)
+	return true
 
 func begin_chat_room(code: String) -> void:
 	if chat_room == code:
@@ -337,23 +373,25 @@ func request(action: String, args: Dictionary) -> void:
 			GameManager.handle_intent(sender, action, args)
 
 func valid_arguments(action: String, args: Dictionary) -> bool:
-	if args.size() > 5:
+	if args.size() > 6 or not args.get("match_id", 0) is int:
 		return false
+	var payload := args.duplicate(true)
+	payload.erase("match_id")
 	match action:
 		"ready", "start", "spectate", "rematch", "restart", "lobby", "end":
-			return args.is_empty()
+			return payload.is_empty()
 		"play":
-			return args.get("card") is int and args.get("target") is int
+			return payload.get("card") is int and payload.get("target") is int
 		"discard":
-			return args.get("card") is int
+			return payload.get("card") is int
 		"reaction":
-			return args.get("request") is int and args.get("accept") is bool and args.get("cards", []) is Array and args.get("cards", []).size() <= 2 and args.get("option", "") is String and args.get("card", 0) is int
+			return payload.get("request") is int and payload.get("accept") is bool and payload.get("cards", []) is Array and payload.get("cards", []).size() <= 2 and payload.get("option", "") is String and payload.get("card", 0) is int
 		"character":
-			return args.get("character") is String and args.get("match_id") is int
+			return payload.get("character") is String and args.get("match_id") is int
 		"ability":
-			return args.get("cards") is Array and args.cards.size() == 2 and args.cards.all(func(id): return id is int)
+			return payload.get("cards") is Array and payload.cards.size() == 2 and payload.cards.all(func(id): return id is int)
 		"debug":
-			return args.get("operation") is String and args.get("target", 1) is int
+			return payload.get("operation") is String and payload.get("target", 1) is int
 	return false
 
 @rpc("authority", "call_remote", "reliable")
@@ -363,6 +401,7 @@ func receive_public(snapshot: Dictionary) -> void:
 	public_state = snapshot
 	admission_timer = 0.0
 	connecting = false
+	set_connection_status(CONNECTION_CONNECTED)
 	session_port = int(snapshot.get("server_port", session_port))
 	updated.emit()
 

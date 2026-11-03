@@ -190,7 +190,10 @@ func compact(chosen: bool, reaction: bool) -> void:
 	visual.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	visual.size = Vector2(210, 214)
 	visual.scale = Vector2.ONE * 0.75 * (1.05 if chosen_state else 1.0)
-	selected_lift = -30 if chosen else 0
+	# Selection is a compact hand highlight, not a second preview. Keep the lift
+	# inside the requested 10-18 px range so the rendered face cannot rise behind
+	# the department-store prompt or escape the HandFan bounds.
+	selected_lift = -18 if chosen else 0
 	visual.position.y = selected_lift
 	if reaction:
 		if VisualSettings.decorative_motion():

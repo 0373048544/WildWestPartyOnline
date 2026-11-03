@@ -163,6 +163,7 @@ func draw_job(job: Dictionary) -> void:
 func action_job(job: Dictionary) -> void:
 	if game.living(job.target):
 		game.turns.phase = "ACTION_PHASE"
+		game.turns.action_deadline = Time.get_ticks_msec() + TurnManager.ACTION_TIMEOUT_MS
 	else:
 		game.advance_turn()
 

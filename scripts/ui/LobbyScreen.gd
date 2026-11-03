@@ -18,7 +18,11 @@ func configure(app: Node, state: Dictionary) -> void:
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	heading.add_theme_color_override("font_color", SaloonTheme.GOLD)
 	var connection := WesternStatusBadgeScript.new()
-	connection.configure("● ĐÃ KẾT NỐI", "success")
+	var local_status := NetworkManager.connection_status
+	connection.configure(
+		"⌁ ĐANG KẾT NỐI LẠI" if local_status == NetworkManager.CONNECTION_RECONNECTING else "● ĐÃ KẾT NỐI",
+		"warning" if local_status == NetworkManager.CONNECTION_RECONNECTING else "success"
+	)
 	header.add_child(connection)
 
 	var code: String = str(state.get("room_code", ""))
@@ -39,15 +43,11 @@ func configure(app: Node, state: Dictionary) -> void:
 	room_code.name = "RoomCodeValue"
 	room_code.add_theme_color_override("font_color", Color("#35241b"))
 	if not code.is_empty():
-		var copy: Button = app.button("⧉  SAO CHÉP", func():
-			DisplayServer.clipboard_set(code)
-			app.show_outgame_toast("Đã sao chép mã phòng " + code, "success"), room_row)
+		var copy: Button = app.button("⧉  SAO CHÉP", func(): _copy_room_code(app, code), room_row)
 		copy.name = "CopyRoomCode"
 		copy.set_variant("primary")
 		if not portrait:
-			var invite: Button = app.button("✦  MỜI BẠN", func():
-				DisplayServer.clipboard_set(code)
-				app.show_outgame_toast("Đã sao chép mã để gửi bạn bè", "success"), room_row)
+			var invite: Button = app.button("✦  MỜI BẠN", func(): _copy_room_code(app, code), room_row)
 			invite.set_variant("quiet")
 
 	var host_name := ""
@@ -69,6 +69,8 @@ func configure(app: Node, state: Dictionary) -> void:
 	list.add_theme_constant_override("v_separation", 7)
 	add_child(list)
 	var own_ready := false
+	var connected_count := 0
+	var ready_count := 0
 	for player in state.players:
 		var card: PanelContainer = WesternPlayerCardScript.new()
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -76,6 +78,9 @@ func configure(app: Node, state: Dictionary) -> void:
 		card.configure(player, int(state.get("host_player_id", 1)), app.local_id(), compact or portrait)
 		if int(player.player_id) == app.local_id():
 			own_ready = bool(player.ready)
+		if bool(player.get("is_connected", true)):
+			connected_count += 1
+			ready_count += int(bool(player.ready))
 	for _slot in range(maxi(0, int(state.minimum_players) - state.players.size())):
 		var empty := PanelContainer.new()
 		empty.add_theme_stylebox_override("panel", SaloonTheme.inset_panel(10))
@@ -89,7 +94,14 @@ func configure(app: Node, state: Dictionary) -> void:
 	var note := PanelContainer.new()
 	note.add_theme_stylebox_override("panel", SaloonTheme.inset_panel(9))
 	add_child(note)
-	var note_label: Label = app.label("Mọi người nhấn SẴN SÀNG. Chủ phòng sẽ bắt đầu khi đủ người.", 13 if compact else 15, note)
+	var waiting_reason := "Mọi người đã sẵn sàng."
+	if connected_count < 2:
+		waiting_reason = "Cần ít nhất 2 người chơi."
+	elif connected_count < state.players.size():
+		waiting_reason = "Đang chờ người chơi mất kết nối quay lại."
+	elif ready_count < connected_count:
+		waiting_reason = "Đang chờ người chơi sẵn sàng (%d/%d)." % [ready_count, connected_count]
+	var note_label: Label = app.label(waiting_reason, 13 if compact else 15, note)
 	note_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	note.visible = not compact
 
@@ -110,10 +122,6 @@ func configure(app: Node, state: Dictionary) -> void:
 		start.name = "StartButton"
 		start.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		start.set_variant("primary")
-		if can_start and VisualSettings.decorative_motion():
-			var pulse := start.create_tween().set_loops()
-			pulse.tween_property(start, "modulate", Color("#fff0c5"), 0.75).set_trans(Tween.TRANS_SINE)
-			pulse.tween_property(start, "modulate", Color.WHITE, 0.75).set_trans(Tween.TRANS_SINE)
 	else:
 		var waiting_host := WesternStatusBadgeScript.new()
 		waiting_host.configure("CHỜ CHỦ PHÒNG", "warning")
@@ -131,3 +139,10 @@ func configure(app: Node, state: Dictionary) -> void:
 	if OS.is_debug_build() and bool(state.debug) and NetworkManager.mode != "websocket" and app.local_id() == int(state.get("host_player_id", 1)):
 		var debug_button: Button = app.button("DEBUG • BẮT ĐẦU ÉP BUỘC", func(): app.intent("debug", {"operation": "Force Start"}), self, state.players.size() < int(state.minimum_players))
 		debug_button.set_variant("quiet")
+
+func _copy_room_code(app: Node, code: String) -> void:
+	DisplayServer.clipboard_set(code)
+	if DisplayServer.clipboard_get() == code:
+		app.show_outgame_toast("ĐÃ SAO CHÉP MÃ PHÒNG", "success")
+	else:
+		app.show_outgame_toast("KHÔNG THỂ SAO CHÉP MÃ PHÒNG", "danger")

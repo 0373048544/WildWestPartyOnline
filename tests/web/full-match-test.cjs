@@ -9,7 +9,7 @@ async function until(fn,label,ms=12000){const end=Date.now()+ms;while(!fn()){if(
 class Peer{
  constructor(name){this.name=name;this.messages=[];this.state=null;this.session=null;this.last=0;}
  async open(){this.ws=new WebSocket(endpoint);this.ws.addEventListener('message',e=>{const m=JSON.parse(e.data);this.messages.push(m);if(m.type==='STATE')this.state=m.payload;if(['ROOM_CREATED','JOIN_ACCEPTED','SESSION_RESUMED'].includes(m.type))this.session=m.payload;if(m.type==='PING')this.send('PONG');});await new Promise((r,j)=>{this.ws.addEventListener('open',r,{once:true});this.ws.addEventListener('error',j,{once:true});});}
- packet(type,payload={}){return {type,payload,version:1,intent_id:crypto.randomUUID()};}
+ packet(type,payload={}){const scoped=this.state?{...payload,match_id:this.state.public.match_id}:payload;return {type,payload:scoped,version:1,intent_id:crypto.randomUUID()};}
  send(type,payload={}){this.ws.send(JSON.stringify(this.packet(type,payload)));}
  async intent(type,payload={}){await delay(Math.max(0,120-(Date.now()-this.last)));const revision=this.state?.public.revision||0;this.send(type,payload);this.last=Date.now();try{await until(()=>this.state?.public.revision>revision,type);}catch(e){console.error('Intent diagnostic',JSON.stringify({type,payload,player:this.session.player_id,phase:this.state.public.phase,turn:this.state.public.current_player,reaction:this.state.private.reaction,errors:this.messages.filter(m=>m.type==='ERROR').slice(-3)}));throw e;}}
  async resume(){const own=structuredClone(this.state.private),token=this.session.session_token;this.ws.close();await delay(100);await this.open();this.state=null;this.send('RESUME_SESSION',{session_token:token});await until(()=>this.state&&this.messages.at(-1)?.type==='STATE'&&this.state.public.players.find(p=>p.player_id===this.session.player_id)?.is_connected,'resume');assert.deepEqual(this.state.private.hand,own.hand);assert.equal(this.state.private.role,own.role);assert.equal(this.state.private.reaction?.request_id,own.reaction?.request_id);}
@@ -22,6 +22,8 @@ function verify(group){
  for(const row of pub.players){assert(!('hand'in row)&&!('role'in row)&&!('character_options'in row));if(row.weapon_card?.instance_id)ids.push(row.weapon_card.instance_id);ids.push(...(row.equipment_cards||[]).map(c=>c.instance_id));ids.push(...(row.delayed_cards||[]).map(c=>c.instance_id));}
  ids.push(...pub.market.map(c=>c.instance_id));assert.equal(new Set(ids).size,ids.length,'no duplicate physical cards across owners/in-play/reserved/market');
  assert.equal(ids.length+pub.draw_count+pub.discard_count,EXPECTED_CARD_COUNT,`${EXPECTED_CARD_COUNT}-card conservation over actual client views`);assert(!('draw_pile'in pub)&&!('character_options'in pub));
+ const history=pub.history||[];assert(history.length<=150,'public action history is capped');assert.equal(new Set(history.map(e=>e.event_id)).size,history.length,'public action history has no duplicate IDs');
+ for(const event of history){assert.equal(event.match_id,pub.match_id,'history is scoped to current match');assert(!/card_data_id|instance_id|\buid\b/i.test(String(event.text)),'history leaks no private card identifier');}
 }
 async function match(count){
  const host=await peer('Host'+count);host.send('CREATE_ROOM',{player_name:host.name});await until(()=>host.session&&host.state,'create');const group=[host];
@@ -62,7 +64,15 @@ async function match(count){
   else await p.intent('END_TURN');
  }
  assert(host.state.public.winner,'complete game must finish');await sync(group);verify(group);
- const before=host.state.public.match_id;await Promise.all(group.map(p=>p.intent('REMATCH_READY')));await sync(group);assert(host.state.public.match_id>before);assert(group.every(p=>p.state.private.character_options.length===2));assert.equal(new Set(group.flatMap(p=>p.state.private.character_options.map(c=>c.character_id))).size,count*2);
+ const before=host.state.public.match_id;
+ // A match-ending action can have been sent less than the server's 80 ms
+ // per-player intent cooldown ago. Wait exactly as Peer.intent() does so this
+ // fixed packet tests idempotency instead of being (correctly) rate-limited.
+ await delay(Math.max(0,120-(Date.now()-host.last)));const rematchPacket=host.packet('REMATCH_READY');host.ws.send(JSON.stringify(rematchPacket));host.last=Date.now();await until(()=>host.state.public.players.find(row=>row.player_id===host.session.player_id).ready,'host rematch ready');
+ const duplicateRevision=host.state.public.revision;host.ws.send(JSON.stringify(rematchPacket));await delay(150);assert.equal(host.state.public.revision,duplicateRevision,'duplicate rematch intent is ignored');
+ await host.resume();const resumedRevision=host.state.public.revision;host.ws.send(JSON.stringify(rematchPacket));await delay(150);assert.equal(host.state.public.revision,resumedRevision,'replayed rematch intent stays ignored after reconnect');
+ await Promise.all(group.slice(1).map(p=>p.intent('REMATCH_READY')));await until(()=>host.state?.public.match_id===before+1,'authoritative rematch start');await sync(group);assert.equal(host.state.public.match_id,before+1,'rematch increments match exactly once');assert(group.every(p=>p.state.private.character_options.length===2));assert.equal(new Set(group.flatMap(p=>p.state.private.character_options.map(c=>c.character_id))).size,count*2);
+ const stalePick=host.packet('SELECT_CHARACTER',{character:host.state.private.character_options[0].character_id});stalePick.payload.match_id=before;const optionsBefore=host.state.private.character_options.map(c=>c.character_id);host.ws.send(JSON.stringify(stalePick));await delay(150);assert.deepEqual(host.state.private.character_options.map(c=>c.character_id),optionsBefore,'late previous-match intent cannot select in the new match');assert(host.messages.some(m=>m.type==='ERROR'&&String(m.payload.message).includes('ván cũ')),'late intent receives a sender-only rejection');
  for(const p of group)p.send('LEAVE_ROOM');
  const result={players:count,actions,coverage,reconnectContexts:[...checked],rematch:true};console.log('PASS full WebSocket match '+JSON.stringify(result));return result;
 }

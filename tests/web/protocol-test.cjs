@@ -14,7 +14,7 @@ class Client {
     });
     await new Promise((resolve,reject) => { this.ws.addEventListener('open',resolve,{once:true}); this.ws.addEventListener('error',reject,{once:true}); });
   }
-  send(type,payload={}) { this.ws.send(JSON.stringify({type,payload,version:1,intent_id:crypto.randomUUID()})); }
+  send(type,payload={}) { const scoped=this.state?{...payload,match_id:this.state.public.match_id}:payload; this.ws.send(JSON.stringify({type,payload:scoped,version:1,intent_id:crypto.randomUUID()})); }
   async wait(predicate, label, ms=10000) {
     const end=Date.now()+ms;
     while (!predicate()) { if(Date.now()>end) throw Error(this.name+': timeout '+label); await delay(30); }

@@ -1,12 +1,16 @@
 class_name TurnManager
 extends RefCounted
 
+const ACTION_TIMEOUT_MS := 90000
+const DISCARD_TIMEOUT_MS := 30000
+
 enum Phase { WAITING, GAME_STARTING, TURN_START, DRAW_PHASE, ACTION_PHASE, DISCARD_PHASE, TURN_END, REACTION, GAME_OVER }
 var phase: String = "WAITING"
 var current_player: int = 0
 var round_number: int = 0
 var action_turn_number: int = 0
 var action_turn_players_this_round: Dictionary = {}
+var action_deadline: int = 0
 
 func record_action_turn(id: int, players: Dictionary) -> void:
 	var active_ids: Array = players.values().filter(

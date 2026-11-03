@@ -14,6 +14,7 @@ var flow_signature: String = ""
 var choice_status_signature: String = ""
 var target_picker: Control
 var loadout_panel: Control
+var action_history: Control
 var dismissed_picker_request: int = -1
 var department_give_request_id: int = -1
 var department_give_selected: int = -1
@@ -46,7 +47,6 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 		request.get("request_id", 0),
 		state.get("players", []).map(func(row): return [row.get("player_id", 0), row.get("display_name", "")])
 	]) + str(get_window().size)
-	var next_log_signature := JSON.stringify(state.get("log", [])) + str(app.log_expanded)
 	var next_hand_signature := JSON.stringify([
 		own.get("hand", []), own.get("targets", {}), own.get("disabled_reasons", {}),
 		request_identity, state.get("phase", ""), state.get("current_player", 0),
@@ -62,11 +62,9 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 		NetworkManager.mode == "websocket" and NetworkManager.room_client.reconnecting
 	])
 	var top_changed := next_top_signature != top_signature
-	var log_changed := next_log_signature != log_signature
 	var hand_changed := next_hand_signature != hand_signature
 	var flow_changed := next_flow_signature != flow_signature
 	top_signature = next_top_signature
-	log_signature = next_log_signature
 	hand_signature = next_hand_signature
 	flow_signature = next_flow_signature
 
@@ -87,6 +85,7 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	name = "MatchHUD"
+	_sync_action_history()
 
 	app.table.targeting.blocked = false
 
@@ -153,10 +152,6 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 	if top_changed:
 		_free_named("TopBar")
 		build_top()
-
-	if log_changed:
-		_free_named("MatchLog")
-		build_log()
 
 	if state.phase == "CHARACTER_SELECTION":
 		app.table.targeting.blocked = true
@@ -661,6 +656,27 @@ func build_top() -> void:
 		menu.position.x -= safe.z
 		menu.position.y += safe.y
 
+
+func _sync_action_history() -> void:
+	if not is_instance_valid(action_history):
+		action_history = load("res://scripts/ui/ActionHistoryPanel.gd").new()
+		add_child(action_history)
+		action_history.setup(app)
+	var force_collapse: bool = (
+		not request.is_empty()
+		or app.menu_open
+		or state.get("phase", "") == "CHARACTER_SELECTION"
+		or not str(state.get("winner", "")).is_empty()
+		or is_instance_valid(app.overlay)
+	)
+	if state.get("history", []) is Array and not state.get("history", []).is_empty():
+		action_history.sync(state.get("history", []), int(state.get("match_id", 0)), force_collapse)
+	else:
+		action_history.sync_legacy(state.get("log", []), int(state.get("match_id", 0)), force_collapse)
+	# Chat is visually stacked under the persistent history control. Its first
+	# layout may run before this nested toggle has entered the tree.
+	if is_instance_valid(app.chat_panel):
+		app.chat_panel.call_deferred("layout_chat")
 
 func build_log() -> void:
 	var holder := VBoxContainer.new()
@@ -1670,29 +1686,44 @@ func build_result() -> void:
 	heading.add_theme_color_override("font_color", SaloonTheme.GOLD)
 	var winner_label := text(TextCatalog.text(state.winner), 30, box)
 	winner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	for player in state.players:
-		var status := " · SẴN SÀNG VÁN MỚI" if bool(player.get("ready", false)) and bool(player.get("is_connected", true)) else ""
-		var row := text("%s · %s%s" % [player.display_name, TextCatalog.text(player.public_role), status], 15, box)
-		row.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var local_ready := false
 	var connected_count := 0
 	var ready_count := 0
 	for player in state.players:
-		if bool(player.get("is_connected", true)):
+		var connected := bool(player.get("is_connected", true))
+		var ready := bool(player.get("ready", false)) and connected
+		var status := " · SẴN SÀNG" if ready else (" · MẤT KẾT NỐI" if not connected else " · ĐANG CHỜ")
+		var row := text("%s · %s%s" % [player.display_name, TextCatalog.text(player.public_role), status], 15, box)
+		row.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		if not connected:
+			row.add_theme_color_override("font_color", Color("#a99d87"))
+		if connected:
 			connected_count += 1
-			ready_count += int(bool(player.get("ready", false)))
+			ready_count += int(ready)
 		if int(player.player_id) == app.local_id():
-			local_ready = bool(player.get("ready", false))
+			local_ready = ready
+	var rematch_heading := text("CHƠI VÁN MỚI — %d/%d SẴN SÀNG" % [ready_count, connected_count], 17, box)
+	rematch_heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rematch_heading.add_theme_color_override("font_color", SaloonTheme.GOLD.lightened(0.12))
 	if local_ready:
 		var ready_label := text("✓  BẠN ĐÃ SẴN SÀNG", 19, box)
 		ready_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		ready_label.add_theme_color_override("font_color", SaloonTheme.SUCCESS.lightened(0.18))
-		var waiting := text("Đang chờ người chơi khác...  %d/%d" % [ready_count, connected_count], 15, box)
+		var waiting := text("Đang chờ người chơi khác xác nhận...", 15, box)
 		waiting.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	else:
-		var continue_button := action("TIẾP TỤC", func(): app.intent("rematch"), box)
+		var continue_button: Button
+		continue_button = action("TIẾP TỤC", func(): _request_rematch(continue_button), box)
 		continue_button.name = "RematchReadyButton"
 		continue_button.set_variant("primary")
 	var leave_button := action("RỜI PHÒNG", app.leave, box)
 	leave_button.name = "ResultLeaveButton"
 	leave_button.set_variant("danger")
+
+
+func _request_rematch(button: Button) -> void:
+	if button.disabled or not NetworkManager.can_submit_intents():
+		return
+	if app.intent("rematch"):
+		button.disabled = true
+		button.text = "ĐANG XÁC NHẬN…"

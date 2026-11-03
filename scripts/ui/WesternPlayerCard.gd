@@ -7,6 +7,7 @@ func configure(player: Dictionary, host_id: int, local_id: int, compact: bool = 
 	name = "Player%d" % int(player.player_id)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var seat_color: Color = SaloonTheme.SEATS[int(player.seat_index) % SaloonTheme.SEATS.size()]
+	var connected := bool(player.get("is_connected", true))
 	add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#243238"), seat_color, 12))
 	custom_minimum_size.y = 44 if compact else 60
 	if compact:
@@ -35,7 +36,7 @@ func configure(player: Dictionary, host_id: int, local_id: int, compact: bool = 
 	title.add_theme_color_override("font_color", SaloonTheme.CREAM)
 	identity.add_child(title)
 	var state := Label.new()
-	state.text = "Đang kết nối lại…" if not bool(player.is_connected) else ("Sẵn sàng vào bàn" if bool(player.ready) else "Đang chuẩn bị")
+	state.text = "⌁ MẤT KẾT NỐI · Đang giữ chỗ" if not connected else ("Sẵn sàng vào bàn" if bool(player.ready) else "Chưa sẵn sàng")
 	state.add_theme_font_size_override("font_size", 12 if compact else 14)
 	state.add_theme_color_override("font_color", Color("#9fd4ab") if bool(player.ready) else Color("#c9b996"))
 	identity.add_child(state)
@@ -47,13 +48,14 @@ func configure(player: Dictionary, host_id: int, local_id: int, compact: bool = 
 			host_badge.text_label.add_theme_font_size_override("font_size", 11)
 		row.add_child(host_badge)
 	var ready_badge := WesternStatusBadgeScript.new()
-	ready_badge.configure("✓ SẴN SÀNG" if bool(player.ready) else "CHỜ", "success" if bool(player.ready) else "warning")
+	ready_badge.configure("⌁ MẤT MẠNG" if not connected else ("✓ SẴN SÀNG" if bool(player.ready) else "CHƯA SẴN SÀNG"), "danger" if not connected else ("success" if bool(player.ready) else "warning"))
 	if compact:
 		ready_badge.text_label.text = "✓" if bool(player.ready) else "CHỜ"
 		ready_badge.text_label.add_theme_font_size_override("font_size", 11)
 	row.add_child(ready_badge)
 
 func build_compact(player: Dictionary, host_id: int, local_id: int, seat_color: Color) -> void:
+	var connected := bool(player.get("is_connected", true))
 	custom_minimum_size.y = 72
 	var stack := VBoxContainer.new()
 	stack.add_theme_constant_override("separation", 2)
@@ -84,7 +86,7 @@ func build_compact(player: Dictionary, host_id: int, local_id: int, seat_color: 
 	status_row.add_theme_constant_override("separation", 6)
 	stack.add_child(status_row)
 	var connection := Label.new()
-	connection.text = "Đang kết nối lại…" if not bool(player.is_connected) else ("Sẵn sàng vào bàn" if bool(player.ready) else "Đang chuẩn bị")
+	connection.text = "⌁ MẤT KẾT NỐI · Giữ chỗ" if not connected else ("Sẵn sàng vào bàn" if bool(player.ready) else "Chưa sẵn sàng")
 	connection.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	connection.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	connection.add_theme_font_size_override("font_size", 12)
@@ -96,6 +98,6 @@ func build_compact(player: Dictionary, host_id: int, local_id: int, seat_color: 
 		host.text_label.add_theme_font_size_override("font_size", 10)
 		status_row.add_child(host)
 	var ready := WesternStatusBadgeScript.new()
-	ready.configure("✓" if bool(player.ready) else "CHỜ", "success" if bool(player.ready) else "warning")
+	ready.configure("⌁" if not connected else ("✓" if bool(player.ready) else "CHỜ"), "danger" if not connected else ("success" if bool(player.ready) else "warning"))
 	ready.text_label.add_theme_font_size_override("font_size", 10)
 	status_row.add_child(ready)

@@ -287,7 +287,7 @@ async function save(page,name) {
       await click(page,c=>c.card_index===0&&!c.disabled);continue;
     }
     if(current.public.phase!=='ACTION_PHASE'){await delay(250);continue;}
-    const index=current.private.hand.findIndex(c=>['shoot','dodge'].includes(c.card_data_id)&&(current.private.targets[String(c.instance_id)]||[]).some(id=>id!==current.player_id));
+    const index=current.private.hand.findIndex(c=>c.card_data_id==='shoot'&&(current.private.targets[String(c.instance_id)]||[]).some(id=>id!==current.player_id));
     if(index>=0){
       const card=current.private.hand[index];
       const target=current.private.targets[String(card.instance_id)][0];

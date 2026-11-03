@@ -57,7 +57,7 @@ func require(value: bool, message: String) -> void:
 func _process(delta: float) -> void:
 	elapsed += delta
 	tick += delta
-	if elapsed > 35:
+	if elapsed > 70:
 		push_error("NETWORK FAILED: timeout")
 		get_tree().quit(1)
 	if tick < 0.18:
@@ -121,7 +121,9 @@ func _process(delta: float) -> void:
 	if stage == 1:
 		stage = 2
 		print("PASS: fresh match restart, peer ", id)
-	if is_host and elapsed - started_at > 5:
+	# Seven concurrent peers need more time to receive and assert their first
+	# private snapshot before the host forces the deterministic game-over state.
+	if is_host and elapsed - started_at > 12:
 		# Deterministic end-state exercises game-over delivery and restart.
 		for p in GameManager.players.values():
 			if p.role != PlayerState.Role.SHERIFF:

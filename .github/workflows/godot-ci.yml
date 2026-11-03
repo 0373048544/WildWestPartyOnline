@@ -1,0 +1,115 @@
+name: Godot multiplayer regression
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      GODOT_VERSION: 4.7.2
+      WWPO_TEST_URL: ws://127.0.0.1:17075
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Godot
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          curl --fail --location --retry 3 \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/${archive}" \
+            --output "/tmp/${archive}"
+          unzip -q "/tmp/${archive}" -d /tmp/godot
+          sudo install -m 0755 "/tmp/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+          godot --version
+
+      - name: Import project and validate scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --editor --path . --quit --quit-after 120
+
+      - name: Run gameplay and UI regression scenes
+        shell: bash
+        run: |
+          set -euo pipefail
+          tests=(
+            RulesTest
+            FullRoundPlaytest
+            MultiplayerStabilityTest
+            MultiplayerExperienceV2Test
+            RematchReliabilityTest
+            SpectatorRematchQuickEquipTest
+            DepartmentStoreGiveUITest
+            CharacterChoiceResponsiveTest
+            ResponsiveLayoutTest
+            CardArtworkTest
+            EndTurnPositionTest
+            DynamiteRulesTest
+            DuelTest
+            CustomCardsTest
+            CharacterAbilityTest
+            AudioReliabilityTest
+            StabilizationTest
+            ConnectionFailureTest
+          )
+          for test_name in "${tests[@]}"; do
+            echo "Running ${test_name}"
+            godot --headless --path . "res://tests/${test_name}.tscn"
+          done
+
+      - name: Run real WebSocket multiplayer tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          godot --headless --path . res://server/DedicatedServer.tscn -- --port=17075 \
+            > /tmp/wwpo-server.log 2>&1 &
+          server_pid=$!
+          cleanup() {
+            kill "${server_pid}" 2>/dev/null || true
+            wait "${server_pid}" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          ready=0
+          for _ in $(seq 1 60); do
+            if grep -q "ROOM SERVER READY" /tmp/wwpo-server.log; then
+              ready=1
+              break
+            fi
+            if ! kill -0 "${server_pid}" 2>/dev/null; then
+              cat /tmp/wwpo-server.log
+              exit 1
+            fi
+            sleep 0.25
+          done
+          if [[ "${ready}" != "1" ]]; then
+            cat /tmp/wwpo-server.log
+            exit 1
+          fi
+
+          node tests/web/protocol-test.cjs
+          node tests/web/room-capacity-test.cjs
+          node tests/web/full-match-test.cjs
+
+      - name: Upload server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dedicated-server-log
+          path: /tmp/wwpo-server.log
+          if-no-files-found: ignore

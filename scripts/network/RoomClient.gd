@@ -13,6 +13,7 @@ var retries: int = 0
 var response_deadline: int = 0
 var leaving: bool = false
 var local_start_attempted: bool = false
+var awaiting_resume_snapshot: bool = false
 
 func restore() -> void:
 	if not OS.has_feature("web"):
@@ -41,6 +42,9 @@ func connect_socket() -> void:
 	transport.failed.connect(func(_message): socket_lost())
 	transport.message_received.connect(receive)
 	manager.connecting = true
+	if not session_token.is_empty():
+		reconnecting = true
+		manager.set_connection_status(NetworkManager.CONNECTION_RECONNECTING)
 	response_deadline = Time.get_ticks_msec() + 12000
 	transport.connect_to_server(NetworkConfig.server_url())
 	manager.updated.emit()
@@ -67,11 +71,18 @@ func socket_lost() -> void:
 	if not session_token.is_empty() and retries < 8:
 		reconnecting = true
 		manager.connecting = true
+		manager.set_connection_status(NetworkManager.CONNECTION_RECONNECTING)
 		retries += 1
 		retry_at = Time.get_ticks_msec() + mini(5000, retries * 500)
 		response_deadline = 0
 	else:
+		var had_session := not session_token.is_empty()
 		manager.leave()
+		manager.set_connection_status(
+			NetworkManager.CONNECTION_SERVER_UNAVAILABLE
+			if had_session
+			else NetworkManager.CONNECTION_DISCONNECTED
+		)
 		manager.error_received.emit("Không kết nối được máy chủ tại %s. Hãy kiểm tra máy chủ và cổng kết nối." % NetworkConfig.server_url())
 	manager.updated.emit()
 
@@ -87,13 +98,17 @@ func _process(_delta: float) -> void:
 		response_deadline = 0
 		socket_lost()
 
-func send_intent(action: String, args: Dictionary) -> void:
+func can_send_gameplay() -> bool:
+	return transport != null and transport.is_transport_connected() and not reconnecting and not awaiting_resume_snapshot
+
+func send_intent(action: String, args: Dictionary) -> bool:
 	if transport == null or not transport.is_transport_connected() or reconnecting:
-		return
+		return false
 	var message := RoomProtocol.encode(action, args)
 	if not message.is_empty():
 		message["intent_id"] = Crypto.new().generate_random_bytes(16).hex_encode()
-		transport.send_message(message)
+		return transport.send_message(message) == OK
+	return false
 
 func send_chat(text: String) -> void:
 	if transport == null or not transport.is_transport_connected() or reconnecting:
@@ -117,6 +132,7 @@ func leave() -> void:
 	response_deadline = 0
 	pending = {}
 	local_start_attempted = false
+	awaiting_resume_snapshot = false
 	if OS.has_feature("web"):
 		JavaScriptBridge.eval("sessionStorage.removeItem('wwpo_session')")
 	leaving = false
@@ -127,14 +143,19 @@ func receive(message: Dictionary) -> void:
 	var payload: Dictionary = message.get("payload", {})
 	match str(message.get("type", "")):
 		"ROOM_CREATED", "JOIN_ACCEPTED", "SESSION_RESUMED":
+			var resumed := str(message.get("type", "")) == "SESSION_RESUMED"
 			player_id = int(payload.player_id)
 			room_code = str(payload.room_code)
 			host_id = int(payload.host_player_id)
 			session_token = str(payload.session_token)
-			manager.connecting = false
-			reconnecting = false
+			manager.connecting = resumed
+			reconnecting = resumed
+			awaiting_resume_snapshot = resumed
 			retries = 0
 			response_deadline = 0
+			manager.set_connection_status(
+				NetworkManager.CONNECTION_RECONNECTING if resumed else NetworkManager.CONNECTION_CONNECTED
+			)
 			manager.begin_chat_room(room_code)
 			if OS.has_feature("web"):
 				var saved := JSON.stringify({"token": session_token, "room": room_code})
@@ -144,6 +165,11 @@ func receive(message: Dictionary) -> void:
 			manager.private_state = RoomProtocol.normalize_private(payload.private)
 			host_id = int(payload.public.get("host_player_id", host_id))
 			manager.public_state = payload.public
+			if awaiting_resume_snapshot:
+				awaiting_resume_snapshot = false
+				reconnecting = false
+				manager.connecting = false
+			manager.set_connection_status(NetworkManager.CONNECTION_CONNECTED)
 		"VISUAL_EVENT":
 			manager.visual_event.emit(int(payload.actor), str(payload.kind), int(payload.get("target", 0)))
 		"TABLE_EVENT":
@@ -157,7 +183,13 @@ func receive(message: Dictionary) -> void:
 		"ERROR", "JOIN_REJECTED":
 			var reason := str(payload.get("message", "Yêu cầu không hợp lệ."))
 			if bool(payload.get("fatal", false)):
+				var expired_session := not session_token.is_empty() or reconnecting or awaiting_resume_snapshot
 				manager.leave()
+				manager.set_connection_status(
+					NetworkManager.CONNECTION_SESSION_EXPIRED
+					if expired_session
+					else NetworkManager.CONNECTION_DISCONNECTED
+				)
 			manager.error_received.emit(reason)
 		"PING":
 			transport.send_message({"type": "PONG", "version": RoomProtocol.VERSION, "payload": {}})

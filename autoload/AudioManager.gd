@@ -89,6 +89,8 @@ func cancel_transient_audio() -> void:
 func _exit_tree() -> void:
 	for player in pool + world_pool + loops:
 		player.stop()
+		player.stream = null
+		player.set_meta("cue", "")
 	pending.clear()
 	unique_loop_players.clear()
 	streams.clear()
