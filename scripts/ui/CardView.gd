@@ -57,7 +57,7 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	visual.add_child(panel)
 	var band := ColorRect.new()
 	band.name = "TitleBand"
-	band.color = accent.darkened(0.10) if usable else accent.darkened(0.38)
+	band.color = Color("#8a7040") if usable else Color("#6f6653")
 	band.position = Vector2(6, 6)
 	band.size = Vector2(198, 33)
 	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -93,6 +93,29 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	corner.autowrap_mode = TextServer.AUTOWRAP_OFF
 	corner.clip_text = true
 	corner.z_index = 3
+	# WWPO_HAND_PREVIEW_HEADER_V6
+	# Fixed text drawing prevents font intrinsic-minimum changes from pushing
+	# the Vietnamese title into the artwork after compact/touch scaling.
+	card_name.visible = false
+	corner.visible = false
+	var header_paint := Control.new()
+	header_paint.name = "PreviewStyleHeader"
+	header_paint.position = Vector2(6.0, 5.0)
+	header_paint.size = Vector2(198.0, 34.0)
+	header_paint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	header_paint.z_index = 12
+	visual.add_child(header_paint)
+	var header_name: String = display_name if not display_name.is_empty() else "LÁ BÀI"
+	var header_corner: String = CardInstance.corner(card)
+	var header_font: Font = get_theme_default_font()
+	header_paint.draw.connect(func() -> void:
+		var title_size: int = 17
+		while title_size > 11 and header_font.get_string_size(header_name, HORIZONTAL_ALIGNMENT_LEFT, -1, title_size).x > 137.0:
+			title_size -= 1
+		header_paint.draw_string(header_font, Vector2(8.0, 24.0), header_name, HORIZONTAL_ALIGNMENT_LEFT, 140.0, title_size, SaloonTheme.CREAM)
+		header_paint.draw_string(header_font, Vector2(150.0, 24.0), header_corner, HORIZONTAL_ALIGNMENT_RIGHT, 39.0, 16, SaloonTheme.CREAM)
+	)
+
 	if CardData.is_quick_equipment(str(card.get("card_data_id", ""))):
 		var quick_badge := Panel.new()
 		quick_badge.name = "QuickEquipBadge"
@@ -257,11 +280,11 @@ func touch_compact(width: float) -> void:
 	card_name.add_theme_font_size_override("font_size", title_size)
 	card_name.position = Vector2(13, 7)
 	card_name.size = Vector2(144, 28)
-	card_name.visible = true
+	card_name.visible = false
 	corner.add_theme_font_size_override("font_size", clampi(int(round(13.0 / touch_scale)), 16, 24))
 	corner.position = Vector2(158, 7)
 	corner.size = Vector2(40, 28)
-	corner.visible = true
+	corner.visible = false
 	var title_band: ColorRect = visual.get_node("TitleBand") as ColorRect
 	title_band.position = Vector2(6, 6)
 	title_band.size = Vector2(198, 33)

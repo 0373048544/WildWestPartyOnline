@@ -46,7 +46,7 @@ func setup(owner_app: Node) -> void:
 func _build() -> void:
 	toggle_button = load("res://scripts/ui/WesternButton.gd").new()
 	toggle_button.name = "ChatToggle"
-	toggle_button.text = "💬 CHAT"
+	toggle_button.text = "CHAT"
 	toggle_button.mouse_filter = Control.MOUSE_FILTER_STOP
 	toggle_button.pressed.connect(open_chat)
 	add_child(toggle_button)
@@ -260,7 +260,7 @@ func _on_error(message: String) -> void:
 
 func _update_badge() -> void:
 	if is_instance_valid(toggle_button):
-		toggle_button.text = "💬 CHAT" if unread <= 0 else "💬 %d" % unread
+		toggle_button.text = "CHAT" if unread <= 0 else "💬 %d" % unread
 
 func _scroll_to_bottom(force: bool) -> void:
 	if not is_instance_valid(message_scroll):
