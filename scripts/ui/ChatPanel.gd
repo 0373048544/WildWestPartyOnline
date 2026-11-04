@@ -160,6 +160,11 @@ func open_chat() -> void:
 	panel.show()
 	toggle_button.hide()
 	layout_chat()
+	if VisualSettings.reduced_motion:
+		panel.modulate = Color.WHITE
+	else:
+		panel.modulate = Color(1, 1, 1, 0.25)
+		panel.create_tween().tween_property(panel, "modulate", Color.WHITE, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	call_deferred("_scroll_to_bottom", true)
 
 func close_chat() -> void:
@@ -279,6 +284,8 @@ func layout_chat() -> void:
 	input.custom_minimum_size.y = touch
 	send_button.custom_minimum_size = Vector2(layout.units(self, 64.0), touch)
 	var button_rect: Rect2 = _journal_button_rect(layout)
+	if layout.mobile(self):
+		button_rect.size.x = minf(button_rect.size.x, layout.units(self, 82.0))
 	toggle_button.position = button_rect.position
 	toggle_button.size = button_rect.size
 	var panel_rect: Rect2 = layout.chat_panel_rect(self)
@@ -309,7 +316,10 @@ func _journal_button_rect(layout: Script) -> Rect2:
 				var journal: Rect2 = child.get_global_rect()
 				return Rect2(
 					Vector2(journal.position.x, journal.end.y + layout.units(self, 4.0)),
-					Vector2(journal.size.x, maxf(layout.units(self, 42.0), journal.size.y))
+					Vector2(
+						minf(journal.size.x, layout.units(self, 82.0)) if layout.mobile(self) else journal.size.x,
+						maxf(layout.units(self, 42.0), journal.size.y)
+					)
 				)
 	return layout.chat_button_rect(self)
 

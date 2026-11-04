@@ -48,6 +48,7 @@ func update_loadout(row: Dictionary) -> void:
 	])
 	if next_signature == signature:
 		return
+	var had_loadout: bool = not signature.is_empty()
 	signature = next_signature
 	for child in items.get_children():
 		child.queue_free()
@@ -56,7 +57,11 @@ func update_loadout(row: Dictionary) -> void:
 	var weapon_name := "Colt .45" if weapon.is_empty() else str(CardData.data(weapon.get("card_data_id", "")).get("name", "Colt .45"))
 	current_weapon_name = weapon_name
 	current_range = int(row.get("weapon_range", 1))
-	current_equipment_count = row.get("equipment_cards", []).size() + row.get("delayed_cards", []).size()
+	current_equipment_count = (
+		(0 if weapon.is_empty() else 1)
+		+ row.get("equipment_cards", []).size()
+		+ row.get("delayed_cards", []).size()
+	)
 	_add_item(weapon_name, "♠", weapon, "Súng hiện tại · Tầm %d" % int(row.get("weapon_range", 1)))
 	for card in row.get("equipment_cards", []):
 		var data: Dictionary = CardData.data(card.get("card_data_id", ""))
@@ -65,6 +70,9 @@ func update_loadout(row: Dictionary) -> void:
 		var data: Dictionary = CardData.data(card.get("card_data_id", ""))
 		_add_item(str(data.get("name", "")), _icon(str(card.get("card_data_id", ""))), card, "HIỆU ỨNG TRÌ HOÃN • " + str(data.get("description", "")))
 	_apply_layout()
+	if had_loadout and visible and not VisualSettings.reduced_motion:
+		modulate = Color("#fff0bf")
+		create_tween().tween_property(self, "modulate", Color.WHITE, 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 func set_modal_blocked(value: bool) -> void:
 	modal_blocked = value
@@ -100,15 +108,18 @@ func _apply_layout() -> void:
 	var compact: bool = bool(layout.get_equipment_compact_mode(self))
 	var width: float
 	if compact:
-		width = minf(layout.units(self, 206.0), get_viewport_rect().size.x * 0.34)
+		width = minf(
+			layout.units(self, 236.0 if expanded else 124.0),
+			get_viewport_rect().size.x * (0.66 if expanded else 0.34)
+		)
 	else:
 		width = minf(layout.units(self, 260.0) if mobile else 280.0, get_viewport_rect().size.x * (0.52 if mobile else 0.28))
 	title_button.text = (
-		"TRANG BỊ · TẦM %d · %d LÁ" % [current_range, current_equipment_count]
+		"TRANG BỊ (%d)" % current_equipment_count
 		if compact
 		else "BÀI TRÊN BÀN CỦA BẠN · TẦM %d" % current_range
 	)
-	title_button.custom_minimum_size.y = layout.units(self, 42.0) if compact else 40.0
+	title_button.custom_minimum_size.y = layout.units(self, 40.0) if compact else 40.0
 	details_scroll.visible = not compact or expanded
 	set_anchors_preset(Control.PRESET_TOP_LEFT, false)
 	var zone: Rect2 = layout.equipment_rect(self, details_scroll.visible)

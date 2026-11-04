@@ -9,9 +9,66 @@ static var spark_mesh: SphereMesh
 static var spark_materials: Dictionary = {}
 static var smoke_mesh: SphereMesh
 static var smoke_materials: Array[StandardMaterial3D] = []
+static var starburst_mesh: ImmediateMesh
+static var starburst_material: StandardMaterial3D
 var floating_pool: Array[Label3D] = []
 var bullet_pool: Array[MeshInstance3D] = []
 var puff_pool: Array[MeshInstance3D] = []
+var mesh_pool: Array[MeshInstance3D] = []
+var spawned_count: int = 0
+var created_mesh_count: int = 0
+
+func _presentation_scale(value: float) -> float:
+	var table: Node = get_parent()
+	var mobile_camera_node: Node = table.get("mobile_camera") if is_instance_valid(table) else null
+	# First-person phone cameras sit much closer to the table than the desktop
+	# overview camera. Keep transient card presentations readable without letting
+	# them cover opponents, the centre table, or the local hand.
+	return value * 0.16 if is_instance_valid(mobile_camera_node) and bool(mobile_camera_node.get("enabled")) else value
+
+func _acquire_mesh() -> MeshInstance3D:
+	var node: MeshInstance3D
+	if not mesh_pool.is_empty():
+		node = mesh_pool.pop_back()
+	else:
+		node = MeshInstance3D.new()
+		created_mesh_count += 1
+	if not node.is_inside_tree():
+		add_child(node)
+	elif node.get_parent() != self:
+		node.reparent(self)
+	node.visible = true
+	node.transparency = 0.0
+	node.scale = Vector3.ONE
+	node.rotation = Vector3.ZERO
+	spawned_count += 1
+	return node
+
+func _release_mesh(node: MeshInstance3D) -> void:
+	if not is_instance_valid(node):
+		return
+	node.visible = false
+	node.mesh = null
+	node.material_override = null
+	if node.get_parent() != self:
+		node.reparent(self)
+	if mesh_pool.size() < 32:
+		mesh_pool.append(node)
+	else:
+		node.queue_free()
+
+func reset_for_match() -> void:
+	# Every transient and every pooled object stays owned by this node. A rematch
+	# can therefore cancel all tweens/VFX without touching gameplay table objects.
+	for child in get_children():
+		child.queue_free()
+	floating_pool.clear()
+	bullet_pool.clear()
+	puff_pool.clear()
+	mesh_pool.clear()
+	judgement_cards.clear()
+	spawned_count = 0
+	created_mesh_count = 0
 
 func gun_smoke(at: Vector3) -> void:
 	if not gun_puff_mesh:
@@ -50,7 +107,7 @@ var judgement_cards: Dictionary = {}
 func spark(at: Vector3, color: Color, count: int = 6, radius: float = 0.65) -> void:
 	count = VisualSettings.particle_count(count)
 	for i in range(count):
-		var piece := MeshInstance3D.new()
+		var piece := _acquire_mesh()
 		if not spark_mesh:
 			spark_mesh = SphereMesh.new()
 			spark_mesh.radius = 0.045
@@ -66,14 +123,13 @@ func spark(at: Vector3, color: Color, count: int = 6, radius: float = 0.65) -> v
 			material.emission = color
 			spark_materials[material_key] = material
 		piece.material_override = spark_materials[material_key]
-		add_child(piece)
 		piece.position = at
 		var angle: float = TAU * i / count
 		var end := at + Vector3(cos(angle) * radius, 0.3 + (i % 3) * 0.2, sin(angle) * radius)
 		var tween := piece.create_tween().set_parallel()
 		tween.tween_property(piece, "position", end, 0.45).set_trans(Tween.TRANS_QUAD)
 		tween.tween_property(piece, "scale", Vector3.ONE * 0.01, 0.5)
-		tween.chain().tween_callback(piece.queue_free)
+		tween.chain().tween_callback(_release_mesh.bind(piece))
 
 func floating(at: Vector3, value: String, color: Color) -> void:
 	var label: Label3D = floating_pool.pop_back() if not floating_pool.is_empty() else load("res://scenes/vfx/FloatingText.tscn").instantiate()
@@ -118,33 +174,33 @@ func comic(at: Vector3, value: String, color: Color, duration: float = 0.8) -> v
 	tween.tween_callback(_release_floating.bind(label))
 
 func starburst(at: Vector3, size: float = 0.5, duration: float = 0.33) -> void:
-	var shape := ImmediateMesh.new()
-	shape.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
-	var points: Array[Vector3] = []
-	for index in range(12):
-		var angle: float = TAU * index / 12.0
-		var radius: float = size if index % 2 == 0 else size * 0.42
-		points.append(Vector3(cos(angle), sin(angle), 0) * radius)
-	for index in range(12):
-		shape.surface_add_vertex(Vector3.ZERO)
-		shape.surface_add_vertex(points[index])
-		shape.surface_add_vertex(points[(index + 1) % 12])
-	shape.surface_end()
-	var node := MeshInstance3D.new()
-	node.mesh = shape
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
-	material.albedo_color = Color("#ffdc75")
-	node.material_override = material
-	add_child(node)
+	if not starburst_mesh:
+		starburst_mesh = ImmediateMesh.new()
+		starburst_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+		var points: Array[Vector3] = []
+		for index in range(12):
+			var angle: float = TAU * index / 12.0
+			var radius: float = 1.0 if index % 2 == 0 else 0.42
+			points.append(Vector3(cos(angle), sin(angle), 0) * radius)
+		for index in range(12):
+			starburst_mesh.surface_add_vertex(Vector3.ZERO)
+			starburst_mesh.surface_add_vertex(points[index])
+			starburst_mesh.surface_add_vertex(points[(index + 1) % 12])
+		starburst_mesh.surface_end()
+		starburst_material = StandardMaterial3D.new()
+		starburst_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		starburst_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		starburst_material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		starburst_material.albedo_color = Color("#ffdc75")
+	var node := _acquire_mesh()
+	node.mesh = starburst_mesh
+	node.material_override = starburst_material
 	node.position = at
-	node.scale = Vector3.ONE * 0.25
+	node.scale = Vector3.ONE * size * 0.25
 	var tween := node.create_tween()
-	tween.tween_property(node, "scale", Vector3.ONE, duration * 0.24).set_trans(Tween.TRANS_BACK)
+	tween.tween_property(node, "scale", Vector3.ONE * size, duration * 0.24).set_trans(Tween.TRANS_BACK)
 	tween.tween_property(node, "scale", Vector3.ONE * 0.01, duration * 0.76)
-	tween.tween_callback(node.queue_free)
+	tween.tween_callback(_release_mesh.bind(node))
 
 func smoke(at: Vector3) -> void:
 	if not smoke_mesh:
@@ -158,17 +214,16 @@ func smoke(at: Vector3) -> void:
 			material.albedo_color = color
 			smoke_materials.append(material)
 	for index in range(VisualSettings.particle_count(6)):
-		var puff := MeshInstance3D.new()
+		var puff := _acquire_mesh()
 		puff.mesh = smoke_mesh
 		puff.material_override = smoke_materials[index % 2]
-		add_child(puff)
 		puff.position = at
 		var angle: float = index * TAU / 6
 		var tween := puff.create_tween().set_parallel()
 		tween.tween_property(puff, "position", at + Vector3(cos(angle) * 0.75, 0.5 + index * 0.06, sin(angle) * 0.75), 0.65)
 		tween.tween_property(puff, "scale", Vector3.ONE * 1.8, 0.35)
 		tween.chain().tween_property(puff, "scale", Vector3.ONE * 0.01, 0.25)
-		tween.chain().tween_callback(puff.queue_free)
+		tween.chain().tween_callback(_release_mesh.bind(puff))
 
 func muzzle(at: Vector3) -> void:
 	starburst(at, 0.23, 0.12)
@@ -215,7 +270,7 @@ func _release_floating(label: Label3D) -> void:
 		return
 	label.visible = false
 	if floating_pool.size() < 12:
-		label.reparent(get_parent())
+		label.reparent(self)
 		floating_pool.append(label)
 	else:
 		label.queue_free()
@@ -225,7 +280,7 @@ func _release_bullet(node: MeshInstance3D) -> void:
 		return
 	node.visible = false
 	if bullet_pool.size() < 16:
-		node.reparent(get_parent())
+		node.reparent(self)
 		bullet_pool.append(node)
 	else:
 		node.queue_free()
@@ -235,7 +290,7 @@ func _release_puff(node: MeshInstance3D) -> void:
 		return
 	node.visible = false
 	if puff_pool.size() < 12:
-		node.reparent(get_parent())
+		node.reparent(self)
 		puff_pool.append(node)
 	else:
 		node.queue_free()
@@ -250,21 +305,21 @@ func flying_card(origin: Vector3, destination: Vector3, face: Dictionary = {}, d
 	card.configure("card" if not face.is_empty() and not hidden else "hand", data, {})
 	card.area.collision_layer = 0
 	card.position = origin
-	card.scale = Vector3.ONE * 0.65
+	card.scale = Vector3.ONE * _presentation_scale(0.65)
 	var tween := card.create_tween()
 	tween.tween_interval(delay)
 	tween.tween_property(card, "position", origin.lerp(destination, 0.5) + Vector3.UP * 0.8, 0.18).set_trans(Tween.TRANS_SINE)
 	tween.parallel().tween_property(card, "rotation:y", 0.55, 0.18)
 	tween.tween_property(card, "position", destination, 0.22).set_trans(Tween.TRANS_SINE)
 	tween.parallel().tween_property(card, "rotation:y", 0.0, 0.22)
-	tween.parallel().tween_property(card, "scale", Vector3.ONE * 0.2, 0.22)
+	tween.parallel().tween_property(card, "scale", Vector3.ONE * _presentation_scale(0.2), 0.22)
 	if hidden and not face.is_empty():
 		tween.tween_callback(func():
 			for child in card.get_children():
 				child.free()
 			card.configure("card", data, {})
 			card.area.collision_layer = 0
-			card.scale = Vector3.ONE * 0.65)
+			card.scale = Vector3.ONE * _presentation_scale(0.65))
 		tween.tween_interval(0.35)
 	tween.tween_callback(card.queue_free)
 
@@ -279,16 +334,16 @@ func special_card_intro(origin: Vector3, face: Dictionary, hold: float = 0.45) -
 	card.configure("card", data, {})
 	card.area.collision_layer = 0
 	card.position = origin
-	card.scale = Vector3.ONE * 0.58
+	card.scale = Vector3.ONE * _presentation_scale(0.58)
 	card.rotation = Vector3(0.12, -0.18, 0.08)
 	var center := Vector3(0, 2.35, 0)
 	var tween := card.create_tween()
 	tween.tween_property(card, "position", center, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tween.parallel().tween_property(card, "scale", Vector3.ONE * 0.82, 0.22)
+	tween.parallel().tween_property(card, "scale", Vector3.ONE * _presentation_scale(0.82), 0.22)
 	tween.parallel().tween_property(card, "rotation", Vector3.ZERO, 0.22)
 	tween.tween_interval(clampf(hold, 0.2, 0.65))
 	tween.tween_property(card, "position", Vector3(0.45, 1.7, 0), 0.18).set_trans(Tween.TRANS_SINE)
-	tween.parallel().tween_property(card, "scale", Vector3.ONE * 0.18, 0.18)
+	tween.parallel().tween_property(card, "scale", Vector3.ONE * _presentation_scale(0.18), 0.18)
 	tween.tween_callback(card.queue_free)
 
 func judgement(at: Vector3, face: Dictionary, from_hand: bool = false) -> void:
@@ -302,6 +357,7 @@ func judgement(at: Vector3, face: Dictionary, from_hand: bool = false) -> void:
 	card.configure("card", data, {})
 	card.area.collision_layer = 0
 	card.position = at - Vector3.UP * 1.3 if from_hand else Vector3(-0.45, 1.7, 0)
+	card.scale = Vector3.ONE * _presentation_scale(1.0)
 	judgement_cards[int(face.instance_id)] = card
 	card.rotation.x = PI / 3
 	var tween := card.create_tween()

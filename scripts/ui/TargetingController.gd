@@ -34,7 +34,7 @@ func _process(_delta: float) -> void:
 		shot_quiet_until = 0
 		if selected_card >= 0 and hovered_target > 0:
 			update_hover_target(hovered_target)
-	if not blocked and selected_card < 0 and info_hover > 0 and hover_since > 0 and Time.get_ticks_msec() - hover_since > 450:
+	if not blocked and selected_card < 0 and info_hover > 0 and hover_since > 0 and not load("res://scripts/ui/MatchLayout.gd").mobile_first_person(table) and Time.get_ticks_msec() - hover_since > 450:
 		hover_since = 0
 		table.show_context(info_hover)
 
@@ -255,6 +255,13 @@ func _input(event: InputEvent) -> void:
 	if blocked:
 		return
 	if event is InputEventMouseMotion:
+		# Mobile browsers may synthesize mouse motion after touch. Character details
+		# are tap-only in first-person mode, so a stale emulated cursor cannot open a
+		# large inspection card while the player scrolls the hand.
+		if load("res://scripts/ui/MatchLayout.gd").mobile_first_person(table):
+			info_hover = 0
+			hover_since = 0
+			return
 		if selected_card >= 0:
 			update_hover_target(pick_at(event.position))
 		else:

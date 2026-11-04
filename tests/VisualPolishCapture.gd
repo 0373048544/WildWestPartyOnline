@@ -44,8 +44,8 @@ func set_hand(count: int) -> void:
 	app.refresh()
 	await settle()
 
-func capture(label: String) -> void:
-	await settle()
+func capture(label: String, delay: float = 0.18) -> void:
+	await settle(delay)
 	var image: Image = get_viewport().get_texture().get_image()
 	var path := OUTPUT + "/" + label + ".png"
 	var error := image.save_png(path)
@@ -74,26 +74,59 @@ func _ready() -> void:
 	GameManager.turns.phase = "ACTION_PHASE"
 	for player in GameManager.players.values():
 		player.current_hp = player.max_hp
+	GameManager.players[1].weapon = CardInstance.make(87001, "winchester", "SPADE", 8)
+	GameManager.players[1].equipment["barrel"] = CardInstance.make(87002, "barrel", "HEART", 12)
 	GameManager.publish()
 	app.seen_role = GameManager.match_id
 	app.refresh()
 	await settle()
+	if "--v10-focus" in OS.get_cmdline_user_args():
+		await set_view(Vector2i(390, 844), true)
+		await set_hand(7)
+		app.table.present_event({"kind": "draw", "player": 1, "count": 2})
+		await capture("portrait_v10_draw", 0.12)
+		app.table.present_event({"kind": "equip", "player": 1, "card": CardInstance.make(99201, "barrel", "HEART", 12)})
+		await capture("portrait_v10_equip", 0.12)
+		app.table.special_presenter.show_special_start(1, "department_store")
+		await capture("portrait_v10_department_store", 0.12)
+		app.table.special_presenter.show_special_start(1, "general_store")
+		await capture("portrait_v10_general_store", 0.12)
+		print("VISUAL V10 FOCUSED CAPTURE PASS")
+		get_tree().quit(0)
+		return
+	if "--v12-focus" in OS.get_cmdline_user_args():
+		await set_view(Vector2i(390, 844), true)
+		await set_hand(3)
+		await capture("portrait_390_hand_03")
+		await set_view(Vector2i(360, 640), true)
+		await set_hand(10)
+		await capture("portrait_360x640_hand_10")
+		await set_view(Vector2i(844, 390), true)
+		await set_hand(10)
+		await capture("landscape_844x390_hand_10")
+		app.match_hud.show_preview(NetworkManager.private_state.hand[0])
+		await capture("landscape_v12_preview")
+		print("VISUAL V12 FOCUSED CAPTURE PASS")
+		get_tree().quit(0)
+		return
 
 	# Required portrait card-count states.
 	await set_view(Vector2i(390, 844), true)
-	for count in [1, 2, 5, 7, 10]:
+	for count in [1, 3, 5, 7, 10]:
 		await set_hand(count)
 		await capture("portrait_390_hand_%02d" % count)
 
-	# Remaining phone breakpoints with a realistic seven-card hand.
+	# Every requested phone breakpoint is exercised with sparse and crowded hands.
 	for css in [Vector2i(360, 640), Vector2i(375, 667), Vector2i(430, 932)]:
 		await set_view(css, true)
-		await set_hand(7)
-		await capture("portrait_%dx%d" % [css.x, css.y])
-	for css in [Vector2i(667, 375), Vector2i(844, 390), Vector2i(932, 430)]:
+		for count in [1, 3, 5, 7, 10]:
+			await set_hand(count)
+			await capture("portrait_%dx%d_hand_%02d" % [css.x, css.y, count])
+	for css in [Vector2i(844, 390)]:
 		await set_view(css, true)
-		await set_hand(7)
-		await capture("landscape_%dx%d" % [css.x, css.y])
+		for count in [1, 3, 5, 7, 10]:
+			await set_hand(count)
+			await capture("landscape_%dx%d_hand_%02d" % [css.x, css.y, count])
 
 	# Overlay priority and interaction states.
 	await set_view(Vector2i(390, 844), true)
@@ -130,6 +163,29 @@ func _ready() -> void:
 	app.chat_panel.open_chat()
 	await capture("portrait_chat_open")
 	app.chat_panel.close_chat()
+	await capture("portrait_chat_closed")
+	if is_instance_valid(app.match_hud.loadout_panel):
+		await capture("portrait_loadout_closed")
+		app.match_hud.loadout_panel.title_button.pressed.emit()
+		await capture("portrait_loadout_open")
+		app.match_hud.loadout_panel.title_button.pressed.emit()
+
+	# Authoritative presentation-layer samples. These calls never mutate rules;
+	# they exercise the same semantic events clients receive from the server.
+	app.table.play_animation(1, "shoot", 2)
+	await capture("portrait_v10_shoot", 0.105)
+	app.table.play_animation(2, "dodge", 1)
+	await capture("portrait_v10_dodge", 0.08)
+	app.table.special_presenter.show_heal(1, "iced_tea", false)
+	await capture("portrait_v10_heal", 0.12)
+	app.table.present_event({"kind": "draw", "player": 1, "count": 2})
+	await capture("portrait_v10_draw", 0.12)
+	app.table.present_event({"kind": "equip", "player": 1, "card": CardInstance.make(99201, "barrel", "HEART", 12)})
+	await capture("portrait_v10_equip", 0.12)
+	app.table.special_presenter.show_special_start(1, "department_store")
+	await capture("portrait_v10_department_store", 0.12)
+	app.table.special_presenter.show_special_start(1, "general_store")
+	await capture("portrait_v10_general_store", 0.12)
 
 	# Target selection must stay readable above the hand and in first-person.
 	app.selected = int(GameManager.players[1].hand[0].instance_id)

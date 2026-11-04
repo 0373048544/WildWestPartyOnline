@@ -14,10 +14,12 @@ var flow_signature: String = ""
 var choice_status_signature: String = ""
 var target_picker: Control
 var loadout_panel: Control
+var hud_modal_blocked: bool = false
 var action_history: Control
 var dismissed_picker_request: int = -1
 var department_give_request_id: int = -1
 var department_give_selected: int = -1
+var result_celebrated_match: int = -1
 
 
 func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> void:
@@ -50,7 +52,13 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 	var next_hand_signature := JSON.stringify([
 		own.get("hand", []), own.get("targets", {}), own.get("disabled_reasons", {}),
 		request_identity, state.get("phase", ""), state.get("current_player", 0),
-		state.get("players", []), app.selected, app.sid_mode, app.sid_cards
+		state.get("choice_player", 0), state.get("choice_type", ""),
+		state.get("players", []).map(func(row): return [
+			row.get("player_id", 0), row.get("display_name", ""), row.get("is_alive", false),
+			row.get("current_hp", 0) if int(row.get("player_id", 0)) == app.local_id() else 0,
+			row.get("max_hp", 0) if int(row.get("player_id", 0)) == app.local_id() else 0,
+			row.get("character", {}) if int(row.get("player_id", 0)) == app.local_id() else {}
+		]), app.selected, app.sid_mode, app.sid_cards
 	]) + str(get_window().size)
 	var next_flow_signature := JSON.stringify([
 		state.get("phase", ""), state.get("winner", ""), request_identity,
@@ -441,6 +449,7 @@ func _confirm_department_store_give() -> void:
 	})
 
 func set_modal_blocked(value: bool) -> void:
+	hud_modal_blocked = value
 	if is_instance_valid(loadout_panel):
 		loadout_panel.set_modal_blocked(value)
 	if is_instance_valid(hand):
@@ -545,7 +554,7 @@ func action(
 		item.custom_minimum_size.y = float(
 			layout.action_height(self)
 		)
-		item.add_theme_font_size_override("font_size", int(layout.units(self, 13.0)))
+		item.add_theme_font_size_override("font_size", int(layout.units(self, 12.0)))
 
 		item.custom_minimum_size.x = float(
 			layout.units(self, 48.0)
@@ -696,7 +705,7 @@ func build_log() -> void:
 	holder.size.x = (
 		minf(320.0, size.x * 0.28)
 		if app.log_expanded
-		else 105.0
+		else (layout.units(self, 82.0) if layout.mobile(self) else 105.0)
 	)
 
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -796,8 +805,8 @@ func build_hand() -> void:
 	if phone_layout:
 		# Preserve the existing phone placement; it is coordinated with the compact
 		# equipment chip and mobile browser safe area.
-		footer.offset_left = safe.x + 12.0
-		footer.offset_right = -safe.z - 12.0
+		footer.offset_left = safe.x + layout.units(self, 6.0)
+		footer.offset_right = -safe.z - layout.units(self, 6.0)
 		footer.offset_top = -safe.w - visible_hand - float(layout.action_height(self)) - 4.0
 		footer.offset_bottom = -safe.w - visible_hand - 4.0
 		footer.z_index = layout.Z_ACTION
@@ -1032,7 +1041,7 @@ func build_hand() -> void:
 					continue
 				target_picker.add_item(str(player.get("display_name", "Cao bồi")))
 				target_picker.set_item_metadata(target_picker.item_count - 1, player_id)
-			target_picker.custom_minimum_size = Vector2(layout.units(self, 150.0), layout.units(self, 44.0))
+			target_picker.custom_minimum_size = Vector2(layout.units(self, 132.0), layout.units(self, 44.0))
 			footer.add_child(target_picker)
 			target_picker.item_selected.connect(func(index: int):
 				if index > 0:
@@ -1055,7 +1064,7 @@ func build_hand() -> void:
 		if layout.mobile_landscape(self):
 			end_turn.custom_minimum_size = Vector2(layout.units(self, 128.0), layout.action_height(self))
 		elif layout.mobile_portrait(self):
-			end_turn.custom_minimum_size.x = minf(layout.units(self, 126.0), size.x * 0.40)
+			end_turn.custom_minimum_size.x = minf(layout.units(self, 104.0), size.x * 0.32)
 		else:
 			end_turn.custom_minimum_size = Vector2(180.0, 44.0)
 
@@ -1174,8 +1183,8 @@ func build_hand() -> void:
 	hand.offset_bottom = -4
 
 	if mobile_layout:
-		hand.offset_left = safe.x + 12
-		hand.offset_right = -safe.z - 12
+		hand.offset_left = safe.x + layout.units(self, 6.0)
+		hand.offset_right = -safe.z - layout.units(self, 6.0)
 
 		hand.offset_top = (
 			-safe.w
@@ -1338,8 +1347,28 @@ func world_action(token: Dictionary) -> void:
 	)
 
 
+func _compact_preview_text(value: String, line_limit: int = 29) -> String:
+	var output: Array[String] = []
+	for paragraph in value.split("\n"):
+		var line := ""
+		for word in paragraph.split(" ", false):
+			var candidate := word if line.is_empty() else line + " " + word
+			if candidate.length() > line_limit and not line.is_empty():
+				output.append(line)
+				line = word
+			else:
+				line = candidate
+		if not line.is_empty():
+			output.append(line)
+	return "\n".join(output)
+
+
 func show_preview(card: Dictionary) -> void:
 	close_preview()
+	if is_instance_valid(loadout_panel):
+		# The equipment chip occupies the same lower-right table corner as the
+		# compact preview. Temporarily hide it instead of layering two inspectors.
+		loadout_panel.set_modal_blocked(true)
 
 	var mobile_preview: bool = bool(layout.mobile(self))
 	var data: Dictionary = CardData.data(card.card_data_id)
@@ -1353,16 +1382,16 @@ func show_preview(card: Dictionary) -> void:
 	var safe: Vector4 = layout.safe_insets(self) if mobile_preview else Vector4.ZERO
 	var preview_width: float
 	if layout.mobile_landscape(self):
-		preview_width = clampf(size.x * 0.31, 188.0 * unit, size.x * 0.34)
+		preview_width = minf(200.0 * unit, size.x * 0.29)
 	elif mobile_preview:
-		preview_width = minf(280.0 * unit, size.x - safe.x - safe.z - 24.0 * unit)
+		preview_width = minf(200.0 * unit, size.x - safe.x - safe.z - 20.0 * unit)
 	else:
 		preview_width = minf(260.0, size.x - 24.0)
 	var reason: String = str(
 		own.get("disabled_reasons", {}).get(card.instance_id, "")
 	)
 	var preview_height: float = (
-		(292.0 if not reason.is_empty() else 264.0) * unit
+		(246.0 if not reason.is_empty() else 226.0) * unit
 		if mobile_preview
 		else (208.0 if not reason.is_empty() else 178.0)
 	)
@@ -1373,10 +1402,10 @@ func show_preview(card: Dictionary) -> void:
 	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.z_index = layout.Z_PREVIEW
 
-	var style: StyleBoxFlat = SaloonTheme.card_face(accent, "preview", 14.0 * unit)
-	style.set_corner_radius_all(int(15.0 * unit))
+	var style: StyleBoxFlat = SaloonTheme.card_face(accent, "preview", 9.0 * unit)
+	style.set_corner_radius_all(int(11.0 * unit))
 	style.shadow_color = Color(0, 0, 0, 0.35)
-	style.shadow_size = VisualSettings.ui_shadow_size(int(7.0 * unit))
+	style.shadow_size = VisualSettings.ui_shadow_size(int(4.0 * unit))
 	style.shadow_offset = Vector2(0, 3.0 * unit)
 	preview.add_theme_stylebox_override("panel", style)
 
@@ -1390,9 +1419,15 @@ func show_preview(card: Dictionary) -> void:
 		left = (size.x - preview_width) * 0.5
 		if layout.mobile_landscape(self):
 			var focus_rect: Rect2 = layout.get_table_focus_rect(self)
-			top = focus_rect.position.y + maxf(4.0 * unit, (focus_rect.size.y - preview_height) * 0.28)
+			top = focus_rect.position.y + maxf(3.0 * unit, (focus_rect.size.y - preview_height) * 0.22)
 		else:
-			top = size.y - safe.w - hand_height - preview_height - 12.0 * unit
+			# Preview lives above both the hand and the action row. The previous
+			# formula subtracted only the hand and let the action buttons cover the
+			# description on short iPhones.
+			top = (
+				size.y - safe.w - hand_height - layout.action_height(self)
+				- preview_height - 18.0 * unit
+			)
 		top = maxf(top, safe.y + layout.get_mobile_banner_height(self) + 6.0 * unit)
 	else:
 		var mouse: Vector2 = get_viewport().get_mouse_position()
@@ -1436,22 +1471,22 @@ func show_preview(card: Dictionary) -> void:
 	var title_band := ColorRect.new()
 	title_band.name = "PreviewTitleBand"
 	title_band.color = accent.darkened(0.16)
-	title_band.position = Vector2(7.0, 7.0) * unit
-	title_band.size = Vector2(preview_width / unit - 14.0, 31.0) * unit
+	title_band.position = Vector2(6.0, 6.0) * unit
+	title_band.size = Vector2(preview_width / unit - 12.0, 29.0) * unit
 	title_band.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.add_child(title_band)
 	var title_glint := ColorRect.new()
 	title_glint.color = Color(1, 0.86, 0.58, 0.28)
-	title_glint.position = Vector2(9.0, 37.0) * unit
-	title_glint.size = Vector2(preview_width / unit - 18.0, 2.0) * unit
+	title_glint.position = Vector2(8.0, 35.0) * unit
+	title_glint.size = Vector2(preview_width / unit - 16.0, 2.0) * unit
 	title_glint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.add_child(title_glint)
 
 	var card_name := Label.new()
 	card_name.text = str(data.get("name", ""))
-	card_name.position = Vector2(14.0, 10.0) * unit
-	card_name.size = Vector2(preview_width / unit - 92.0, 26.0) * unit
-	card_name.add_theme_font_size_override("font_size", int(16.0 * unit))
+	card_name.position = Vector2(11.0, 8.0) * unit
+	card_name.size = Vector2(preview_width / unit - 70.0, 25.0) * unit
+	card_name.add_theme_font_size_override("font_size", int(14.0 * unit) if mobile_preview else 16)
 	card_name.autowrap_mode = TextServer.AUTOWRAP_OFF
 	card_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	card_name.add_theme_color_override("font_color", SaloonTheme.CREAM)
@@ -1460,23 +1495,23 @@ func show_preview(card: Dictionary) -> void:
 
 	var corner := Label.new()
 	corner.text = CardInstance.corner(card)
-	corner.position = Vector2(preview_width - 76.0 * unit, 10.0 * unit)
-	corner.size = Vector2(62.0, 26.0) * unit
+	corner.position = Vector2(preview_width - 59.0 * unit, 8.0 * unit)
+	corner.size = Vector2(48.0, 25.0) * unit
 	corner.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	corner.add_theme_font_size_override("font_size", int(17.0 * unit))
+	corner.add_theme_font_size_override("font_size", int(14.0 * unit) if mobile_preview else 17)
 	corner.add_theme_color_override("font_color", CardInstance.suit_color(card.suit))
 	corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.add_child(corner)
 
 	# Preview shows a framed illustration and never draws outside its own bounds.
-	var artwork_y: float = 62.0 if mobile_preview else 43.0
+	var artwork_y: float = 42.0 if mobile_preview else 43.0
 	# Reserve enough compact-preview space for long localized descriptions such
 	# as BÁCH HÓA; artwork remains prominent without consuming the text area.
-	var artwork_height: float = 82.0 if mobile_preview else 58.0
+	var artwork_height: float = 70.0 if mobile_preview else 58.0
 	var artwork_frame := Panel.new()
 	artwork_frame.name = "PreviewArtworkFrame"
-	artwork_frame.position = Vector2(14.0, artwork_y) * unit
-	artwork_frame.size = Vector2(preview_width / unit - 28.0, artwork_height) * unit
+	artwork_frame.position = Vector2(10.0, artwork_y) * unit
+	artwork_frame.size = Vector2(preview_width / unit - 20.0, artwork_height) * unit
 	artwork_frame.clip_contents = true
 	artwork_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	artwork_frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#30281f"), accent, 2.0 * unit))
@@ -1495,26 +1530,27 @@ func show_preview(card: Dictionary) -> void:
 	type_label.text = TextCatalog.text(
 		CardData.CardType.keys()[int(data.get("type", 0))]
 	)
-	type_label.position = Vector2(14.0, 149.0 if mobile_preview else 105.0) * unit
-	type_label.size = Vector2(preview_width / unit - 28.0, 18.0) * unit
-	type_label.add_theme_font_size_override("font_size", int(12.0 * unit))
+	type_label.position = Vector2(10.0, 116.0 if mobile_preview else 105.0) * unit
+	type_label.size = Vector2(preview_width / unit - 20.0, 16.0) * unit
+	type_label.add_theme_font_size_override("font_size", int(10.0 * unit) if mobile_preview else 12)
 	type_label.add_theme_color_override("font_color", accent.darkened(0.28))
 	type_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.add_child(type_label)
 
 	var description := Label.new()
-	description.text = str(data.get("description", ""))
-	description.position = Vector2(14.0, 171.0 if mobile_preview else 127.0) * unit
+	var description_text := str(data.get("description", ""))
+	description.text = _compact_preview_text(description_text) if mobile_preview else description_text
+	description.position = Vector2(10.0, 134.0 if mobile_preview else 127.0) * unit
 	description.size = Vector2(
-		preview_width / unit - 28.0,
-		(76.0 if not reason.is_empty() else 86.0) if mobile_preview else 46.0
+		preview_width / unit - 20.0,
+		(58.0 if not reason.is_empty() else 72.0) if mobile_preview else 46.0
 	) * unit
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	description.custom_minimum_size = Vector2(1.0, 1.0)
 	description.clip_text = true
 	description.max_lines_visible = 6 if mobile_preview else 3
 	description.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING if mobile_preview else TextServer.OVERRUN_TRIM_ELLIPSIS
-	description.add_theme_font_size_override("font_size", int(12.0 * unit) if mobile_preview else 13)
+	description.add_theme_font_size_override("font_size", int(10.0 * unit) if mobile_preview else 13)
 	description.add_theme_color_override("font_color", SaloonTheme.INK_SOFT)
 	description.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.add_child(description)
@@ -1522,10 +1558,10 @@ func show_preview(card: Dictionary) -> void:
 	if not reason.is_empty():
 		var reason_label := Label.new()
 		reason_label.text = reason
-		reason_label.position = Vector2(14.0, 257.0 if mobile_preview else 176.0) * unit
-		reason_label.size = Vector2(preview_width / unit - 28.0, 26.0) * unit
+		reason_label.position = Vector2(10.0, 198.0 if mobile_preview else 176.0) * unit
+		reason_label.size = Vector2(preview_width / unit - 20.0, 38.0 if mobile_preview else 27.0) * unit
 		reason_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		reason_label.add_theme_font_size_override("font_size", int(12.0 * unit))
+		reason_label.add_theme_font_size_override("font_size", int(10.0 * unit) if mobile_preview else 12)
 		reason_label.add_theme_color_override("font_color", Color("#8f3328"))
 		reason_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		preview.add_child(reason_label)
@@ -1613,6 +1649,8 @@ func close_preview() -> void:
 	if is_instance_valid(preview):
 		preview.queue_free()
 		preview = null
+	if is_instance_valid(loadout_panel):
+		loadout_panel.set_modal_blocked(hud_modal_blocked)
 
 
 func build_pause() -> void:
@@ -1787,6 +1825,7 @@ func build_result() -> void:
 	var box: VBoxContainer = app.modal()
 	app.overlay.color = Color(0.025, 0.03, 0.04, 0.64)
 	compact_modal_frame(620.0, 500.0)
+	_add_result_celebration()
 	var heading := text("✦  KẾT THÚC VÁN  ✦", 24, box)
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	heading.add_theme_color_override("font_color", SaloonTheme.GOLD)
@@ -1824,6 +1863,43 @@ func build_result() -> void:
 	var leave_button := action("RỜI PHÒNG", app.leave, box)
 	leave_button.name = "ResultLeaveButton"
 	leave_button.set_variant("danger")
+
+
+func _add_result_celebration() -> void:
+	if not is_instance_valid(app.overlay) or VisualSettings.reduced_motion:
+		return
+	var first_presentation := result_celebrated_match != int(state.get("match_id", 0))
+	result_celebrated_match = int(state.get("match_id", 0))
+	if not first_presentation:
+		return
+	var layer := Control.new()
+	layer.name = "ResultCelebration"
+	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.z_index = 1
+	app.overlay.add_child(layer)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(state.get("match_id", 1)) * 7919 + 37
+	var count := VisualSettings.particle_count(18)
+	for index in range(count):
+		var piece := ColorRect.new()
+		piece.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		piece.color = [SaloonTheme.GOLD, Color("#f2d990"), Color("#b86c45")][index % 3]
+		var side: float = float(layout.units(self, rng.randf_range(4.0, 8.0)))
+		piece.size = Vector2(side, side * rng.randf_range(0.45, 0.85))
+		piece.position = Vector2(
+			rng.randf_range(layout.units(self, 16.0), maxf(layout.units(self, 17.0), size.x - layout.units(self, 24.0))),
+			rng.randf_range(-layout.units(self, 24.0), layout.units(self, 20.0))
+		)
+		piece.rotation = rng.randf_range(-0.8, 0.8)
+		layer.add_child(piece)
+		var fall := piece.create_tween().set_parallel()
+		fall.tween_property(piece, "position:y", size.y * rng.randf_range(0.52, 0.88), rng.randf_range(0.75, 1.2)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		fall.tween_property(piece, "rotation", piece.rotation + rng.randf_range(1.5, 3.5), rng.randf_range(0.75, 1.2))
+		fall.tween_property(piece, "modulate:a", 0.0, 0.28).set_delay(0.72)
+	var cleanup := layer.create_tween()
+	cleanup.tween_interval(1.25)
+	cleanup.tween_callback(layer.queue_free)
 
 
 func _request_rematch() -> void:

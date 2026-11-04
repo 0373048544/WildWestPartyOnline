@@ -909,4 +909,11 @@ func show_visual_settings() -> void:
 	for entry in [["LOW", "THẤP · Ít hạt, không bóng"], ["MEDIUM", "VỪA · Web / điện thoại"], ["HIGH", "CAO · Bóng cho desktop"]]:
 		button(entry[1], func(): VisualSettings.set_quality(entry[0]); refresh(), box)
 	label("Đang dùng: " + VisualSettings.level, 16, box)
+	var motion_toggle := CheckButton.new()
+	motion_toggle.name = "ReducedMotion"
+	motion_toggle.text = "Giảm chuyển động · tắt rung camera và chuyển động trang trí"
+	motion_toggle.button_pressed = VisualSettings.reduced_motion
+	motion_toggle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	motion_toggle.toggled.connect(func(value: bool): VisualSettings.set_reduced_motion(value))
+	box.add_child(motion_toggle)
 	button("ĐÓNG", func(): clear_game_modal(); refresh(), box)

@@ -88,7 +88,7 @@ static func hand_lift(node: Node, targeting: bool) -> float:
 	# Keep cards almost flush with the top edge of the mobile hand.
 	if targeting:
 		return 0.0
-	return units(node, 6.0 if mobile_portrait(node) else 4.0)
+	return units(node, 8.0 if mobile_portrait(node) else 6.0)
 
 static func portrait(node: Node) -> bool:
 	var size: Vector2 = node.get_viewport().get_visible_rect().size
@@ -102,12 +102,12 @@ static func hand_height(node: Node, targeting: bool = false) -> float:
 	# Portrait keeps the complete card touchable without consuming roughly one
 	# third of a short iPhone viewport.
 	if mobile_portrait(node):
-		return units(node, 160.0 if targeting else 166.0)
+		return units(node, 120.0 if targeting else 128.0)
 	# Landscape is proportional to the short side: a real phone gets 24–28%
 	# instead of the old fixed 142px zone that could consume over one third.
 	var css: Vector2 = css_size(node)
-	var ratio := 0.25 if targeting else 0.27
-	return units(node, clampf(css.y * ratio, 96.0, 150.0))
+	var ratio := 0.28 if targeting else 0.32
+	return units(node, clampf(css.y * ratio, 100.0, 128.0))
 
 static func get_hand_zone_height(node: Node, targeting: bool = false) -> float:
 	return hand_height(node, targeting)
@@ -117,12 +117,13 @@ static func touch_card_width(node: Node) -> float:
 		return units(node, 150.0)
 	if mobile_portrait(node):
 		var css: Vector2 = css_size(node)
-		return units(node, clampf(141.0 + maxf(0.0, css.x - 360.0) * 0.08, 141.0, 146.0))
+		return units(node, clampf(100.0 + maxf(0.0, css.x - 360.0) * 0.10, 100.0, 108.0))
 	if mobile_landscape(node):
 		var css: Vector2 = css_size(node)
-		var hand_css := clampf(css.y * 0.27, 96.0, 150.0)
+		var targeting: bool = bool(node.get_meta("target_mode", false)) if node != null else false
+		var hand_css := clampf(css.y * (0.28 if targeting else 0.32), 100.0, 128.0)
 		var height_limited := (hand_css - 10.0) * 210.0 / 214.0
-		return units(node, clampf(minf(css.x * 0.11, height_limited), 88.0, 118.0))
+		return units(node, clampf(minf(css.x * 0.105, height_limited), 84.0, 108.0))
 	return 158.0
 
 static func get_mobile_card_width(node: Node) -> float:
@@ -132,7 +133,7 @@ static func get_mobile_nameplate_scale(node: Node) -> float:
 	return 0.84 if mobile_landscape(node) else (0.9 if mobile_portrait(node) else (0.92 if tablet(node) else 1.0))
 
 static func get_equipment_compact_mode(node: Node) -> bool:
-	return mobile_landscape(node)
+	return mobile(node)
 
 static func get_table_focus_rect(node: Node) -> Rect2:
 	var viewport_size := node.get_viewport().get_visible_rect().size
@@ -178,7 +179,7 @@ static func chat_button_rect(node: Node) -> Rect2:
 	var safe := safe_rect(node, 8.0)
 	# Matches the collapsed Journal control; ChatPanel replaces this fallback with
 	# the Journal's measured rect once MatchHUD is present.
-	var width := units(node, 104.0 if mobile(node) else 135.0)
+	var width := units(node, 82.0 if mobile(node) else 135.0)
 	var height := units(node, 44.0 if mobile(node) else 42.0)
 	return Rect2(
 		Vector2(safe.position.x + units(node, 4.0), safe.position.y + units(node, 48.0)),
@@ -209,15 +210,20 @@ static func chat_panel_rect(node: Node) -> Rect2:
 static func equipment_rect(node: Node, expanded: bool = false) -> Rect2:
 	var safe := safe_rect(node, 8.0 if mobile(node) else 16.0)
 	var action_zone := action_rect(node)
-	var width: float = (
-		minf(units(node, 180.0), safe.size.x * 0.30)
-		if mobile_landscape(node)
-		else minf(320.0, safe.size.x * 0.30)
-	)
+	var width: float
+	if mobile(node):
+		width = minf(
+			units(node, 236.0 if expanded else 124.0),
+			safe.size.x * (0.66 if expanded else 0.34)
+		)
+	else:
+		width = minf(320.0, safe.size.x * 0.30)
 	# PanelContainer includes its border/content margins in addition to the 42px
 	# title hit target. Reserving only 52px let the real 68px compact panel spill
 	# into End Turn in short landscape viewports.
-	var height := units(node, 136.0 if expanded else 68.0) if mobile(node) else (124.0 if expanded else 76.0)
+	# The collapsed visual is about 40 CSS px, while PanelContainer margins make
+	# its measured box roughly 58 px. Reserve 76 px so it never touches actions.
+	var height := units(node, 112.0 if expanded else 76.0) if mobile(node) else (124.0 if expanded else 76.0)
 	return Rect2(Vector2(safe.end.x - width, action_zone.position.y - height - units(node, 6.0)), Vector2(width, height))
 
 static func modal_rect(node: Node) -> Rect2:
@@ -239,8 +245,8 @@ static func character_choice_carousel(node: Node) -> bool:
 
 static func hand_scrollbar_height(node: Node) -> float:
 	if mobile_landscape(node):
-		return units(node, 8.0)
-	return units(node, 12.0) if mobile(node) else 18.0
+		return units(node, 6.0)
+	return units(node, 8.0) if mobile(node) else 18.0
 
 static func drag_threshold(node: Node) -> float:
 	return units(node, 10.0) if mobile(node) else 12.0

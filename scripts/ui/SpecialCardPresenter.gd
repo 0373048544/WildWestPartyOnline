@@ -39,7 +39,9 @@ func setup(owner_table: Node3D) -> void:
 	content.add_child(title_label)
 	subtitle_label = Label.new()
 	subtitle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	subtitle_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	subtitle_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	subtitle_label.clip_text = true
+	subtitle_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	subtitle_label.add_theme_color_override("font_color", SaloonTheme.CREAM)
 	content.add_child(subtitle_label)
 	banner.hide()
@@ -54,6 +56,9 @@ func _layout_banner() -> void:
 	var width_ratio: float = 0.92 if layout.mobile(root) else 0.58
 	var width: float = minf(float(layout.units(root, 620)), usable.size.x * width_ratio)
 	var height: float = float(layout.units(root, 76 if layout.mobile_landscape(root) else 88))
+	# A one-line compact subtitle avoids PanelContainer minimum-size expansion on
+	# narrow phone viewports while preserving the full message at normal widths.
+	subtitle_label.custom_minimum_size = Vector2(maxf(0.0, width - layout.units(root, 28)), 0.0)
 	banner.size = Vector2(width, height)
 	banner.position = Vector2(usable.get_center().x - width * 0.5, usable.position.y + layout.units(root, 12))
 	title_label.add_theme_font_size_override("font_size", int(layout.units(root, 21 if layout.mobile(root) else 24)))
@@ -94,6 +99,11 @@ func show_heal(player_id: int, card_id: String, rescued: bool) -> void:
 	)
 
 func _show_card(player_id: int, card_id: String, hold: float) -> void:
+	# In the close first-person phone camera a world-space card can cover most of
+	# the table. The compact banner and character gesture carry the same event
+	# clearly, so reserve the 3D card flourish for the overview camera.
+	if is_instance_valid(table.mobile_camera) and table.mobile_camera.enabled:
+		return
 	var face := {"card_data_id": card_id, "suit": "", "rank": ""}
 	table.effects.special_card_intro(
 		table.avatars[player_id].position + Vector3.UP * 1.35,
@@ -104,9 +114,12 @@ func _show_card(player_id: int, card_id: String, hold: float) -> void:
 func _show_banner(title: String, subtitle: String, duration: float) -> void:
 	if banner_tween:
 		banner_tween.kill()
-	_layout_banner()
 	title_label.text = title
 	subtitle_label.text = subtitle
+	# Assign text before sizing so the wrapped subtitle computes its minimum
+	# height against the real banner width. Doing this in the opposite order can
+	# make a longer Vietnamese line expand a mobile PanelContainer vertically.
+	_layout_banner()
 	banner.show()
 	banner.modulate = Color(1, 1, 1, 0)
 	var rest: Vector2 = banner.position

@@ -293,6 +293,16 @@ func _process(delta: float) -> void:
 		mobile_process_accumulator = 0.0
 	if rig == null or dead:
 		return
+	if VisualSettings.reduced_motion and (motion == null or not motion.is_running()):
+		rig.position = Vector3.ZERO
+		rig.scale = Vector3.ONE
+		rig.rotation.x = 0.08 if visual_preset.get("idle", "") == "lean" else 0.0
+		hat.rotation.z = float(visual_preset.get("tilt", 0))
+		if is_instance_valid(head) and expression == "idle":
+			head.rotation = Vector3.ZERO
+		for eye in eyes:
+			eye.scale.y = 1.0
+		return
 	if expression != "idle" and Time.get_ticks_msec() > expression_until:
 		set_expression("idle", 0)
 	if motion == null or not motion.is_running():

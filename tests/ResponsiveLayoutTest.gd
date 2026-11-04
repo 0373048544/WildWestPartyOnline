@@ -118,21 +118,23 @@ func _ready() -> void:
 			check(absf(footer.size.y/sy-expected_action_height)<=2,"action bar uses the mobile orientation height")
 			var first: Button = fan.cards[0]
 			check(first.size.x/sx>=44 and first.size.y/sy>=44,"card touch target is at least 44 CSS pixels "+str(css))
-			var minimum_card_width: float = 140.0 if css.y>css.x else 88.0
+			var minimum_card_width: float = 95.0 if css.y>css.x else 84.0
 			var rendered_body_size: float = first.visual.get_node("CardDescription").get_theme_font_size("font_size")*first.visual.scale.y/sy
 			check(first.size.x/sx>=minimum_card_width and rendered_body_size>=12,"orientation-specific mobile card and body text stay readable width=%s body=%s css=%s" % [first.size.x/sx,rendered_body_size,css])
+			var rendered_title: Label = first.visual.get_node("CardName") as Label
+			check(rendered_title.visible and not rendered_title.text.is_empty() and rendered_title.get_global_rect().intersects(first.get_global_rect()),"real card title is visibly rendered inside compact hand card %s title=%s" % [css,rendered_title.get_global_rect()])
 			var visible_ratio: float = (fan.size.y-first.position.y)/first.size.y
 			check(visible_ratio>=1.0,"resting hand shows the complete card body")
 			var expected_fov := 59.0 if layout_mode == LAYOUT.MOBILE_PORTRAIT else (55.0 if layout_mode == LAYOUT.MOBILE_LANDSCAPE else 57.0)
 			check(is_equal_approx(app.table.camera.fov,expected_fov),"mobile/tablet camera uses mode-specific framing")
 			if layout_mode == LAYOUT.MOBILE_LANDSCAPE:
-				check(expected_hand_height/css.y>=0.24 and expected_hand_height/css.y<=0.28,"landscape hand reserves only 24-28 percent of short side")
+				check(expected_hand_height/css.y>=0.27 and expected_hand_height/css.y<=0.33,"landscape hand stays within 27-33 percent of short side")
 			app.match_hud.show_preview(NetworkManager.private_state.hand[0])
 			var card_preview: Control = app.match_hud.preview
 			check(is_instance_valid(card_preview) and absf(card_preview.get_rect().get_center().x-logical.x*0.5)<2,"touch preview is centered instead of relying on hover position rect="+str(card_preview.get_rect()))
 			if layout_mode == LAYOUT.MOBILE_LANDSCAPE:
 				var preview_ratio: float = card_preview.size.x/logical.x
-				check(preview_ratio>=0.28 and preview_ratio<=0.34,"landscape preview stays within 28-34 percent width")
+				check(preview_ratio>=0.19 and preview_ratio<=0.28,"landscape preview stays within 19-28 percent width ratio=%s css=%s size=%s" % [preview_ratio, css, card_preview.size])
 				var loadout: Control = app.match_hud.loadout_panel
 				check(loadout.custom_minimum_size.x/sx<=180.5 and not loadout.details_scroll.visible,"landscape equipment starts as a <=180px chip")
 				loadout.title_button.pressed.emit()

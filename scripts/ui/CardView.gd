@@ -13,13 +13,36 @@ var touch_layout: bool = false
 var block_activation: bool = false
 var holding: bool = false
 var hold_time: float = 0.0
+var hold_touch_index: int = -1
 var glow: Tween
 var chosen_state: bool = false
+var content_signature: String = ""
+var compact_signature: String = ""
+var dynamic_signature: String = ""
+var touch_width_signature: float = -1.0
+
+static var configure_calls: int = 0
+static var visual_rebuilds: int = 0
 
 func _ready() -> void:
 	set_process(false)
 
 func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: bool, reason: String = "") -> void:
+	configure_calls += 1
+	var next_content_signature := str([
+		int(card.get("instance_id", -1)), str(card.get("card_data_id", "")),
+		str(card.get("suit", "")), str(card.get("rank", "")),
+		str(definition.get("name", "")), int(definition.get("type", 0)),
+		int(definition.get("effect", 0)), str(definition.get("description", ""))
+	])
+	if next_content_signature == content_signature and is_instance_valid(visual):
+		_apply_dynamic_state(definition, usable, chosen, reason)
+		return
+	content_signature = next_content_signature
+	visual_rebuilds += 1
+	compact_signature = ""
+	touch_width_signature = -1.0
+	dynamic_signature = "%s|%s|%s" % [usable, chosen, reason]
 	if lift:
 		lift.kill()
 	if glow:
@@ -31,6 +54,7 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	chosen_state = chosen
 	selected_lift = 0.0
 	holding = false
+	hold_touch_index = -1
 	set_process(false)
 	custom_minimum_size = Vector2(210, 214)
 	disabled = not usable
@@ -79,6 +103,7 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	var display_name: String = str(definition.get("name", "LÁ BÀI"))
 	var card_name := add_text(display_name, Rect2(13, 7, 144, 28), 17, SaloonTheme.CREAM)
 	card_name.name = "CardName"
+	card_name.set_meta("full_title", display_name)
 	card_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	card_name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	card_name.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -163,6 +188,28 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 		button_up.connect(_press_ended)
 	visual.modulate = Color("#fff8e4") if chosen else (Color.WHITE if usable else Color(0.88, 0.88, 0.84, 0.92))
 
+func _apply_dynamic_state(definition: Dictionary, usable: bool, chosen: bool, reason: String) -> void:
+	var next_dynamic_signature := "%s|%s|%s" % [usable, chosen, reason]
+	if next_dynamic_signature == dynamic_signature:
+		return
+	dynamic_signature = next_dynamic_signature
+	disabled = not usable
+	set_meta("disabled_reason", reason)
+	chosen_state = chosen
+	accent = [Color("#bc6449"), Color("#6a9b9f"), Color("#a38748"), Color("#7b719d")][int(definition.type)]
+	var panel: Panel = visual.get_node_or_null("CardFace") as Panel
+	if is_instance_valid(panel):
+		var face_state := "selected" if chosen else ("normal" if usable else "disabled")
+		panel.add_theme_stylebox_override("panel", SaloonTheme.card_face(accent, face_state, 10))
+	var band: ColorRect = visual.get_node_or_null("TitleBand") as ColorRect
+	if is_instance_valid(band):
+		band.color = Color("#8a7040") if usable else Color("#6f6653")
+	var rail: ColorRect = visual.get_node_or_null("PlayableRail") as ColorRect
+	if is_instance_valid(rail):
+		rail.color = (SaloonTheme.GOLD if chosen else accent.lightened(0.18)) if usable else Color("#777268")
+		rail.size.x = 4 if chosen else 3
+	visual.modulate = Color("#fff8e4") if chosen else (Color.WHITE if usable else Color(0.88, 0.88, 0.84, 0.92))
+
 func add_text(value: String, bounds: Rect2, font_size: int, color: Color) -> Label:
 	var text_label := Label.new()
 	text_label.text = value
@@ -179,12 +226,22 @@ func add_text(value: String, bounds: Rect2, font_size: int, color: Color) -> Lab
 
 func _gui_input(event: InputEvent) -> void:
 	# Disabled cards remain inspectable by touch/long press.
-	if event is InputEventScreenTouch or (event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT):
-		holding = event.pressed
-		set_process(holding)
+	if event is InputEventScreenTouch:
 		if event.pressed:
-			hold_time = 0
-			block_activation = false
+			# The first finger that starts on this card owns its hold lifecycle.
+			# A second finger must not cancel or complete another finger's preview.
+			if hold_touch_index >= 0:
+				return
+			hold_touch_index = event.index
+			_press_started()
+		elif event.index == hold_touch_index:
+			hold_touch_index = -1
+			_press_ended()
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			_press_started()
+		else:
+			_press_ended()
 
 func hover(raised: bool) -> void:
 	if touch_layout:
@@ -202,24 +259,33 @@ func hover(raised: bool) -> void:
 
 func compact(chosen: bool, reaction: bool) -> void:
 	set_meta("chosen_card", chosen)
+	var next_signature := "%s|%s|%s" % [chosen, reaction, touch_layout]
+	if next_signature == compact_signature:
+		return
+	compact_signature = next_signature
 	compact_mode = true
-	custom_minimum_size = Vector2(158, 162)
-	size = custom_minimum_size
-	visual.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-	visual.size = Vector2(210, 214)
-	visual.scale = Vector2.ONE * 0.75 * (1.05 if chosen_state else 1.0)
+	if not touch_layout:
+		custom_minimum_size = Vector2(158, 162)
+		size = custom_minimum_size
+		visual.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+		visual.size = Vector2(210, 214)
+		visual.scale = Vector2.ONE * 0.75 * (1.05 if chosen_state else 1.0)
 	# Selection is a compact hand highlight, not a second preview. Keep the lift
 	# inside the requested 10-18 px range so the rendered face cannot rise behind
 	# the department-store prompt or escape the HandFan bounds.
 	selected_lift = -18 if chosen else 0
 	visual.position.y = selected_lift
 	if reaction:
-		if VisualSettings.decorative_motion():
+		if VisualSettings.decorative_motion() and (not glow or not glow.is_valid()):
 			glow = create_tween().set_loops()
 			glow.tween_property(visual, "modulate", Color("#fff0b5"), 0.55)
 			glow.tween_property(visual, "modulate", Color.WHITE, 0.55)
 		else:
 			visual.modulate = Color("#fff0c8")
+	elif glow and glow.is_valid():
+		glow.kill()
+		glow = null
+		visual.modulate = Color("#fff8e4") if chosen else (Color.WHITE if not disabled else Color(0.88, 0.88, 0.84, 0.92))
 
 func _process(delta: float) -> void:
 	if holding:
@@ -245,8 +311,20 @@ func _press_ended() -> void:
 	holding = false
 	set_process(false)
 
+func cancel_touch_hold_for_drag() -> void:
+	# Once HandFan classifies the gesture as a drag, neither the long-press timer
+	# nor Button.pressed may turn that same gesture into a second intent.
+	holding = false
+	hold_touch_index = -1
+	block_activation = true
+	set_process(false)
+
 func touch_compact(width: float) -> void:
+	if touch_layout and is_equal_approx(width, touch_width_signature):
+		return
+	var was_touch_layout := touch_layout
 	touch_layout = true
+	touch_width_signature = width
 	selected_lift = 0.0
 	custom_minimum_size = Vector2(width, width * 214.0 / 210.0)
 	size = custom_minimum_size
@@ -256,31 +334,41 @@ func touch_compact(width: float) -> void:
 	# nominal 12px label into roughly 8px on portrait phones.
 	var logical_per_css: float = maxf(0.1, load("res://scripts/ui/MatchLayout.gd").units(self, 1.0))
 	var readable_scale: float = touch_scale / logical_per_css
-	visual.scale = Vector2.ONE * touch_scale * (1.05 if chosen_state else 1.0)
+	# A selected hand card only lifts; it never grows into a second preview.
+	visual.scale = Vector2.ONE * touch_scale
 	visual.position = Vector2.ZERO
 	# Card face stays identical to the desktop face: name/suit above art.
 	var card_name: Label = visual.get_node("CardName") as Label
 	var corner: Label = visual.get_node("RankSuitCorner") as Label
-	var narrow: bool = width < 110.0
-	var title_size: int = clampi(ceili((13.0 if narrow else 14.0) / readable_scale), 18, 34)
+	var narrow: bool = width < load("res://scripts/ui/MatchLayout.gd").units(self, 110.0)
+	var full_title: String = str(card_name.get_meta("full_title", card_name.text))
+	var two_line_title: bool = full_title.length() > 7 and full_title.contains(" ")
+	card_name.text = full_title
+	if two_line_title:
+		var title_words: PackedStringArray = full_title.split(" ", false)
+		var split_at: int = ceili(float(title_words.size()) * 0.5)
+		card_name.text = " ".join(title_words.slice(0, split_at)) + "\n" + " ".join(title_words.slice(split_at))
+	var title_css: float = 11.5 if two_line_title else (14.5 if narrow else 15.5)
+	var title_size: int = clampi(ceili(title_css / readable_scale), 20, 38)
 	card_name.add_theme_font_size_override("font_size", title_size)
-	card_name.position = Vector2(13, 4 if narrow else 5)
-	card_name.size = Vector2(144, 64 if narrow else 40)
+	card_name.position = Vector2(13, 5)
+	card_name.size = Vector2(160, 64 if two_line_title else 46)
 	card_name.visible = true
 	card_name.clip_text = false
-	card_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if narrow else TextServer.AUTOWRAP_OFF
-	card_name.max_lines_visible = 2 if narrow else 1
-	corner.add_theme_font_size_override("font_size", clampi(ceili(13.0 / readable_scale), 16, 34))
-	corner.position = Vector2(158, 4 if narrow else 5)
-	corner.size = Vector2(40, 64 if narrow else 40)
+	card_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if two_line_title else TextServer.AUTOWRAP_OFF
+	card_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	card_name.max_lines_visible = 2 if two_line_title else 1
+	corner.add_theme_font_size_override("font_size", clampi(ceili(11.0 / readable_scale), 14, 30))
+	corner.position = Vector2(174, 5)
+	corner.size = Vector2(24, 42)
 	corner.visible = true
 	corner.clip_text = false
 	var title_band: ColorRect = visual.get_node("TitleBand") as ColorRect
-	title_band.position = Vector2(6, 3 if narrow else 4)
-	title_band.size = Vector2(198, 66 if narrow else 42)
+	title_band.position = Vector2(6, 4)
+	title_band.size = Vector2(198, 69 if two_line_title else 50)
 	var artwork_frame: Control = visual.get_node("ArtworkFrame") as Control
-	artwork_frame.position.y = 70.0 if narrow else 54.0
-	artwork_frame.size.y = 63.0 if narrow else 79.0
+	artwork_frame.position.y = 75.0 if two_line_title else 58.0
+	artwork_frame.size.y = 77.0 if two_line_title else 94.0
 	var artwork: TextureRect = artwork_frame.get_node("CardArtwork") as TextureRect
 	artwork.size.y = artwork_frame.size.y - 6.0
 	# Full descriptions remain readable in the deliberate long-press preview
@@ -288,6 +376,10 @@ func touch_compact(width: float) -> void:
 	var description: Label = visual.get_node("CardDescription") as Label
 	description.add_theme_font_size_override("font_size", clampi(ceili(12.0 / readable_scale), 12, 30))
 	description.visible = false
+	var type_badge: Control = visual.get_node("CardTypeBadge") as Control
+	var type_text: Label = visual.get_node("CardType") as Label
+	type_badge.position.y = 160.0 if narrow else 153.0
+	type_text.position.y = 162.0 if narrow else 155.0
 	visual.get_node("RankSuitLower").visible = false
 	var quick_badge: Control = visual.get_node_or_null("QuickEquipBadge") as Control
 	var quick_text: Control = visual.get_node_or_null("QuickEquipText") as Control
@@ -297,6 +389,9 @@ func touch_compact(width: float) -> void:
 		quick_text.visible = false
 	# Keep original card type and artwork geometry.
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	# Include the touch profile in the compact cache only after applying it once.
+	if not was_touch_layout:
+		compact_signature = ""
 
 func draw_symbol(icon: Control) -> void:
 	var center := Vector2(105, 80)

@@ -52,6 +52,9 @@ func animate_scale(value: Vector2) -> void:
 		return
 	if feedback:
 		feedback.kill()
+	if VisualSettings.reduced_motion:
+		scale = Vector2.ONE
+		return
 	pivot_offset = size / 2
 	feedback = create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	feedback.tween_property(self, "scale", value, 0.12)

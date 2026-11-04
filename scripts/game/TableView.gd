@@ -90,6 +90,8 @@ func _process(delta: float) -> void:
 	if camera_goal == Vector3.ZERO:
 		return
 	camera_shake = maxf(0.0, camera_shake - delta * 0.25)
+	if not VisualSettings.camera_motion():
+		camera_shake = 0.0
 	var previous_camera: Vector3 = camera.position
 	if mobile_camera.enabled:
 		mobile_camera.apply_camera()
@@ -230,8 +232,7 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 		presentation_wait = 0
 		hide_context()
 		targeting.cancel_targeting(false)
-		for effect in effects.get_children():
-			effect.queue_free()
+		effects.reset_for_match()
 		built_match = state.match_id
 	var count: int = state.players.size()
 	var local_seat := 0
@@ -484,7 +485,7 @@ func present_event(event: Dictionary) -> void:
 				effects.starburst(at + Vector3.UP * 1.9, 1.0)
 				effects.smoke(at + Vector3.UP * 1.3)
 				avatars[id].set_expression("panic", 1000)
-				camera_shake = 0.14
+				camera_shake = 0.14 if VisualSettings.camera_motion() else 0.0
 				effects.floating(at + Vector3.UP * 3.4, "BOOM!", Color("#ffc269"))
 				effects.spark(at + Vector3.UP, Color("#d89a65"), 12, 1.2)
 		"transfer":
@@ -560,7 +561,7 @@ func play_animation(actor: int, kind: String, target: int) -> void:
 	var at: Vector3 = avatars[actor].position + Vector3(0, 2.6, 0)
 	match kind:
 		"shoot":
-			camera_shake = maxf(camera_shake, 0.018)
+			camera_shake = maxf(camera_shake, 0.018) if VisualSettings.camera_motion() else 0.0
 			var shooting_avatar: PlayerAvatar = avatars[actor]
 			var flash_timing := shooting_avatar.create_tween()
 			flash_timing.tween_interval(0.095)
@@ -576,7 +577,7 @@ func play_animation(actor: int, kind: String, target: int) -> void:
 		"hit":
 			effects.starburst(at - Vector3.UP * 0.7)
 			effects.spark(at - Vector3(0, 1.1, 0), Color("#e9bd78"))
-			camera_shake = 0.055
+			camera_shake = 0.055 if VisualSettings.camera_motion() else 0.0
 		"drink":
 			# HEAL already owns the single +HP/comedy message. This animation event
 			# supplies only the physical avatar accent and must not duplicate text.

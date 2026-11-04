@@ -46,10 +46,10 @@ func _ready() -> void:
 	var environment := WorldEnvironment.new()
 	var settings := Environment.new()
 	settings.background_mode = Environment.BG_COLOR
-	settings.background_color = Color("#42626c")
+	settings.background_color = Color("#314e58")
 	settings.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	settings.ambient_light_color = Color("#c1d0cf")
-	settings.ambient_light_energy = 0.65
+	settings.ambient_light_color = Color("#d6c8b4")
+	settings.ambient_light_energy = 0.72
 	settings.tonemap_mode = Environment.TONE_MAPPER_LINEAR
 	environment.environment = settings
 	add_child(environment)
@@ -57,7 +57,7 @@ func _ready() -> void:
 	key_light = light
 	light.rotation_degrees = Vector3(-52, -32, 0)
 	light.light_color = Color("#ffdcac")
-	light.light_energy = 1.05
+	light.light_energy = 1.12
 	apply_quality()
 	VisualSettings.changed.connect(apply_quality)
 	light.directional_shadow_max_distance = 24
@@ -65,7 +65,7 @@ func _ready() -> void:
 	var rim_light := DirectionalLight3D.new()
 	rim_light.rotation_degrees = Vector3(-24, 145, 0)
 	rim_light.light_color = Color("#9bc8d7")
-	rim_light.light_energy = 0.28
+	rim_light.light_energy = 0.22
 	add_child(rim_light)
 	for plank in range(24):
 		var color: Color = [Color("#765039"), Color("#80593e"), Color("#694633")][plank % 3]
@@ -90,7 +90,7 @@ func _ready() -> void:
 	var fill := OmniLight3D.new()
 	fill.position = Vector3(0, 5.5, 0)
 	fill.light_color = Color("#ffc47e")
-	fill.light_energy = 0.45
+	fill.light_energy = 0.52
 	fill.omni_range = 11
 	add_child(fill)
 	build_table()

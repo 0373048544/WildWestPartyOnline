@@ -10,10 +10,16 @@ var focused_uid: int = -1
 var scroll_offset: float = 0.0
 var drag_origin := Vector2.ZERO
 var dragging: bool = false
+var touch_index: int = -1
 var drag_distance: float = 0.0
 var mobile_lift: float = 0.0
 var scroller: HScrollBar
 var configured_size := Vector2.ZERO
+var layout_signature: String = ""
+var gesture_was_drag: bool = false
+
+static var configure_calls: int = 0
+static var arrange_calls: int = 0
 
 var layout: Script = preload("res://scripts/ui/MatchLayout.gd")
 
@@ -30,6 +36,7 @@ func configure(
 	reactions: bool = false,
 	reasons: Dictionary = {}
 ) -> void:
+	configure_calls += 1
 	var current_css_size: Vector2 = layout.css_size(self)
 
 	if not configured_size.is_equal_approx(current_css_size):
@@ -38,6 +45,8 @@ func configure(
 		configured_size = current_css_size
 
 	mobile_mode = bool(layout.mobile(self))
+	if not mobile_mode:
+		_cancel_touch_gesture()
 
 	var existing: Dictionary = {}
 
@@ -82,6 +91,10 @@ func configure(
 				func():
 					preview_closed.emit()
 			)
+		if not mobile_mode and bool(view.touch_layout):
+			# Rebuild only when crossing back to the desktop layout profile; touch
+			# cards use deliberate line breaks and different artwork geometry.
+			view.content_signature = ""
 
 		view.set_meta("mobile_uid", uid)
 		view.set_meta("preview_card", card)
@@ -112,8 +125,19 @@ func configure(
 		if is_instance_valid(stale):
 			stale.queue_free()
 
-	arrange()
-	_configure_scrollbar()
+	var ordered_uids: Array[int] = []
+	for card_view in cards:
+		ordered_uids.append(int(card_view.get_meta("mobile_uid", -1)))
+	var next_layout_signature := str([
+		ordered_uids, selected, mobile_mode, size, mobile_lift,
+		float(layout.touch_card_width(self)) if mobile_mode else 158.0
+	])
+	if focused_uid not in ordered_uids:
+		focused_uid = -1
+	if next_layout_signature != layout_signature:
+		layout_signature = next_layout_signature
+		arrange()
+		_configure_scrollbar()
 
 
 func _configure_scrollbar() -> void:
@@ -168,7 +192,7 @@ func _on_view_pressed(view: Button) -> void:
 
 	if mobile_mode:
 		# A horizontal drag scrolls the hand and must never play a card.
-		if drag_distance > float(layout.drag_threshold(self)):
+		if gesture_was_drag or drag_distance > float(layout.drag_threshold(self)):
 			return
 
 		# Mobile interaction is intentionally one-tap:
@@ -214,7 +238,7 @@ func card_spacing() -> float:
 			float(mini(visible_target, cards.size()) - 1)
 		),
 		minimum,
-		maxf(minimum, width * (0.90 if layout.mobile_landscape(self) else 0.78))
+		maxf(minimum, width * (0.92 if layout.mobile_landscape(self) else 0.82))
 	)
 
 
@@ -226,6 +250,7 @@ func content_width() -> float:
 
 
 func arrange() -> void:
+	arrange_calls += 1
 	if cards.is_empty():
 		if is_instance_valid(scroller):
 			scroller.visible = false
@@ -378,21 +403,39 @@ func _input(event: InputEvent) -> void:
 
 	if event is InputEventScreenTouch:
 		if event.pressed:
-			if get_global_rect().has_point(event.position):
+			# A gesture keeps one owner from press through release. Ignore other
+			# fingers until that owner's gesture finishes.
+			if touch_index < 0 and get_global_rect().has_point(event.position):
+				touch_index = event.index
 				drag_origin = event.position
 				dragging = true
 				drag_distance = 0.0
-		else:
-			dragging = false
+				gesture_was_drag = false
+				get_viewport().set_input_as_handled()
+		elif event.index == touch_index:
+			if dragging:
+				get_viewport().set_input_as_handled()
+			_cancel_touch_gesture(false)
 
-	elif event is InputEventScreenDrag and dragging:
+	elif event is InputEventScreenDrag and dragging and event.index == touch_index:
 		drag_distance = maxf(
 			drag_distance,
-			absf(
-				event.position.x
-				- drag_origin.x
-			)
+			absf(event.position.x - drag_origin.x)
 		)
+		if not gesture_was_drag and drag_distance > float(layout.drag_threshold(self)):
+			gesture_was_drag = true
+			for card_view in cards:
+				if is_instance_valid(card_view) and card_view.has_method("cancel_touch_hold_for_drag"):
+					card_view.cancel_touch_hold_for_drag()
 
 		scroll_offset -= event.relative.x
 		arrange()
+		get_viewport().set_input_as_handled()
+
+
+func _cancel_touch_gesture(clear_classification: bool = true) -> void:
+	touch_index = -1
+	dragging = false
+	drag_distance = 0.0 if clear_classification else drag_distance
+	if clear_classification:
+		gesture_was_drag = false
