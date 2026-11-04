@@ -56,6 +56,15 @@ func sync(snapshot: Dictionary, owner: int, request: Dictionary) -> void:
 			var slot: Vector3 = radial * (2.55 + row * 0.68) + tangent * ((column - (columns - 1) / 2.0) * 0.62) + Vector3.UP * 1.43
 			objects[key].position.x = slot.x
 			objects[key].position.z = slot.z
+			# The local hidden-hand pile sits directly between a seated phone
+			# camera and the table center. It remains in authoritative state and is
+			# still rendered for every other client; only its owner's first-person
+			# presentation hides this redundant public proxy.
+			objects[key].visible = not (
+				table.mobile_camera.enabled
+				and int(p.player_id) == local_id
+				and str(zone.zone) == "hand"
+			)
 			objects[key].title.text = zone.name
 			objects[key].token["card"] = int(zone.get("card", {}).get("instance_id", 0))
 			if not zone.get("card", {}).is_empty():

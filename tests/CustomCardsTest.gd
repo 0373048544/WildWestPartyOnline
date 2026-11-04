@@ -68,7 +68,7 @@ func _ready() -> void:
 	test_department_store_edge_cases()
 	test_department_store_validation_and_privacy()
 	test_department_store_suzy_last_card()
-	test_per_game_limits_and_reset()
+	test_department_store_action_turn_limit()
 	test_general_store_unchanged_and_limited()
 	test_duplicate_card_restrictions()
 	test_iced_tea_all_counts()
@@ -214,7 +214,7 @@ func test_department_store_validation_and_privacy() -> void:
 	check(GameManager.reactions.active.target_player_id == 3,
 		"giver disconnect is skipped and the next giver prompt continues")
 
-func test_per_game_limits_and_reset() -> void:
+func test_department_store_action_turn_limit() -> void:
 	setup(2)
 	var first := give(1, "department_store")
 	var offered := give(2, "shoot")
@@ -222,8 +222,8 @@ func test_per_game_limits_and_reset() -> void:
 	GameManager.flow.resolve({"accept": true, "cards": [offered.instance_id]})
 	var second := give(1, "department_store")
 	check(GameManager.resolver.valid_targets(GameManager, 1, second).is_empty()
-		and GameManager.resolver.disabled_reason(GameManager, 1, second) == "Bạn đã dùng BÁCH HÓA trong ván này.",
-		"same player cannot use a second BÁCH HÓA in the match")
+		and GameManager.resolver.disabled_reason(GameManager, 1, second) == "Bạn đã dùng BÁCH HÓA trong lượt này.",
+		"same player cannot use a second BÁCH HÓA in one action turn")
 	GameManager.resolver.play(GameManager, 1, second.instance_id, 1)
 	check(not GameManager.find_card(1, second.instance_id).is_empty(),
 		"server rejection does not consume the second BÁCH HÓA")
@@ -232,11 +232,28 @@ func test_per_game_limits_and_reset() -> void:
 	var other := give(2, "department_store")
 	give(1, "dodge")
 	GameManager.resolver.play(GameManager, 2, other.instance_id, 2)
-	check(GameManager.players[2].department_store_used_this_match,
+	check(GameManager.players[2].department_store_used_this_action_turn,
 		"different player retains their independent BÁCH HÓA allowance")
+	# Phase changes, snapshots and reconnect state must not create a new turn.
+	GameManager.turns.phase = "REACTION"
+	GameManager.publish()
+	GameManager.players[2].is_connected = false
+	GameManager.players[2].is_connected = true
+	GameManager.turns.phase = "ACTION_PHASE"
+	check(GameManager.players[2].department_store_used_this_action_turn,
+		"phase changes, snapshots and reconnect do not reset BÁCH HÓA")
+	# Only the authoritative next action-turn boundary resets this player's flag.
+	GameManager.begin_turn(1)
+	GameManager.flow.jobs.clear()
+	GameManager.reactions.active = {}
+	GameManager.turns.phase = "ACTION_PHASE"
+	check(not GameManager.players[1].department_store_used_this_action_turn,
+		"same player may use BÁCH HÓA again on their next action turn")
+	check(GameManager.resolver.valid_targets(GameManager, 1, second).has(1),
+		"second BÁCH HÓA becomes valid after the next action-turn boundary")
 	setup(2)
-	check(not GameManager.players[1].department_store_used_this_match,
-		"new match resets BÁCH HÓA per-game state")
+	check(not GameManager.players[1].department_store_used_this_action_turn,
+		"new match starts with a fresh BÁCH HÓA action-turn allowance")
 
 func resolve_store_all() -> void:
 	while not GameManager.reactions.active.is_empty():
@@ -312,7 +329,7 @@ func test_duplicate_card_restrictions() -> void:
 	GameManager.players[1].weapon = give(1, "volcanic")
 	GameManager.players[1].hand.erase(GameManager.players[1].weapon)
 	check(GameManager.resolver.valid_targets(GameManager, 1, duplicate).is_empty(),
-		"Volcanic does not override BÁCH HÓA per-game restriction")
+		"Volcanic does not override BÁCH HÓA action-turn restriction")
 
 	setup(3)
 	GameManager.players[1].ability_id = "unlimited_shoot"

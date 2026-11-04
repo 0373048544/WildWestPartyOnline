@@ -171,10 +171,19 @@ func place(camera: Camera3D, anchor: Vector3) -> Rect2:
 	var edge: Vector2 = camera.unproject_position(global_position + camera.global_basis.x * 1.82)
 	var projected_width: float = maxf(1, center.distance_to(edge))
 	var layout: Script = load("res://scripts/ui/MatchLayout.gd")
-	var minimum_width: float = 165 if get_viewport().get_visible_rect().size.y > get_viewport().get_visible_rect().size.x else 148
+	var portrait: bool = get_viewport().get_visible_rect().size.y > get_viewport().get_visible_rect().size.x
+	var first_person: bool = bool(layout.mobile_first_person(self))
+	# In first-person several opponents share a narrow upper band. Keep plates
+	# readable, but do not let their projected size grow into one large block.
+	var minimum_width: float = (120.0 if portrait else 112.0) if first_person else (165.0 if portrait else 148.0)
 	minimum_width *= float(layout.get_mobile_nameplate_scale(self))
-	var size_factor: float = clampf(minimum_width / projected_width, 1, 3.4)
-	scale = Vector3.ONE * size_factor
+	var maximum_scale: float = 2.55 if first_person else 3.4
+	var minimum_scale: float = 0.38 if first_person else 1.0
+	var size_factor: float = clampf(minimum_width / projected_width, minimum_scale, maximum_scale)
+	# Apply the billboard scale in global space. Using the local `scale` property
+	# under the transformed table parent produces an incorrect apparent size for
+	# nearby plates when the factor is below one.
+	global_basis = camera.global_basis.scaled(Vector3.ONE * size_factor)
 	global_position.y += 0.325 * (size_factor - 1) + (0.12 if hovered else 0)
 	center = camera.unproject_position(global_position)
 	var screen_size := Vector2(projected_width * size_factor, projected_width * size_factor * 0.65 / 1.82)

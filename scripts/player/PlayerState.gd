@@ -21,7 +21,7 @@ var spectating: bool = false
 var shoot_used_this_action_turn: bool = false
 var panic_used_this_action_turn: bool = false
 var cat_balou_used_this_action_turn: bool = false
-var department_store_used_this_match: bool = false
+var department_store_used_this_action_turn: bool = false
 var general_store_used_this_match: bool = false
 # Descriptive alias over the existing authoritative flag, never separate state.
 var bang_played_this_action_turn: bool:

@@ -15,7 +15,10 @@ func create(target: int, kind: String, context: Dictionary, payload: Dictionary 
 		"source_player_id": context.get("source", 0),
 		"allowed_actions": payload.get("allowed_actions", ["choose", "pass"]),
 		"allowed_card_types": payload.get("allowed_cards", []),
-		"required_count": context.get("required", 1), "resolved_count": context.get("resolved", 0),
+		# required_count is the immutable total for UI/reconnect. The remaining
+		# requirement stays authoritative in context.required.
+		"required_count": context.get("total_required", context.get("required", 1)),
+		"resolved_count": context.get("resolved", 0),
 		"timeout_seconds": timeout_seconds,
 		"deadline": Time.get_ticks_msec() + int(timeout_seconds * 1000.0),
 		"context": context, "payload": payload}

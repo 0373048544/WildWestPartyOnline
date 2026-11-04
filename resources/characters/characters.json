@@ -88,7 +88,7 @@
     "display_name": "Slab the Killer",
     "max_hp": 4,
     "ability_id": "double_dodge",
-    "ability_description_vi": "Đối thủ cần 2 lần Né để tránh lá Bắn của bạn."
+    "ability_description_vi": "Đối thủ cần NÉ thành công 2 lần để tránh mỗi lá BẮN thông thường của bạn."
   },
   {
     "character_id": "suzy_lafayette",

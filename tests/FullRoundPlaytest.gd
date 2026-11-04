@@ -383,7 +383,7 @@ func run_round(layout_name: String, viewport_size: Vector2i) -> void:
 		confirm_give.pressed.emit()
 	await settle(0.35)
 	check(GameManager.reactions.active.is_empty() and not is_instance_valid(app.overlay) and not is_instance_valid(app.match_hud.get_node_or_null("DepartmentStoreGivePanel")), layout_name + ": Bách Hóa finishes without stuck panel/reaction")
-	check(GameManager.players[2].department_store_used_this_match, layout_name + ": Bách Hóa per-game limit recorded")
+	check(GameManager.players[2].department_store_used_this_action_turn, layout_name + ": Bách Hóa action-turn limit recorded")
 	var public_transfers: Array = net.public_events.filter(func(e): return bool(e.get("department_store", false)) and e.get("kind", "") == "transfer")
 	check(public_transfers.size() == 3 and public_transfers.all(func(e): return not e.has("card")), layout_name + ": public Bách Hóa transfers never leak identity")
 	for giver in [3, 4, 1]:
@@ -441,7 +441,8 @@ func run_round(layout_name: String, viewport_size: Vector2i) -> void:
 	check(GameManager.reactions.active.is_empty() and not is_instance_valid(app.overlay), layout_name + ": next turn has no stale reaction/modal")
 	check(not GameManager.find_card(2, cards.store.instance_id).is_empty() == false, layout_name + ": played Store card is absent from hand")
 	check(GameManager.players[3].weapon.get("card_data_id", "") == "winchester", layout_name + ": unrelated weapon state remains intact")
-	check(GameManager.players[2].general_store_used_this_match and GameManager.players[2].department_store_used_this_match, layout_name + ": per-game limits survive turn transition")
+	check(GameManager.players[2].general_store_used_this_match, layout_name + ": Cửa Hàng per-game limit survives turn transition")
+	check(GameManager.players[2].department_store_used_this_action_turn, layout_name + ": another player's turn does not reset Bách Hóa early")
 	verify_physical_cards(layout_name + " next turn")
 	check_ui_bounds(layout_name + " next turn")
 	await screenshot(layout_name, "09-next-player")
@@ -451,6 +452,7 @@ func run_round(layout_name: String, viewport_size: Vector2i) -> void:
 	GameManager.flow.jobs.clear()
 	GameManager.reactions.active = {}
 	GameManager.begin_turn(2)
+	check(not GameManager.players[2].department_store_used_this_action_turn, layout_name + ": Bách Hóa allowance resets on player's next action turn")
 	GameManager.flow.jobs.clear()
 	GameManager.reactions.active = {}
 	GameManager.turns.phase = "ACTION_PHASE"

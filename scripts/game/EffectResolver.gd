@@ -42,7 +42,7 @@ func valid_targets(game: Node, sender: int, card: Dictionary) -> Array:
 		return result
 	if effect == CardData.EffectType.HEAL and (p.current_hp >= p.max_hp or (card.card_data_id == "drink" and not game.beer_enabled())):
 		return result
-	if effect == CardData.EffectType.DEPARTMENT_STORE and p.department_store_used_this_match:
+	if effect == CardData.EffectType.DEPARTMENT_STORE and p.department_store_used_this_action_turn:
 		return result
 	if effect == CardData.EffectType.STORE and p.general_store_used_this_match:
 		return result
@@ -143,8 +143,8 @@ func disabled_reason(game: Node, sender: int, card: Dictionary) -> String:
 			return "Bia không có tác dụng khi chỉ còn 2 người chơi."
 		if p.current_hp >= p.max_hp:
 			return "Bạn đã đầy máu."
-	if effect == CardData.EffectType.DEPARTMENT_STORE and p.department_store_used_this_match:
-		return "Bạn đã dùng BÁCH HÓA trong ván này."
+	if effect == CardData.EffectType.DEPARTMENT_STORE and p.department_store_used_this_action_turn:
+		return "Bạn đã dùng BÁCH HÓA trong lượt này."
 	if effect == CardData.EffectType.STORE and p.general_store_used_this_match:
 		return "Bạn đã dùng CỬA HÀNG trong ván này."
 	if card.get("card_data_id", "") == "panic" and p.panic_used_this_action_turn:
@@ -225,7 +225,9 @@ func indians(game: Node, sender: int, _target: int, _card: Dictionary) -> void:
 		game.flow.push({"kind": "indians", "source": sender, "target": id})
 
 func department_store(game: Node, sender: int, _target: int, _card: Dictionary) -> void:
-	game.players[sender].department_store_used_this_match = true
+	# The allowance belongs to the authoritative action-turn boundary. Mark it
+	# when the play is accepted, before any giver prompt can yield or reconnect.
+	game.players[sender].department_store_used_this_action_turn = true
 	var batch := {"receiver": sender, "count": 0}
 	game.emit_event("DEPARTMENT_STORE_STARTED", sender, {
 		"kind": "department_store", "receiver": sender,

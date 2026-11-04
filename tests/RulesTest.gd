@@ -245,7 +245,9 @@ func test_shoot() -> void:
 	play(1, "shoot", 2)
 	check(GameManager.reactions.active.required_count == 2, "Slab requires two")
 	respond()
-	check(GameManager.reactions.active.required_count == 1, "first Dodge is only partial")
+	check(GameManager.reactions.active.required_count == 2
+		and GameManager.reactions.active.resolved_count == 1,
+		"first Dodge is progress 1/2 in the same attack reaction")
 	respond()
 	check(GameManager.players[2].current_hp == 4, "two Dodge defend Slab")
 	setup()

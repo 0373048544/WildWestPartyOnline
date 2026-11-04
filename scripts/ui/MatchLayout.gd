@@ -74,14 +74,12 @@ static func safe_insets(node: Node) -> Vector4:
 	return node.get_viewport().get_meta("match_safe_insets", Vector4.ZERO)
 
 static func action_height(node: Node) -> float:
-	if mobile_portrait(node):
-		return units(node, 48.0)
-	if mobile_landscape(node):
-		return units(node, 46.0)
+	if mobile_portrait(node) or mobile_landscape(node):
+		return units(node, 44.0)
 	return 44.0
 
 static func get_mobile_banner_height(node: Node) -> float:
-	return units(node, 46.0 if mobile_landscape(node) else 52.0)
+	return units(node, 40.0 if mobile_landscape(node) else 42.0)
 
 static func hand_lift(node: Node, targeting: bool) -> float:
 	if not mobile(node):
@@ -101,9 +99,10 @@ static func hand_height(node: Node, targeting: bool = false) -> float:
 		return 182.0
 	if tablet(node):
 		return units(node, 176.0 if targeting else 190.0)
-	# Portrait gets enough room for a full touch card + scrollbar.
+	# Portrait keeps the complete card touchable without consuming roughly one
+	# third of a short iPhone viewport.
 	if mobile_portrait(node):
-		return units(node, 172.0 if targeting else 194.0)
+		return units(node, 160.0 if targeting else 166.0)
 	# Landscape is proportional to the short side: a real phone gets 24–28%
 	# instead of the old fixed 142px zone that could consume over one third.
 	var css: Vector2 = css_size(node)
@@ -117,7 +116,8 @@ static func touch_card_width(node: Node) -> float:
 	if tablet(node):
 		return units(node, 150.0)
 	if mobile_portrait(node):
-		return units(node, 152.0)
+		var css: Vector2 = css_size(node)
+		return units(node, clampf(141.0 + maxf(0.0, css.x - 360.0) * 0.08, 141.0, 146.0))
 	if mobile_landscape(node):
 		var css: Vector2 = css_size(node)
 		var hand_css := clampf(css.y * 0.27, 96.0, 150.0)
@@ -178,7 +178,7 @@ static func chat_button_rect(node: Node) -> Rect2:
 	var safe := safe_rect(node, 8.0)
 	# Matches the collapsed Journal control; ChatPanel replaces this fallback with
 	# the Journal's measured rect once MatchHUD is present.
-	var width := units(node, 135.0)
+	var width := units(node, 104.0 if mobile(node) else 135.0)
 	var height := units(node, 44.0 if mobile(node) else 42.0)
 	return Rect2(
 		Vector2(safe.position.x + units(node, 4.0), safe.position.y + units(node, 48.0)),
@@ -214,7 +214,10 @@ static func equipment_rect(node: Node, expanded: bool = false) -> Rect2:
 		if mobile_landscape(node)
 		else minf(320.0, safe.size.x * 0.30)
 	)
-	var height := units(node, 136.0 if expanded else 52.0) if mobile(node) else (124.0 if expanded else 76.0)
+	# PanelContainer includes its border/content margins in addition to the 42px
+	# title hit target. Reserving only 52px let the real 68px compact panel spill
+	# into End Turn in short landscape viewports.
+	var height := units(node, 136.0 if expanded else 68.0) if mobile(node) else (124.0 if expanded else 76.0)
 	return Rect2(Vector2(safe.end.x - width, action_zone.position.y - height - units(node, 6.0)), Vector2(width, height))
 
 static func modal_rect(node: Node) -> Rect2:

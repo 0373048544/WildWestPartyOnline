@@ -142,6 +142,7 @@ func begin_turn(id: int) -> void:
 	# only when that player's next action turn begins, never on transfers or reactions.
 	players[id].panic_used_this_action_turn = false
 	players[id].cat_balou_used_this_action_turn = false
+	players[id].department_store_used_this_action_turn = false
 	flow.push({"kind": "dynamite", "target": id})
 	flow.push({"kind": "jail", "target": id})
 	flow.push({"kind": "draw", "target": id})

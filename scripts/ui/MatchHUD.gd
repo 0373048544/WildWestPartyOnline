@@ -545,6 +545,7 @@ func action(
 		item.custom_minimum_size.y = float(
 			layout.action_height(self)
 		)
+		item.add_theme_font_size_override("font_size", int(layout.units(self, 13.0)))
 
 		item.custom_minimum_size.x = float(
 			layout.units(self, 48.0)
@@ -555,6 +556,9 @@ func action(
 
 func build_top() -> void:
 	var bar := Control.new()
+	# A transient picker can temporarily raise the HUD's minimum width. Mobile
+	# chrome must follow the actual viewport, not that propagated minimum size.
+	var available_size: Vector2 = get_viewport().get_visible_rect().size if layout.mobile(self) else size
 
 	bar.name = "TopBar"
 
@@ -597,19 +601,16 @@ func build_top() -> void:
 
 	bar.add_child(strip)
 
-	var strip_width: float = minf(570.0, size.x - 260.0)
+	var strip_width: float = minf(570.0, available_size.x - 260.0)
 	if layout.mobile_landscape(self):
-		strip_width = minf(layout.units(self, 470.0), size.x - layout.units(self, 224.0))
+		strip_width = minf(layout.units(self, 470.0), available_size.x - layout.units(self, 224.0))
 
 	strip.position = Vector2(
-		(size.x - strip_width) / 2.0,
+		(available_size.x - strip_width) / 2.0,
 		layout.units(self, 4.0) if layout.mobile_landscape(self) else 8.0
 	)
 
-	strip.custom_minimum_size = Vector2(
-		strip_width,
-		34.0
-	)
+	strip.custom_minimum_size = Vector2(strip_width, layout.units(self, 38.0) if layout.mobile(self) else 34.0)
 
 	strip.configure(
 		title,
@@ -625,20 +626,8 @@ func build_top() -> void:
 		bar
 	)
 
-	menu.position = Vector2(
-		size.x - 86.0,
-		layout.units(self, 2.0) if layout.mobile_landscape(self) else 8.0
-	)
-
-	menu.size = Vector2(
-		74.0,
-		layout.units(self, 42.0) if layout.mobile_landscape(self) else 42.0
-	)
-
-	if bool(
-		load("res://scripts/ui/MatchLayout.gd").portrait(self)
-	):
-		menu.size.y = 68.0
+	menu.position = Vector2(available_size.x - 86.0, layout.units(self, 2.0) if layout.mobile(self) else 8.0)
+	menu.size = Vector2(layout.units(self, 64.0), layout.units(self, 40.0)) if layout.mobile(self) else Vector2(74.0, 42.0)
 
 	menu.name = "PauseButton"
 	menu.tooltip_text = "Menu · Luật chơi · Rời trận"
@@ -655,6 +644,13 @@ func build_top() -> void:
 
 		menu.position.x -= safe.z
 		menu.position.y += safe.y
+		menu.position.x = available_size.x - safe.z - menu.size.x - layout.units(self, 6.0)
+		strip.position.x = safe.x + layout.units(self, 6.0)
+		strip.custom_minimum_size.x = maxf(
+			layout.units(self, 150.0),
+			menu.position.x - layout.units(self, 6.0) - strip.position.x
+		)
+		strip.size.x = strip.custom_minimum_size.x
 
 
 func _sync_action_history() -> void:
@@ -902,6 +898,11 @@ func build_hand() -> void:
 
 	prompt.name = "HandPrompt"
 	prompt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# Reaction/target controls already carry context on phones. Keeping this
+	# sentence in the same HBox squeezed it into vertical letters.
+	if phone_layout and not (state.phase == "DISCARD_PHASE" and state.current_player == app.local_id()):
+		prompt.visible = false
+		prompt.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 
 	prompt.add_theme_color_override(
 		"font_color",
@@ -940,10 +941,10 @@ func build_hand() -> void:
 					str(character.get("display_name", "KỸ NĂNG")), ability_description,
 					"positive", "✦", 4.0
 				)
-		var skill_info := action("KỸ NĂNG", show_skill, footer)
+		var skill_info := action("ⓘ" if phone_layout else "KỸ NĂNG", show_skill, footer)
 		skill_info.name = "CharacterSkillInfo"
 		skill_info.tooltip_text = ability_description
-		skill_info.custom_minimum_size.x = layout.units(self, 90.0)
+		skill_info.custom_minimum_size.x = layout.units(self, 44.0 if phone_layout else 90.0)
 
 	if app.sid_mode:
 		action(
@@ -1045,22 +1046,22 @@ func build_hand() -> void:
 
 	elif state.current_player == app.local_id() and state.phase == "ACTION_PHASE":
 		var end_turn := action(
-			"KẾT THÚC LƯỢT",
+			"KẾT THÚC" if phone_layout else "KẾT THÚC LƯỢT",
 			func():
 				app.intent("end"),
 			footer
 		)
 		end_turn.name = "EndTurn"
 		if layout.mobile_landscape(self):
-			end_turn.custom_minimum_size = Vector2(layout.units(self, 128.0), layout.units(self, 46.0))
+			end_turn.custom_minimum_size = Vector2(layout.units(self, 128.0), layout.action_height(self))
 		elif layout.mobile_portrait(self):
-			end_turn.custom_minimum_size.x = minf(layout.units(self, 180.0), size.x * 0.46)
+			end_turn.custom_minimum_size.x = minf(layout.units(self, 126.0), size.x * 0.40)
 		else:
 			end_turn.custom_minimum_size = Vector2(180.0, 44.0)
 
 	if layout.mobile_first_person(self) and request.is_empty() and app.selected < 0:
 		var reset_camera := action(
-			"◎ BÀN",
+			"◎" if phone_layout else "◎ BÀN",
 			func():
 				if is_instance_valid(app.table) and is_instance_valid(app.table.mobile_camera):
 					app.table.mobile_camera.reset_toward_table(),
@@ -1068,7 +1069,7 @@ func build_hand() -> void:
 		)
 		reset_camera.name = "ResetMobileCamera"
 		reset_camera.tooltip_text = "Đưa góc nhìn về giữa bàn"
-		reset_camera.custom_minimum_size = Vector2(layout.units(self, 72.0), layout.units(self, 44.0))
+		reset_camera.custom_minimum_size = Vector2(layout.units(self, 44.0 if phone_layout else 72.0), layout.units(self, 44.0))
 
 	if (
 		local.get("is_alive", false)
@@ -1360,7 +1361,11 @@ func show_preview(card: Dictionary) -> void:
 	var reason: String = str(
 		own.get("disabled_reasons", {}).get(card.instance_id, "")
 	)
-	var preview_height: float = (292.0 if not reason.is_empty() else 264.0) * unit
+	var preview_height: float = (
+		(292.0 if not reason.is_empty() else 264.0) * unit
+		if mobile_preview
+		else (208.0 if not reason.is_empty() else 178.0)
+	)
 
 	preview = Panel.new()
 	preview.name = "CardPreview"
@@ -1464,10 +1469,14 @@ func show_preview(card: Dictionary) -> void:
 	preview.add_child(corner)
 
 	# Preview shows a framed illustration and never draws outside its own bounds.
+	var artwork_y: float = 62.0 if mobile_preview else 43.0
+	# Reserve enough compact-preview space for long localized descriptions such
+	# as BÁCH HÓA; artwork remains prominent without consuming the text area.
+	var artwork_height: float = 82.0 if mobile_preview else 58.0
 	var artwork_frame := Panel.new()
 	artwork_frame.name = "PreviewArtworkFrame"
-	artwork_frame.position = Vector2(14.0, 62.0) * unit
-	artwork_frame.size = Vector2(preview_width / unit - 28.0, 94.0) * unit
+	artwork_frame.position = Vector2(14.0, artwork_y) * unit
+	artwork_frame.size = Vector2(preview_width / unit - 28.0, artwork_height) * unit
 	artwork_frame.clip_contents = true
 	artwork_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	artwork_frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#30281f"), accent, 2.0 * unit))
@@ -1486,7 +1495,7 @@ func show_preview(card: Dictionary) -> void:
 	type_label.text = TextCatalog.text(
 		CardData.CardType.keys()[int(data.get("type", 0))]
 	)
-	type_label.position = Vector2(14.0, 161.0) * unit
+	type_label.position = Vector2(14.0, 149.0 if mobile_preview else 105.0) * unit
 	type_label.size = Vector2(preview_width / unit - 28.0, 18.0) * unit
 	type_label.add_theme_font_size_override("font_size", int(12.0 * unit))
 	type_label.add_theme_color_override("font_color", accent.darkened(0.28))
@@ -1495,15 +1504,17 @@ func show_preview(card: Dictionary) -> void:
 
 	var description := Label.new()
 	description.text = str(data.get("description", ""))
-	description.position = Vector2(14.0, 184.0) * unit
+	description.position = Vector2(14.0, 171.0 if mobile_preview else 127.0) * unit
 	description.size = Vector2(
 		preview_width / unit - 28.0,
-		64.0 if not reason.is_empty() else 72.0
+		(76.0 if not reason.is_empty() else 86.0) if mobile_preview else 46.0
 	) * unit
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	description.max_lines_visible = 4
-	description.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	description.add_theme_font_size_override("font_size", int(13.0 * unit))
+	description.custom_minimum_size = Vector2(1.0, 1.0)
+	description.clip_text = true
+	description.max_lines_visible = 6 if mobile_preview else 3
+	description.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING if mobile_preview else TextServer.OVERRUN_TRIM_ELLIPSIS
+	description.add_theme_font_size_override("font_size", int(12.0 * unit) if mobile_preview else 13)
 	description.add_theme_color_override("font_color", SaloonTheme.INK_SOFT)
 	description.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.add_child(description)
@@ -1511,7 +1522,7 @@ func show_preview(card: Dictionary) -> void:
 	if not reason.is_empty():
 		var reason_label := Label.new()
 		reason_label.text = reason
-		reason_label.position = Vector2(14.0, 257.0) * unit
+		reason_label.position = Vector2(14.0, 257.0 if mobile_preview else 176.0) * unit
 		reason_label.size = Vector2(preview_width / unit - 28.0, 26.0) * unit
 		reason_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		reason_label.add_theme_font_size_override("font_size", int(12.0 * unit))

@@ -38,7 +38,9 @@ func present(owner_app: Node, active: Dictionary, state: Dictionary) -> void:
 	deadline = Time.get_ticks_msec() / 1000.0 + float(active.get("remaining", 0.0))
 	var actor := _player_name(int(active.get("source_player_id", 0)), state)
 	var kind := str(active.get("reaction_type", ""))
-	var copy := _copy_for(kind, actor)
+	set_meta("required_count", int(active.get("required_count", 1)))
+	set_meta("resolved_count", int(active.get("resolved_count", 0)))
+	var copy := _copy_for(kind, actor, active)
 	title_label.text = copy.title
 	detail_label.text = copy.detail
 	icon.text = copy.icon
@@ -85,7 +87,12 @@ func _primary() -> void:
 	secondary_button.disabled = true
 	skip_button.disabled = true
 	app.intent("reaction", {"request": request_id, "accept": true, "card": primary_card})
-	_animate_out()
+	var total: int = int(get_meta("required_count", 1))
+	var resolved: int = int(get_meta("resolved_count", 0))
+	# A Slab response remains one visual reaction. Keep the banner in place
+	# while authority validates the first NÉ and publishes progress 1/2.
+	if total <= 1 or resolved + 1 >= total:
+		_animate_out()
 
 func _secondary() -> void:
 	if secondary_card < 0 or not is_instance_valid(app):
@@ -107,9 +114,17 @@ func _skip() -> void:
 	app.intent("reaction", {"request": request_id, "accept": false})
 	_animate_out()
 
-func _copy_for(kind: String, actor: String) -> Dictionary:
+func _copy_for(kind: String, actor: String, active: Dictionary = {}) -> Dictionary:
 	match kind:
 		"dodge":
+			var required: int = int(active.get("required_count", 1))
+			var resolved: int = int(active.get("resolved_count", 0))
+			if required > 1:
+				return {
+					"title": "%s ĐANG BẮN BẠN!" % actor.to_upper(),
+					"detail": "CẦN 2 LẦN NÉ · ĐÃ NÉ: %d/%d" % [resolved, required],
+					"primary": TextCatalog.text("USE DODGE"), "icon": "✦"
+				}
 			return {"title": TextCatalog.text("%s is shooting you!") % actor,
 				"detail": TextCatalog.text("Use DODGE or take 1 damage"),
 				"primary": TextCatalog.text("USE DODGE"), "icon": "✦"}

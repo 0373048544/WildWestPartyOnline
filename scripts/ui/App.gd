@@ -776,20 +776,32 @@ func show_character_info(player: Dictionary) -> void:
 	frame.name = "PlayerInfoCard"
 	frame.set_meta("snapshot", signature)
 	frame.set_meta("character_id", player.character_id)
-	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.mouse_filter = Control.MOUSE_FILTER_STOP
 	root.add_child(frame)
 	var layout: Script = load("res://scripts/ui/MatchLayout.gd")
 	var landscape_phone: bool = layout.mobile_landscape(root)
 	var compact: bool = layout.mobile(root) or root.size.x < 1100
 	var card_width: float = minf(layout.units(root, 184.0), root.size.x * 0.24) if landscape_phone else (218 if compact else 250)
 	var focus: Rect2 = layout.get_table_focus_rect(root)
-	frame.position = Vector2(focus.position.x + layout.units(root, 8.0), focus.position.y + layout.units(root, 8.0)) if compact else Vector2(root.size.x - card_width - 18, 76)
+	frame.position = Vector2(focus.end.x - card_width - layout.units(root, 8.0), focus.position.y + layout.units(root, 8.0)) if compact else Vector2(root.size.x - card_width - 18, 76)
 	frame.custom_minimum_size.x = card_width
 	frame.z_index = layout.Z_EQUIPMENT
 	frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#3c3028"), Color("#b99058"), 8 if landscape_phone else 12))
 	var column := VBoxContainer.new()
-	column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column.mouse_filter = Control.MOUSE_FILTER_PASS
 	frame.add_child(column)
+	var close_row := HBoxContainer.new()
+	close_row.mouse_filter = Control.MOUSE_FILTER_PASS
+	column.add_child(close_row)
+	var compact_title := label("THẺ NHÂN VẬT", 11 if landscape_phone else 12, close_row)
+	compact_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var close := button("×", func():
+		if is_instance_valid(frame):
+			root.remove_child(frame)
+			frame.queue_free(), close_row)
+	close.name = "ClosePlayerInfo"
+	close.custom_minimum_size = Vector2(layout.units(root, 40.0), layout.units(root, 36.0))
+	close.add_theme_font_size_override("font_size", int(layout.units(root, 16.0)))
 	var portrait: Control = saved_portrait if saved_portrait else load("res://scripts/ui/CharacterPortrait.gd").new()
 	column.add_child(portrait)
 	var portrait_height: int = 58 if landscape_phone else (88 if compact else 115)
@@ -815,7 +827,8 @@ func show_character_info(player: Dictionary) -> void:
 		ability.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	for child in column.get_children():
 		if child is Control:
-			child.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			if child != close_row:
+				child.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 func show_sid_picker() -> void:
 	sid_mode = true

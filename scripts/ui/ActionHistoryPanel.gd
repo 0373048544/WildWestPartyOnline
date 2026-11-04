@@ -85,7 +85,7 @@ func set_expanded(value: bool) -> void:
 		app.log_expanded = value
 	if not is_instance_valid(body):
 		return
-	toggle.text = "NHẬT KÝ  ×" if expanded else "NHẬT KÝ  +"
+	toggle.text = "NHẬT KÝ  ×" if expanded else "NHẬT KÝ"
 	body.visible = expanded
 	if expanded:
 		_rebuild_rows()
@@ -150,8 +150,8 @@ func _apply_layout() -> void:
 	)
 	position = Vector2(safe.x + layout.units(self, 8.0), safe.y + layout.get_mobile_banner_height(self) + layout.units(self, 8.0)) if mobile else Vector2(12, 62)
 	var intended_size := Vector2(
-		target_width if expanded else layout.units(self, 118.0) if mobile else 118.0,
-		target_height if expanded else layout.units(self, 42.0) if mobile else 42.0
+		target_width if expanded else layout.units(self, 104.0) if mobile else 118.0,
+		target_height if expanded else layout.units(self, 44.0) if mobile else 42.0
 	)
 	# Never copy Control.size back into minimum size: Containers may temporarily
 	# clamp it to a stale child minimum during an orientation change.

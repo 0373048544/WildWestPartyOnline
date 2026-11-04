@@ -266,7 +266,7 @@
   "department_store": {
     "id": "department_store",
     "name": "BÁCH HÓA",
-    "description": "Mỗi người chơi khác tự chọn 1 lá trên tay để đưa cho bạn. Mỗi người chỉ được dùng BÁCH HÓA 1 lần trong ván.",
+    "description": "Mỗi đối thủ tự chọn 1 lá trên tay\nđể đưa cho bạn.\nChỉ dùng 1 lần trong mỗi lượt hành động.",
     "type": 0,
     "target": 3,
     "effect": 15,

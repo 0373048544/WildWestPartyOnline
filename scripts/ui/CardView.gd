@@ -83,7 +83,7 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	card_name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	card_name.autowrap_mode = TextServer.AUTOWRAP_OFF
 	card_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	card_name.clip_text = true
+	card_name.clip_text = false
 	card_name.max_lines_visible = 1
 	card_name.z_index = 3
 	var corner := add_text(CardInstance.corner(card), Rect2(158, 7, 40, 28), 17, CardInstance.suit_color(card.suit))
@@ -91,30 +91,12 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	corner.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	corner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	corner.autowrap_mode = TextServer.AUTOWRAP_OFF
-	corner.clip_text = true
+	corner.clip_text = false
 	corner.z_index = 3
-	# WWPO_HAND_PREVIEW_HEADER_V6
-	# Fixed text drawing prevents font intrinsic-minimum changes from pushing
-	# the Vietnamese title into the artwork after compact/touch scaling.
-	card_name.visible = false
-	corner.visible = false
-	var header_paint := Control.new()
-	header_paint.name = "PreviewStyleHeader"
-	header_paint.position = Vector2(6.0, 5.0)
-	header_paint.size = Vector2(198.0, 34.0)
-	header_paint.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	header_paint.z_index = 12
-	visual.add_child(header_paint)
-	var header_name: String = display_name if not display_name.is_empty() else "LÁ BÀI"
-	var header_corner: String = CardInstance.corner(card)
-	var header_font: Font = get_theme_default_font()
-	header_paint.draw.connect(func() -> void:
-		var title_size: int = 17
-		while title_size > 11 and header_font.get_string_size(header_name, HORIZONTAL_ALIGNMENT_LEFT, -1, title_size).x > 137.0:
-			title_size -= 1
-		header_paint.draw_string(header_font, Vector2(8.0, 24.0), header_name, HORIZONTAL_ALIGNMENT_LEFT, 140.0, title_size, SaloonTheme.CREAM)
-		header_paint.draw_string(header_font, Vector2(150.0, 24.0), header_corner, HORIZONTAL_ALIGNMENT_RIGHT, 39.0, 16, SaloonTheme.CREAM)
-	)
+	# One real Label hierarchy is shared by hand and preview. The previous V6
+	# paint overlay hid these nodes and created two competing title systems.
+	card_name.visible = true
+	corner.visible = true
 
 	if CardData.is_quick_equipment(str(card.get("card_data_id", ""))):
 		var quick_badge := Panel.new()
@@ -269,33 +251,43 @@ func touch_compact(width: float) -> void:
 	custom_minimum_size = Vector2(width, width * 214.0 / 210.0)
 	size = custom_minimum_size
 	var touch_scale: float = maxf(0.1, width / 210.0)
+	# `width` is expressed in Godot logical units. Convert the visual scale back
+	# to CSS pixels before choosing fonts, otherwise Web content scaling turns a
+	# nominal 12px label into roughly 8px on portrait phones.
+	var logical_per_css: float = maxf(0.1, load("res://scripts/ui/MatchLayout.gd").units(self, 1.0))
+	var readable_scale: float = touch_scale / logical_per_css
 	visual.scale = Vector2.ONE * touch_scale * (1.05 if chosen_state else 1.0)
 	visual.position = Vector2.ZERO
 	# Card face stays identical to the desktop face: name/suit above art.
 	var card_name: Label = visual.get_node("CardName") as Label
 	var corner: Label = visual.get_node("RankSuitCorner") as Label
-	var title_size: int = clampi(int(round(14.0 / touch_scale)), 16, 26)
-	if card_name.text.length() > 13:
-		title_size = mini(title_size, 19)
+	var narrow: bool = width < 110.0
+	var title_size: int = clampi(ceili((13.0 if narrow else 14.0) / readable_scale), 18, 34)
 	card_name.add_theme_font_size_override("font_size", title_size)
-	card_name.position = Vector2(13, 7)
-	card_name.size = Vector2(144, 28)
-	card_name.visible = false
-	corner.add_theme_font_size_override("font_size", clampi(int(round(13.0 / touch_scale)), 16, 24))
-	corner.position = Vector2(158, 7)
-	corner.size = Vector2(40, 28)
-	corner.visible = false
+	card_name.position = Vector2(13, 4 if narrow else 5)
+	card_name.size = Vector2(144, 64 if narrow else 40)
+	card_name.visible = true
+	card_name.clip_text = false
+	card_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if narrow else TextServer.AUTOWRAP_OFF
+	card_name.max_lines_visible = 2 if narrow else 1
+	corner.add_theme_font_size_override("font_size", clampi(ceili(13.0 / readable_scale), 16, 34))
+	corner.position = Vector2(158, 4 if narrow else 5)
+	corner.size = Vector2(40, 64 if narrow else 40)
+	corner.visible = true
+	corner.clip_text = false
 	var title_band: ColorRect = visual.get_node("TitleBand") as ColorRect
-	title_band.position = Vector2(6, 6)
-	title_band.size = Vector2(198, 33)
+	title_band.position = Vector2(6, 3 if narrow else 4)
+	title_band.size = Vector2(198, 66 if narrow else 42)
+	var artwork_frame: Control = visual.get_node("ArtworkFrame") as Control
+	artwork_frame.position.y = 70.0 if narrow else 54.0
+	artwork_frame.size.y = 63.0 if narrow else 79.0
+	var artwork: TextureRect = artwork_frame.get_node("CardArtwork") as TextureRect
+	artwork.size.y = artwork_frame.size.y - 6.0
 	# Full descriptions remain readable in the deliberate long-press preview
-	# on tiny screens. For large phone cards show up to three lines.
+	# instead of competing with title/artwork in the compact hand.
 	var description: Label = visual.get_node("CardDescription") as Label
-	description.visible = width >= 128.0
-	if description.visible:
-		description.add_theme_font_size_override("font_size", clampi(int(round(11.5 / touch_scale)), 11, 19))
-		description.position = Vector2(12, 164)
-		description.size = Vector2(186, 43)
+	description.add_theme_font_size_override("font_size", clampi(ceili(12.0 / readable_scale), 12, 30))
+	description.visible = false
 	visual.get_node("RankSuitLower").visible = false
 	var quick_badge: Control = visual.get_node_or_null("QuickEquipBadge") as Control
 	var quick_text: Control = visual.get_node_or_null("QuickEquipText") as Control

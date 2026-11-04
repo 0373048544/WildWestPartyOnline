@@ -82,6 +82,35 @@ func test_conversion_and_combat() -> void:
 	setup(); GameManager.players[1].ability_id = "double_dodge"; var attack: Dictionary = give(1, "shoot")
 	GameManager.resolver.play(GameManager, 1, attack.instance_id, 2)
 	check(GameManager.reactions.active.required_count == 2, "Slab normal BANG requires two dodges")
+	check(GameManager.flow.resolve({"accept": false}) and GameManager.players[2].current_hp == 3,
+		"Slab target with zero dodges takes exactly one damage")
+	setup(); GameManager.players[1].ability_id = "double_dodge"; give(2, "dodge"); attack = give(1, "shoot")
+	GameManager.resolver.play(GameManager, 1, attack.instance_id, 2)
+	check(GameManager.flow.resolve({"accept": true}), "Slab first dodge is accepted")
+	check(GameManager.reactions.active.required_count == 2 and GameManager.reactions.active.resolved_count == 1,
+		"Slab reaction remains active at server progress 1/2")
+	check(GameManager.flow.resolve({"accept": false}) and GameManager.players[2].current_hp == 3,
+		"passing after one Slab dodge deals exactly one damage")
+	setup(); GameManager.players[1].ability_id = "double_dodge"; give(2, "dodge"); attack = give(1, "shoot")
+	GameManager.resolver.play(GameManager, 1, attack.instance_id, 2)
+	GameManager.flow.resolve({"accept": true})
+	GameManager.reactions.active.deadline = 0
+	GameManager._process(0.0)
+	check(GameManager.players[2].current_hp == 3 and GameManager.reactions.active.is_empty(),
+		"timeout after Slab progress 1/2 deals once and closes the reaction")
+	setup(); GameManager.players[1].ability_id = "double_dodge"
+	for _i in range(3): give(2, "dodge")
+	attack = give(1, "shoot"); GameManager.resolver.play(GameManager, 1, attack.instance_id, 2)
+	check(GameManager.flow.resolve({"accept": true}) and GameManager.flow.resolve({"accept": true}),
+		"two valid dodges resolve one Slab attack")
+	check(GameManager.players[2].current_hp == 4 and GameManager.players[2].hand.size() == 1,
+		"Slab consumes exactly two of three available dodges")
+	setup(); GameManager.players[1].ability_id = "double_dodge"; GameManager.players[2].ability_id = "convert"
+	for _i in range(2): give(2, "shoot")
+	attack = give(1, "shoot"); GameManager.resolver.play(GameManager, 1, attack.instance_id, 2)
+	check(GameManager.flow.resolve({"accept": true}) and GameManager.flow.resolve({"accept": true})
+		and GameManager.players[2].current_hp == 4,
+		"Janet contributes two separately validated converted dodges against Slab")
 	setup(); GameManager.players[1].ability_id = "double_dodge"; var gatling: Dictionary = give(1, "gatling")
 	GameManager.resolver.play(GameManager, 1, gatling.instance_id, 1)
 	check(GameManager.reactions.active.required_count == 1, "Slab does not amplify Gatling")

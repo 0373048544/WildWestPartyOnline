@@ -127,7 +127,21 @@ func layout_nameplates() -> void:
 	for id in nameplates:
 		if mobile_camera.enabled:
 			var head_position: Vector3 = avatars[id].global_position + Vector3.UP * 1.6
-			nameplates[id].visible = id != local_player and not camera.is_position_behind(head_position)
+			var head_screen: Vector2 = camera.unproject_position(head_position)
+			var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+			var view_depth: float = -camera.to_local(head_position).z
+			# First-person can look around the table. Do not clamp a plate belonging
+			# to an opponent who is currently outside the camera view back onto the
+			# screen: on portrait this created giant floating panels over the table.
+			var screen_margin: float = 28.0
+			var head_in_view: bool = (
+				head_screen.x >= -screen_margin
+				and head_screen.x <= viewport_size.x + screen_margin
+				and head_screen.y >= -screen_margin
+				and head_screen.y <= viewport_size.y + screen_margin
+				and view_depth > 1.2
+			)
+			nameplates[id].visible = id != local_player and not camera.is_position_behind(head_position) and head_in_view
 		if not nameplates[id].visible:
 			continue
 		placements.append({"id":id,"plate": nameplates[id], "rect": nameplates[id].place(camera, avatars[id].global_position)})
@@ -140,8 +154,16 @@ func layout_nameplates() -> void:
 	if banner_exclusion.has_area():
 		occupied.append(banner_exclusion)
 	var width: float = get_viewport().get_visible_rect().size.x
-	if load("res://scripts/ui/MatchLayout.gd").mobile(self):
-		var radius: float = load("res://scripts/ui/MatchLayout.gd").units(self,25)
+	var frame_layout: Script = load("res://scripts/ui/MatchLayout.gd")
+	var first_person: bool = mobile_camera.enabled and bool(frame_layout.mobile_first_person(self))
+	var focus_bounds: Rect2 = frame_layout.get_table_focus_rect(self)
+	var minimum_plate_y: float = (
+		frame_layout.top_hud_rect(self).end.y + frame_layout.units(self, 4.0)
+		if mobile_camera.enabled
+		else 58.0
+	)
+	if frame_layout.mobile(self):
+		var radius: float = frame_layout.units(self, 14.0 if first_person else 25.0)
 		for avatar in avatars.values():
 			if not avatar.visible:
 				continue
@@ -152,11 +174,16 @@ func layout_nameplates() -> void:
 		rect.position.x = clampf(rect.position.x, 8, maxf(8, width - rect.size.x - 8))
 		var best: Rect2 = rect
 		var best_score: float = INF
-		for y in [0,-1,1,-2,2,-3,3,-4,4,-5,5,-6,6,-7,7,-8,8,-9,9,-10,10]:
+		var y_offsets: Array = [0,1,2,3,4,5,6,7,8,-1,-2,-3,-4] if first_person else [0,-1,1,-2,2,-3,3,-4,4,-5,5,-6,6,-7,7,-8,8,-9,9,-10,10]
+		var y_step: float = rect.size.y + frame_layout.units(self, 4.0) if first_person else 18.0
+		var x_step: float = rect.size.x * 0.58 if first_person else rect.size.x + 6.0
+		for y in y_offsets:
 			for x in [0,-0.25,0.25,-0.5,0.5,-1,1,-1.5,1.5,-2,2]:
-				var candidate := Rect2(rect.position+Vector2(x*(rect.size.x+6),y*18),rect.size)
+				var candidate := Rect2(rect.position + Vector2(x * x_step, y * y_step), rect.size)
 				candidate.position.x = clampf(candidate.position.x,8,maxf(8,width-rect.size.x-8))
-				if candidate.position.y < 58:
+				if candidate.position.y < minimum_plate_y:
+					continue
+				if first_person and candidate.end.y > focus_bounds.end.y:
 					continue
 				var overlaps: bool = occupied.any(func(previous): return candidate.grow(2).intersects(previous))
 				var score: float = candidate.position.distance_squared_to(rect.position)+(1000000 if overlaps else 0)

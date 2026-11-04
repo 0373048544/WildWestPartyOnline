@@ -29,6 +29,6 @@ func _ready() -> void:
 	turns.record_action_turn(1, players)
 	check(turns.action_turn_number == 6 and turns.round_number == 3, "dead player is excluded from next round boundary")
 	check(not players[1].shoot_used_this_action_turn and not players[1].panic_used_this_action_turn and not players[1].cat_balou_used_this_action_turn, "action-turn flags use explicit names")
-	check(not players[1].department_store_used_this_match and not players[1].general_store_used_this_match, "match flags use explicit names")
+	check(not players[1].department_store_used_this_action_turn and not players[1].general_store_used_this_match, "turn and match flags use explicit lifetimes")
 	print("PASS: %d action-turn, round and match terminology checks" % checks)
 	get_tree().quit()
