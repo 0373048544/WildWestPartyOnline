@@ -1,5 +1,7 @@
 ﻿extends Node3D
 
+const MobileFirstPersonCameraScript = preload("res://scripts/ui/MobileFirstPersonCamera.gd")
+
 var avatars: Dictionary = {}
 signal character_info_requested(player: Dictionary)
 var rings: Dictionary = {}
@@ -30,6 +32,7 @@ var reaction_source: int = 0
 var reaction_target: int = 0
 var state_signature: String = ""
 var targeting_frame: bool = false
+var mobile_camera: Node
 
 func _ready() -> void:
 	AudioManager.table = self
@@ -53,6 +56,9 @@ func _ready() -> void:
 	targeting = TargetingController.new()
 	targeting.table = self
 	add_child(targeting)
+	mobile_camera = MobileFirstPersonCameraScript.new()
+	add_child(mobile_camera)
+	mobile_camera.setup(self)
 	turn_marker = load("res://scripts/ui/PlayerNameplate.gd").make_star()
 	add_child(turn_marker)
 	context_label = Label3D.new()
@@ -84,16 +90,19 @@ func _process(delta: float) -> void:
 	if camera_goal == Vector3.ZERO:
 		return
 	camera_shake = maxf(0.0, camera_shake - delta * 0.25)
-	var offset := Vector3(sin(Time.get_ticks_msec() * 0.08), cos(Time.get_ticks_msec() * 0.1), 0) * camera_shake
 	var previous_camera: Vector3 = camera.position
-	camera.position = camera.position.lerp(camera_goal + offset, minf(1.0, delta * 12))
-	var frame_layout: Script = load("res://scripts/ui/MatchLayout.gd")
-	var framing: Vector3 = (
-		Vector3(0, -1.1, 0)
-		if frame_layout.portrait(self)
-		else (Vector3(0, -3.25, 0) if targeting_frame and frame_layout.mobile_landscape(self) else Vector3(0, 1.0, 0))
-	)
-	camera.look_at(duel_focus if Time.get_ticks_msec() < duel_until else framing)
+	if mobile_camera.enabled:
+		mobile_camera.apply_camera()
+	else:
+		var offset := Vector3(sin(Time.get_ticks_msec() * 0.08), cos(Time.get_ticks_msec() * 0.1), 0) * camera_shake
+		camera.position = camera.position.lerp(camera_goal + offset, minf(1.0, delta * 12))
+		var frame_layout: Script = load("res://scripts/ui/MatchLayout.gd")
+		var framing: Vector3 = (
+			Vector3(0, -1.1, 0)
+			if frame_layout.portrait(self)
+			else (Vector3(0, -3.25, 0) if targeting_frame and frame_layout.mobile_landscape(self) else Vector3(0, 1.0, 0))
+		)
+		camera.look_at(duel_focus if Time.get_ticks_msec() < duel_until else framing)
 	if previous_camera.distance_squared_to(camera.position) > 0.000001:
 		plate_layout_key = ""
 	if plate_layout_key.is_empty():
@@ -116,6 +125,11 @@ func layout_nameplates() -> void:
 	plate_layout_key = key
 	var placements: Array = []
 	for id in nameplates:
+		if mobile_camera.enabled:
+			var head_position: Vector3 = avatars[id].global_position + Vector3.UP * 1.6
+			nameplates[id].visible = id != local_player and not camera.is_position_behind(head_position)
+		if not nameplates[id].visible:
+			continue
 		placements.append({"id":id,"plate": nameplates[id], "rect": nameplates[id].place(camera, avatars[id].global_position)})
 	placements.sort_custom(func(a, b):
 		if a.id == local_player or b.id == local_player:
@@ -129,6 +143,8 @@ func layout_nameplates() -> void:
 	if load("res://scripts/ui/MatchLayout.gd").mobile(self):
 		var radius: float = load("res://scripts/ui/MatchLayout.gd").units(self,25)
 		for avatar in avatars.values():
+			if not avatar.visible:
+				continue
 			var center: Vector2 = camera.unproject_position(avatar.global_position+Vector3.UP*1.6)
 			occupied.append(Rect2(center-Vector2.ONE*radius,Vector2.ONE*radius*2))
 	for item in placements:
@@ -192,6 +208,7 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 		built_match = state.match_id
 	var count: int = state.players.size()
 	var local_seat := 0
+	var local_position := Vector3(0, 0, 3.9)
 	for p in state.players:
 		var id: int = p.player_id
 		player_rows[id] = p
@@ -248,7 +265,7 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 			avatars[id].act("death")
 		if id == local_id:
 			local_seat = p.seat_index
-	turn_marker.visible = avatars.has(int(state.current_player)) and state.winner.is_empty() and state.phase != "CHARACTER_SELECTION"
+			local_position = at
 	var local_angle: float = TAU * float(local_seat) / count
 	var match_layout: Script = load("res://scripts/ui/MatchLayout.gd")
 	var layout_mode: String = match_layout.mode(self)
@@ -274,14 +291,28 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 		camera.keep_aspect = Camera3D.KEEP_HEIGHT
 		camera.v_offset = 0
 	camera_goal = Vector3(sin(local_angle) * camera_radius, camera_height, cos(local_angle) * camera_radius)
-	if camera.position == Vector3.ZERO:
+	mobile_camera.configure(local_position, local_seat, count)
+	for id in avatars:
+		var hide_local: bool = mobile_camera.enabled and int(id) == local_id
+		avatars[id].visible = not hide_local
+		nameplates[id].visible = not hide_local
+		if hide_local:
+			rings[id].visible = false
+	turn_marker.visible = (
+		avatars.has(int(state.current_player))
+		and state.winner.is_empty()
+		and state.phase != "CHARACTER_SELECTION"
+		and not (mobile_camera.enabled and int(state.current_player) == local_id)
+	)
+	if not mobile_camera.enabled and camera.position == Vector3.ZERO:
 		camera.position = camera_goal
 	var initial_framing: Vector3 = (
 		Vector3(0, -1.1, 0)
 		if match_layout.portrait(self)
 		else (Vector3(0, -3.25, 0) if targeting_frame and layout_mode == match_layout.MOBILE_LANDSCAPE else Vector3(0, 1.0, 0))
 	)
-	camera.look_at(initial_framing)
+	if not mobile_camera.enabled:
+		camera.look_at(initial_framing)
 	if context_player > 0:
 		show_context(context_player)
 

@@ -232,6 +232,25 @@ func pick_touch_object(at: Vector2) -> Dictionary:
 			nearest = item.token
 	return nearest
 
+func handle_mobile_table_tap(at: Vector2) -> void:
+	if blocked:
+		return
+	if selected_card >= 0:
+		var id := pick_touch_player(at)
+		if id == selected_target and valid_target_ids.has(id):
+			AudioManager.play_ui("confirm")
+			confirm_target()
+		else:
+			selected_target = id
+			update_hover_target(id)
+			if valid_target_ids.has(id):
+				AudioManager.play_ui("button")
+				if table.nameplates.has(id):
+					table.nameplates[id].flash_target()
+				tooltip.text += "\nChạm lần nữa để xác nhận"
+	else:
+		interact(at, true)
+
 func _input(event: InputEvent) -> void:
 	if blocked:
 		return
@@ -277,6 +296,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.device != InputEvent.DEVICE_ID_EMULATION:
 			interact(event.position)
 	elif event is InputEventScreenTouch and event.pressed:
+		if load("res://scripts/ui/MatchLayout.gd").mobile_first_person(table):
+			return
 		if selected_card >= 0:
 			var id := pick_touch_player(event.position)
 			if id == selected_target and valid_target_ids.has(id):
@@ -301,7 +322,7 @@ func interact(at: Vector2, touch: bool = false) -> void:
 	if table.objects.token_allowed(token):
 		world_chosen.emit(token)
 		return
-	var id := pick_at(at)
+	var id := pick_touch_player(at) if touch else pick_at(at)
 	if id > 0:
 		table.show_context(id)
 	else:

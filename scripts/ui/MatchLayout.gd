@@ -47,6 +47,20 @@ static func is_mobile_landscape(node: Node) -> bool:
 static func tablet(node: Node) -> bool:
 	return mode(node) == TABLET
 
+static func mobile_device(node: Node) -> bool:
+	if node.get_viewport().has_meta("match_force_mobile_device"):
+		return bool(node.get_viewport().get_meta("match_force_mobile_device"))
+	if OS.has_feature("mobile"):
+		return true
+	if OS.has_feature("web"):
+		return bool(JavaScriptBridge.eval(
+			"navigator.maxTouchPoints > 0 && matchMedia('(pointer: coarse)').matches"
+		))
+	return false
+
+static func mobile_first_person(node: Node) -> bool:
+	return mobile_device(node) and mode(node) in [MOBILE_PORTRAIT, MOBILE_LANDSCAPE]
+
 static func css_size(node: Node) -> Vector2:
 	return node.get_viewport().get_meta("match_css_size", Vector2(node.get_window().size))
 

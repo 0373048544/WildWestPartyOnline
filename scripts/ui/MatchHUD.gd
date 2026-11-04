@@ -1019,6 +1019,24 @@ func build_hand() -> void:
 			prompt.text = "BÁCH HÓA · CHỌN 1 LÁ TRỰC TIẾP TRÊN TAY"
 
 	elif app.selected >= 0:
+		var selected_targets: Array = own.get("targets", {}).get(app.selected, [])
+		if layout.mobile_first_person(self) and not selected_targets.is_empty():
+			var target_picker := OptionButton.new()
+			target_picker.name = "MobileTargetPicker"
+			target_picker.add_item("CHỌN MỤC TIÊU")
+			target_picker.set_item_disabled(0, true)
+			for player in state.get("players", []):
+				var player_id := int(player.get("player_id", 0))
+				if not selected_targets.has(player_id):
+					continue
+				target_picker.add_item(str(player.get("display_name", "Cao bồi")))
+				target_picker.set_item_metadata(target_picker.item_count - 1, player_id)
+			target_picker.custom_minimum_size = Vector2(layout.units(self, 150.0), layout.units(self, 44.0))
+			footer.add_child(target_picker)
+			target_picker.item_selected.connect(func(index: int):
+				if index > 0:
+					app.table.targeting.select_target(int(target_picker.get_item_metadata(index)))
+			)
 		action(
 			"× HỦY",
 			cancel_selection,
@@ -1039,6 +1057,18 @@ func build_hand() -> void:
 			end_turn.custom_minimum_size.x = minf(layout.units(self, 180.0), size.x * 0.46)
 		else:
 			end_turn.custom_minimum_size = Vector2(180.0, 44.0)
+
+	if layout.mobile_first_person(self) and request.is_empty() and app.selected < 0:
+		var reset_camera := action(
+			"◎ BÀN",
+			func():
+				if is_instance_valid(app.table) and is_instance_valid(app.table.mobile_camera):
+					app.table.mobile_camera.reset_toward_table(),
+			footer
+		)
+		reset_camera.name = "ResetMobileCamera"
+		reset_camera.tooltip_text = "Đưa góc nhìn về giữa bàn"
+		reset_camera.custom_minimum_size = Vector2(layout.units(self, 72.0), layout.units(self, 44.0))
 
 	if (
 		local.get("is_alive", false)
