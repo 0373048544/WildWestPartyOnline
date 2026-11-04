@@ -100,15 +100,15 @@ func _apply_layout() -> void:
 	var compact: bool = bool(layout.get_equipment_compact_mode(self))
 	var width: float
 	if compact:
-		width = minf(layout.units(self, 180.0), get_viewport_rect().size.x * 0.28)
+		width = minf(layout.units(self, 206.0), get_viewport_rect().size.x * 0.34)
 	else:
 		width = minf(layout.units(self, 260.0) if mobile else 280.0, get_viewport_rect().size.x * (0.52 if mobile else 0.28))
 	title_button.text = (
-		"♠ %s · T%d%s" % [current_weapon_name.left(9), current_range, " · +%d" % current_equipment_count if current_equipment_count > 0 else ""]
+		"TRANG BỊ · TẦM %d · %d LÁ" % [current_range, current_equipment_count]
 		if compact
 		else "BÀI TRÊN BÀN CỦA BẠN · TẦM %d" % current_range
 	)
-	title_button.custom_minimum_size.y = layout.units(self, 34.0) if compact else 36.0
+	title_button.custom_minimum_size.y = layout.units(self, 42.0) if compact else 40.0
 	details_scroll.visible = not compact or expanded
 	set_anchors_preset(Control.PRESET_TOP_LEFT, false)
 	var zone: Rect2 = layout.equipment_rect(self, details_scroll.visible)

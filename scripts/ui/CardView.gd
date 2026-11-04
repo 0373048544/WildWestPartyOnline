@@ -59,12 +59,12 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	band.name = "TitleBand"
 	band.color = accent.darkened(0.10) if usable else accent.darkened(0.38)
 	band.position = Vector2(6, 6)
-	band.size = Vector2(198, 31)
+	band.size = Vector2(198, 33)
 	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visual.add_child(band)
 	var band_glint := ColorRect.new()
 	band_glint.color = Color(1, 0.86, 0.58, 0.26 if usable else 0.10)
-	band_glint.position = Vector2(8, 34)
+	band_glint.position = Vector2(8, 39)
 	band_glint.size = Vector2(194, 2)
 	band_glint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visual.add_child(band_glint)
@@ -75,17 +75,28 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	status_rail.size = Vector2(4 if chosen else 3, 157)
 	status_rail.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visual.add_child(status_rail)
-	var card_name := add_text(definition.name, Rect2(10, 8, 190, 25), 17, SaloonTheme.CREAM)
+	# WWPO_CARD_LAYOUT_V5: card hand and enlarged preview use one header hierarchy.
+	var display_name: String = str(definition.get("name", "LÁ BÀI"))
+	var card_name := add_text(display_name, Rect2(13, 7, 144, 28), 17, SaloonTheme.CREAM)
 	card_name.name = "CardName"
-	card_name.clip_text = false
-	card_name.max_lines_visible = 2
+	card_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	card_name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	var corner := add_text(CardInstance.corner(card), Rect2(10, 39, 62, 32), 22, CardInstance.suit_color(card.suit))
+	card_name.autowrap_mode = TextServer.AUTOWRAP_OFF
+	card_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	card_name.clip_text = true
+	card_name.max_lines_visible = 1
+	card_name.z_index = 3
+	var corner := add_text(CardInstance.corner(card), Rect2(158, 7, 40, 28), 17, CardInstance.suit_color(card.suit))
 	corner.name = "RankSuitCorner"
-	corner.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	corner.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	corner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	corner.autowrap_mode = TextServer.AUTOWRAP_OFF
+	corner.clip_text = true
+	corner.z_index = 3
 	if CardData.is_quick_equipment(str(card.get("card_data_id", ""))):
 		var quick_badge := Panel.new()
 		quick_badge.name = "QuickEquipBadge"
+		quick_badge.visible = false
 		quick_badge.position = Vector2(78, 42)
 		quick_badge.size = Vector2(120, 20)
 		quick_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -93,10 +104,11 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 		visual.add_child(quick_badge)
 		var quick_text := add_text("TRANG BỊ NHANH", Rect2(80, 44, 116, 16), 9, SaloonTheme.CREAM)
 		quick_text.name = "QuickEquipText"
+		quick_text.visible = false
 	var artwork_frame := Panel.new()
 	artwork_frame.name = "ArtworkFrame"
-	artwork_frame.position = Vector2(12, 62)
-	artwork_frame.size = Vector2(186, 76)
+	artwork_frame.position = Vector2(12, 44)
+	artwork_frame.size = Vector2(186, 89)
 	artwork_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	artwork_frame.clip_contents = true
 	artwork_frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#2d2722"), accent.darkened(0.15), 3))
@@ -104,7 +116,7 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	var artwork := TextureRect.new()
 	artwork.name = "CardArtwork"
 	artwork.position = Vector2(3, 3)
-	artwork.size = Vector2(180, 70)
+	artwork.size = Vector2(180, 83)
 	artwork.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	artwork.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	artwork.texture = CardArt.texture(str(card.get("card_data_id", definition.get("id", ""))))
@@ -112,18 +124,19 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	artwork_frame.add_child(artwork)
 	var type_badge := Panel.new()
 	type_badge.name = "CardTypeBadge"
-	type_badge.position = Vector2(55, 141)
+	type_badge.position = Vector2(55, 137)
 	type_badge.size = Vector2(100, 21)
 	type_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	type_badge.add_theme_stylebox_override("panel", SaloonTheme.card_badge(accent, usable))
 	visual.add_child(type_badge)
-	var type_text := add_text(TextCatalog.text(CardData.CardType.keys()[definition.type]), Rect2(58, 143, 94, 17), 11, SaloonTheme.CREAM)
+	var type_text := add_text(TextCatalog.text(CardData.CardType.keys()[definition.type]), Rect2(58, 139, 94, 17), 11, SaloonTheme.CREAM)
 	type_text.name = "CardType"
-	var description := add_text(definition.description, Rect2(12, 163, 186, 25), 11, Color("#29333a"))
+	var description := add_text(str(definition.get("description", "")), Rect2(12, 164, 186, 43), 12, Color("#29333a"))
 	description.name = "CardDescription"
-	description.max_lines_visible = 2
+	description.max_lines_visible = 3
+	description.vertical_alignment = VERTICAL_ALIGNMENT_TOP
 	description.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	var lower := add_text(CardInstance.corner(card), Rect2(145, 190, 54, 20), 14, CardInstance.suit_color(card.suit))
+	var lower := add_text("", Rect2(145, 190, 54, 20), 14, CardInstance.suit_color(card.suit))
 	lower.name = "RankSuitLower"
 	lower.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	var icon := Control.new()
@@ -229,70 +242,45 @@ func _press_ended() -> void:
 
 func touch_compact(width: float) -> void:
 	touch_layout = true
-	selected_lift = 0
-	custom_minimum_size = Vector2(width,width*214/210)
+	selected_lift = 0.0
+	custom_minimum_size = Vector2(width, width * 214.0 / 210.0)
 	size = custom_minimum_size
-	var touch_scale: float = width / 210.0
+	var touch_scale: float = maxf(0.1, width / 210.0)
 	visual.scale = Vector2.ONE * touch_scale * (1.05 if chosen_state else 1.0)
 	visual.position = Vector2.ZERO
-	# Compensate both font and bounds before scaling. Previously the font grew
-	# while CardName remained only 25 source pixels high, so its line was clipped
-	# on portrait phones even though artwork and type remained visible.
-	var portrait_card: bool = width >= 128.0
+	# Card face stays identical to the desktop face: name/suit above art.
 	var card_name: Label = visual.get_node("CardName") as Label
-	var desired_title_font: float = 16.0 if portrait_card else 14.0
-	if card_name.text.length() > 10:
-		desired_title_font = 14.0
-	var desired_title_height: float = 30.0 if portrait_card else 21.0
-	var source_title_font: int = mini(38, maxi(17, ceili(desired_title_font / touch_scale)))
-	var source_title_height: float = minf(52.0, maxf(34.0, desired_title_height / touch_scale))
+	var corner: Label = visual.get_node("RankSuitCorner") as Label
+	var title_size: int = clampi(int(round(14.0 / touch_scale)), 16, 26)
+	if card_name.text.length() > 13:
+		title_size = mini(title_size, 19)
+	card_name.add_theme_font_size_override("font_size", title_size)
+	card_name.position = Vector2(13, 7)
+	card_name.size = Vector2(144, 28)
 	card_name.visible = true
-	card_name.clip_text = false
-	# Keep compact hand titles horizontal. Long names reduce font slightly rather
-	# than turning into a vertical stack of one-character lines.
-	card_name.autowrap_mode = TextServer.AUTOWRAP_OFF
-	card_name.max_lines_visible = 1
-	card_name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	card_name.position = Vector2(8.0, 5.0)
-	card_name.size = Vector2(194.0, source_title_height)
-	card_name.add_theme_font_size_override("font_size", source_title_font)
-	# Font changes invalidate Label's minimum size. Reapply the reserved header
-	# rect afterwards so an intrinsic text minimum cannot consume the artwork.
-	card_name.size = Vector2(194.0, source_title_height)
+	corner.add_theme_font_size_override("font_size", clampi(int(round(13.0 / touch_scale)), 16, 24))
+	corner.position = Vector2(158, 7)
+	corner.size = Vector2(40, 28)
+	corner.visible = true
 	var title_band: ColorRect = visual.get_node("TitleBand") as ColorRect
-	title_band.position = Vector2(6.0, 5.0)
-	title_band.size = Vector2(198.0, minf(55.0, source_title_height + 3.0))
-	# Quick-equip detail remains available in the long-press preview. Hiding this
-	# secondary badge prevents it from covering a two-line mobile card name.
+	title_band.position = Vector2(6, 6)
+	title_band.size = Vector2(198, 33)
+	# Full descriptions remain readable in the deliberate long-press preview
+	# on tiny screens. For large phone cards show up to three lines.
+	var description: Label = visual.get_node("CardDescription") as Label
+	description.visible = width >= 128.0
+	if description.visible:
+		description.add_theme_font_size_override("font_size", clampi(int(round(11.5 / touch_scale)), 11, 19))
+		description.position = Vector2(12, 164)
+		description.size = Vector2(186, 43)
+	visual.get_node("RankSuitLower").visible = false
 	var quick_badge: Control = visual.get_node_or_null("QuickEquipBadge") as Control
 	var quick_text: Control = visual.get_node_or_null("QuickEquipText") as Control
 	if is_instance_valid(quick_badge):
 		quick_badge.visible = false
 	if is_instance_valid(quick_text):
 		quick_text.visible = false
-	visual.get_node("CardDescription").add_theme_font_size_override(
-		"font_size",
-		mini(36, maxi(18, int(round(15.0 / touch_scale))))
-	)
-	# Mobile face is glanceable: name, rank/suit, icon and type. Full rules text
-	# belongs to the deliberate 0.45s long-press preview.
-	visual.get_node("CardDescription").visible = false
-	visual.get_node("RankSuitLower").visible = false
-	# Mobile priority row below artwork: rank/suit first, then type. Its font and
-	# height are also compensated so neither label collapses after card scaling.
-	var rank_suit: Label = visual.get_node("RankSuitCorner") as Label
-	rank_suit.position = Vector2(12.0, 140.0)
-	rank_suit.size = Vector2(50.0, minf(48.0, 20.0 / touch_scale))
-	rank_suit.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	rank_suit.add_theme_font_size_override("font_size", mini(34, maxi(18, int(round(14.0 / touch_scale)))))
-	var type_badge: Control = visual.get_node("CardTypeBadge") as Control
-	type_badge.position = Vector2(66.0, 141.0)
-	type_badge.size = Vector2(132.0, minf(44.0, 20.0 / touch_scale))
-	var type_label: Label = visual.get_node("CardType") as Label
-	type_label.position = Vector2(70.0, 141.0)
-	type_label.size = Vector2(124.0, minf(44.0, 20.0 / touch_scale))
-	type_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	type_label.add_theme_font_size_override("font_size", mini(32, maxi(17, int(round(13.0 / touch_scale)))))
+	# Keep original card type and artwork geometry.
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 func draw_symbol(icon: Control) -> void:

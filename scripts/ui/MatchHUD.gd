@@ -930,6 +930,21 @@ func build_hand() -> void:
 		)
 	]
 
+	# Character skill reference: informative unless an ability is actually
+	# activated by the server-supported actions below.
+	var ability_description := str(character.get("ability_description_vi", ""))
+	if not ability_description.is_empty() and not app.sid_mode and request.is_empty():
+		var show_skill := func() -> void:
+			if is_instance_valid(app.personal_toasts):
+				app.personal_toasts.show_notice(
+					str(character.get("display_name", "KỸ NĂNG")), ability_description,
+					"positive", "✦", 4.0
+				)
+		var skill_info := action("KỸ NĂNG", show_skill, footer)
+		skill_info.name = "CharacterSkillInfo"
+		skill_info.tooltip_text = ability_description
+		skill_info.custom_minimum_size.x = layout.units(self, 90.0)
+
 	if app.sid_mode:
 		action(
 			"HỒI 1 MÁU",
@@ -967,8 +982,33 @@ func build_hand() -> void:
 			prompt.text = (
 				"CHỌN CHỒNG RÚT / CHỒNG BỎ"
 				if reaction_type == "draw_discard"
-				else "CHỌN CHỒNG RÚT HOẶC TAY BÀI ĐỐI THỦ"
+				else "KỸ NĂNG: RÚT HOẶC LẤY BÀI ĐỐI THỦ"
 			)
+			if reaction_type == "draw_steal":
+				# Existing GameManager/world_action expects another player's ID as
+				# the reaction option. Never reveal or enumerate their private cards.
+				if layout.mobile_portrait(self):
+					prompt.visible = false
+				var opponent_picker := OptionButton.new()
+				opponent_picker.name = "DrawStealOpponentPicker"
+				opponent_picker.add_item("LẤY BÀI ĐỐI THỦ")
+				opponent_picker.set_item_disabled(0, true)
+				for other in state.get("players", []):
+					if int(other.get("player_id", -1)) == app.local_id() or not bool(other.get("is_alive", false)):
+						continue
+					opponent_picker.add_item(str(other.get("display_name", "Cao bồi")))
+					opponent_picker.set_item_metadata(opponent_picker.item_count - 1, int(other.get("player_id", 0)))
+				opponent_picker.selected = 0
+				opponent_picker.custom_minimum_size = Vector2(layout.units(self, 132.0), layout.units(self, 44.0))
+				opponent_picker.tooltip_text = "KỸ NĂNG: Chọn người để lấy ngẫu nhiên 1 lá trên tay (nếu hợp lệ)"
+				footer.add_child(opponent_picker)
+				opponent_picker.item_selected.connect(func(index: int):
+					if index > 0:
+						world_action({"kind": "zone", "player": int(opponent_picker.get_item_metadata(index))})
+				)
+				var draw_button := action("RÚT CHỒNG", func(): world_action({"kind": "deck"}), footer)
+				draw_button.name = "DrawStealDeckButton"
+				draw_button.custom_minimum_size.x = layout.units(self, 106.0)
 		elif reaction_type == "transfer":
 			action(
 				"CHỌN BÀI",
@@ -1008,7 +1048,7 @@ func build_hand() -> void:
 		< int(local.get("max_hp", 4))
 	):
 		var sid := action(
-			"+",
+			"KỸ NĂNG",
 			func():
 				app.sid_mode = not app.sid_mode
 				app.sid_cards.clear()
@@ -1017,6 +1057,7 @@ func build_hand() -> void:
 		)
 
 		sid.name = "SidAbility"
+		sid.custom_minimum_size = Vector2(110.0, 44.0)
 		sid.tooltip_text = "Sid Ketchum · Chọn bỏ 2 lá để hồi 1 máu"
 
 	var selected_ids: Array = (
@@ -1289,10 +1330,11 @@ func show_preview(card: Dictionary) -> void:
 	var reason: String = str(
 		own.get("disabled_reasons", {}).get(card.instance_id, "")
 	)
-	var preview_height: float = (176.0 if not reason.is_empty() else 150.0) * unit
+	var preview_height: float = (292.0 if not reason.is_empty() else 264.0) * unit
 
 	preview = Panel.new()
 	preview.name = "CardPreview"
+	preview.clip_contents = true
 	preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.z_index = layout.Z_PREVIEW
 
@@ -1374,7 +1416,9 @@ func show_preview(card: Dictionary) -> void:
 	card_name.text = str(data.get("name", ""))
 	card_name.position = Vector2(14.0, 10.0) * unit
 	card_name.size = Vector2(preview_width / unit - 92.0, 26.0) * unit
-	card_name.add_theme_font_size_override("font_size", int(18.0 * unit))
+	card_name.add_theme_font_size_override("font_size", int(16.0 * unit))
+	card_name.autowrap_mode = TextServer.AUTOWRAP_OFF
+	card_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	card_name.add_theme_color_override("font_color", SaloonTheme.CREAM)
 	card_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.add_child(card_name)
@@ -1389,11 +1433,30 @@ func show_preview(card: Dictionary) -> void:
 	corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.add_child(corner)
 
+	# Preview shows a framed illustration and never draws outside its own bounds.
+	var artwork_frame := Panel.new()
+	artwork_frame.name = "PreviewArtworkFrame"
+	artwork_frame.position = Vector2(14.0, 62.0) * unit
+	artwork_frame.size = Vector2(preview_width / unit - 28.0, 94.0) * unit
+	artwork_frame.clip_contents = true
+	artwork_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	artwork_frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#30281f"), accent, 2.0 * unit))
+	preview.add_child(artwork_frame)
+	var artwork := TextureRect.new()
+	artwork.name = "PreviewArtwork"
+	artwork.position = Vector2(3.0, 3.0) * unit
+	artwork.size = artwork_frame.size - Vector2(6.0, 6.0) * unit
+	artwork.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	artwork.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	artwork.texture = CardArt.texture(str(card.get("card_data_id", "")))
+	artwork.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	artwork_frame.add_child(artwork)
+
 	var type_label := Label.new()
 	type_label.text = TextCatalog.text(
 		CardData.CardType.keys()[int(data.get("type", 0))]
 	)
-	type_label.position = Vector2(14.0, 39.0) * unit
+	type_label.position = Vector2(14.0, 161.0) * unit
 	type_label.size = Vector2(preview_width / unit - 28.0, 18.0) * unit
 	type_label.add_theme_font_size_override("font_size", int(12.0 * unit))
 	type_label.add_theme_color_override("font_color", accent.darkened(0.28))
@@ -1402,13 +1465,15 @@ func show_preview(card: Dictionary) -> void:
 
 	var description := Label.new()
 	description.text = str(data.get("description", ""))
-	description.position = Vector2(14.0, 63.0) * unit
+	description.position = Vector2(14.0, 184.0) * unit
 	description.size = Vector2(
 		preview_width / unit - 28.0,
 		64.0 if not reason.is_empty() else 72.0
 	) * unit
 	description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	description.add_theme_font_size_override("font_size", int(14.0 * unit))
+	description.max_lines_visible = 4
+	description.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	description.add_theme_font_size_override("font_size", int(13.0 * unit))
 	description.add_theme_color_override("font_color", SaloonTheme.INK_SOFT)
 	description.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.add_child(description)
@@ -1416,7 +1481,7 @@ func show_preview(card: Dictionary) -> void:
 	if not reason.is_empty():
 		var reason_label := Label.new()
 		reason_label.text = reason
-		reason_label.position = Vector2(14.0, 139.0) * unit
+		reason_label.position = Vector2(14.0, 257.0) * unit
 		reason_label.size = Vector2(preview_width / unit - 28.0, 26.0) * unit
 		reason_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		reason_label.add_theme_font_size_override("font_size", int(12.0 * unit))
@@ -1712,8 +1777,7 @@ func build_result() -> void:
 		var waiting := text("Đang chờ người chơi khác xác nhận...", 15, box)
 		waiting.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	else:
-		var continue_button: Button
-		continue_button = action("TIẾP TỤC", func(): _request_rematch(continue_button), box)
+		var continue_button := action("TIẾP TỤC", _request_rematch, box)
 		continue_button.name = "RematchReadyButton"
 		continue_button.set_variant("primary")
 	var leave_button := action("RỜI PHÒNG", app.leave, box)
@@ -1721,9 +1785,19 @@ func build_result() -> void:
 	leave_button.set_variant("danger")
 
 
-func _request_rematch(button: Button) -> void:
-	if button.disabled or not NetworkManager.can_submit_intents():
+func _request_rematch() -> void:
+	# Resolve the actual button on click. The previous closure captured Nil.
+	if not is_instance_valid(app.overlay):
 		return
-	if app.intent("rematch"):
-		button.disabled = true
-		button.text = "ĐANG XÁC NHẬN…"
+	var button: Button = app.overlay.find_child("RematchReadyButton", true, false) as Button
+	if not is_instance_valid(button) or button.disabled:
+		return
+	if not NetworkManager.can_submit_intents():
+		return
+	# Disable immediately to block repeated clicks; restore if submission fails.
+	button.disabled = true
+	button.text = "ĐANG XÁC NHẬN…"
+	if not app.intent("rematch"):
+		if is_instance_valid(button):
+			button.disabled = false
+			button.text = "TIẾP TỤC"
