@@ -145,6 +145,17 @@ func _ready() -> void:
 			close_touch.position = Vector2(logical.x*0.5,logical.y*0.5)
 			app.match_hud._input(close_touch)
 			check(not is_instance_valid(app.match_hud.preview),"tap outside closes touch preview")
+			if css == Vector2i(390,844):
+				var department_preview_card := CardInstance.make(99551,"department_store","CLUB",5)
+				app.match_hud.show_preview(department_preview_card)
+				var long_description: Label = app.match_hud.preview.get_node("PreviewDescription") as Label
+				check("hành động." in long_description.text,
+					"BÁCH HÓA preview retains the complete final description line")
+				check(long_description.get_line_count() <= long_description.max_lines_visible,
+					"BÁCH HÓA preview description fits its configured line budget")
+				check(not app.match_hud.preview.get_global_rect().intersects(fan.get_global_rect()),
+					"BÁCH HÓA preview remains above the hand")
+				app.match_hud.close_preview()
 			fan.scroller.value = fan.scroller.max_value-fan.scroller.page
 			check(fan.cards.back().visible and not fan.cards[0].visible,"horizontal scroll reaches last card and hides offscreen cards")
 			var tapped_uid: int = int(fan.cards.back().get_meta("mobile_uid", -1))

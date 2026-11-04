@@ -1,5 +1,6 @@
 # Godot 4+ specific ignores
 .godot/
+.godot-user/
 /android/
 tests/network-*.log
 tests/network-*.err
@@ -11,3 +12,7 @@ tests/web/*.log
 tests/web/*.err
 tests/web/browser-profile/
 tests/artifacts/
+mobile_ui_source.zip
+patch_mobile_hand_v*.py
+*.before_*.bak
+*.gd.bak

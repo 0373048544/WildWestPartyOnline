@@ -453,6 +453,8 @@ func set_modal_blocked(value: bool) -> void:
 	if is_instance_valid(loadout_panel):
 		loadout_panel.set_modal_blocked(value)
 	if is_instance_valid(hand):
+		if value and hand.has_method("cancel_active_gesture"):
+			hand.cancel_active_gesture()
 		hand.visible = not value
 	var actions: Control = get_node_or_null("HandActions") as Control
 	if is_instance_valid(actions):
@@ -1204,6 +1206,7 @@ func build_hand() -> void:
 			hand_selection_active
 		)
 
+	hand.set_meta("match_id", int(state.get("match_id", -1)))
 	hand.configure(
 		own.get("hand", []),
 		usable,
@@ -1538,6 +1541,7 @@ func show_preview(card: Dictionary) -> void:
 	preview.add_child(type_label)
 
 	var description := Label.new()
+	description.name = "PreviewDescription"
 	var description_text := str(data.get("description", ""))
 	description.text = _compact_preview_text(description_text) if mobile_preview else description_text
 	description.position = Vector2(10.0, 134.0 if mobile_preview else 127.0) * unit

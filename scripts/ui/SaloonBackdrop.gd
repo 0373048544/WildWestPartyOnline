@@ -32,6 +32,18 @@ func _draw() -> void:
 		draw_line(Vector2(size.x * 0.5 + (x - size.x * 0.5) * 0.3, size.y * 0.72), Vector2(x, size.y), Color("#5c4232"), 2)
 	for beam in [0.06, 0.25, 0.75, 0.94]:
 		draw_rect(Rect2(size.x * beam, 0, 16, size.y * 0.74), Color("#352e2c"))
+	# Brass wall lamps and a quiet halo frame the notice board without competing
+	# with its text. Everything remains cheap canvas drawing for Web/mobile.
+	for lamp_x in [0.31, 0.69]:
+		var lamp := Vector2(size.x * lamp_x, size.y * 0.12)
+		draw_circle(lamp, 54, Color(1.0, 0.68, 0.25, 0.025))
+		draw_circle(lamp, 25, Color(1.0, 0.72, 0.30, 0.055))
+		draw_line(lamp + Vector2(0, -28), lamp + Vector2(0, -7), Color("#6f5134"), 4)
+		draw_circle(lamp, 6, Color("#e7b86d"))
+	# Subtle edge vignette makes the center panel feel intentionally lit.
+	for edge in range(9):
+		var alpha := 0.018 * float(9 - edge)
+		draw_rect(Rect2(edge * 7, edge * 5, size.x - edge * 14, size.y - edge * 10), Color(0.02, 0.025, 0.028, alpha), false, 10)
 	# The foreground screen owns the notice-board frame. An open backdrop avoids
 	# doubled borders and gives narrow phones calmer space around the content.
 	draw_line(Vector2(0, size.y * 0.73), Vector2(size.x, size.y * 0.73), Color("#a27746"), 7)

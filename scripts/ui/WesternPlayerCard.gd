@@ -56,7 +56,7 @@ func configure(player: Dictionary, host_id: int, local_id: int, compact: bool = 
 
 func build_compact(player: Dictionary, host_id: int, local_id: int, seat_color: Color) -> void:
 	var connected := bool(player.get("is_connected", true))
-	custom_minimum_size.y = 72
+	custom_minimum_size.y = 68
 	var stack := VBoxContainer.new()
 	stack.add_theme_constant_override("separation", 2)
 	add_child(stack)
@@ -65,7 +65,7 @@ func build_compact(player: Dictionary, host_id: int, local_id: int, seat_color: 
 	stack.add_child(identity_row)
 	var icon := Label.new()
 	icon.text = "★" if int(player.player_id) == host_id else "♠"
-	icon.custom_minimum_size.x = 28
+	icon.custom_minimum_size.x = 22
 	icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	icon.add_theme_font_size_override("font_size", 18)
 	icon.add_theme_color_override("font_color", SaloonTheme.GOLD if int(player.player_id) == host_id else seat_color.lightened(0.22))
@@ -74,7 +74,7 @@ func build_compact(player: Dictionary, host_id: int, local_id: int, seat_color: 
 	player_name.text = str(player.display_name)
 	player_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	player_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	player_name.add_theme_font_size_override("font_size", 17)
+	player_name.add_theme_font_size_override("font_size", 16)
 	player_name.add_theme_color_override("font_color", SaloonTheme.CREAM)
 	identity_row.add_child(player_name)
 	if int(player.player_id) == local_id:

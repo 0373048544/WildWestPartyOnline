@@ -40,6 +40,24 @@ static func wood_panel(padding: float = 22.0) -> StyleBoxFlat:
 	style.shadow_offset = Vector2(0, 6)
 	return style
 
+static func hero_panel(padding: float = 18.0) -> StyleBoxFlat:
+	var style := panel(Color("#172932e8"), Color("#d8a659"), padding)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(14)
+	style.shadow_color = Color(0.03, 0.02, 0.015, 0.42)
+	style.shadow_size = VisualSettings.ui_shadow_size(7)
+	style.shadow_offset = Vector2(0, 5)
+	return style
+
+static func ribbon_panel(padding: float = 10.0) -> StyleBoxFlat:
+	var style := panel(Color("#213239"), Color("#72553b"), padding)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(8)
+	style.content_margin_top = 6
+	style.content_margin_bottom = 6
+	style.shadow_size = 0
+	return style
+
 static func parchment_panel(padding: float = 16.0) -> StyleBoxFlat:
 	var style := panel(Color("#ddc58f"), Color("#895b32"), padding)
 	style.set_border_width_all(3)

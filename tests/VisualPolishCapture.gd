@@ -115,6 +115,15 @@ func _ready() -> void:
 	for count in [1, 3, 5, 7, 10]:
 		await set_hand(count)
 		await capture("portrait_390_hand_%02d" % count)
+	# Preserve explicit evidence that the far end of a crowded hand remains
+	# reachable instead of only capturing its initial scroll position.
+	await set_hand(10)
+	if is_instance_valid(app.match_hud.hand.scroller):
+		app.match_hud.hand.scroller.value = (
+			app.match_hud.hand.scroller.max_value - app.match_hud.hand.scroller.page
+		)
+		await get_tree().process_frame
+		await capture("portrait_390_hand_10_scrolled")
 
 	# Every requested phone breakpoint is exercised with sparse and crowded hands.
 	for css in [Vector2i(360, 640), Vector2i(375, 667), Vector2i(430, 932)]:

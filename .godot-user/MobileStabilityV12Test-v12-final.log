@@ -1,6 +1,0 @@
-Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
-
-ERROR: Failed to read the root certificate store.
-   at: get_system_ca_certificates (platform/windows/os_windows.cpp:2582)
-V12 PROFILE identical_hand_update avg_usec=47.94 max_usec=102 configure_calls=54 visual_rebuilds=14 arrange_calls=4 stable_nodes=47
-PASS: 70 mobile snapshot reuse, gesture, title and signal checks

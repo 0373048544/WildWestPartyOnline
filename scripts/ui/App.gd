@@ -296,7 +296,8 @@ func refresh() -> void:
 		frame.name = "OutGameFrame"
 		frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		frame.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-		frame.add_theme_stylebox_override("panel", SaloonTheme.wood_panel(18 if root.size.y < 520 else 28))
+		var frame_padding := 12 if root.size.y < 520 else (14 if root.size.x < 600 else 28)
+		frame.add_theme_stylebox_override("panel", SaloonTheme.wood_panel(frame_padding))
 		scroll.add_child(frame)
 		frame.add_child(content)
 		frame.modulate.a = 0.0
@@ -326,37 +327,48 @@ func refresh() -> void:
 func build_menu() -> void:
 	var short_landscape := root.size.y < 520.0 and root.size.x > root.size.y
 	var portrait_phone := root.size.x < 600.0 and root.size.y >= root.size.x
-	var ornament := label("★  QUÁN RƯỢU MIỀN TÂY  ★", 14)
+	content.add_theme_constant_override("separation", 6 if short_landscape else 10)
+	var hero := PanelContainer.new()
+	hero.name = "MenuHero"
+	hero.add_theme_stylebox_override("panel", SaloonTheme.hero_panel(8 if short_landscape else (12 if portrait_phone else 18)))
+	content.add_child(hero)
+	var hero_box := VBoxContainer.new()
+	hero_box.add_theme_constant_override("separation", 2 if short_landscape else 5)
+	hero.add_child(hero_box)
+	var ornament := label("✦  QUÁN RƯỢU BIÊN CƯƠNG  ✦", 12 if short_landscape else 14, hero_box)
 	ornament.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ornament.add_theme_color_override("font_color", SaloonTheme.GOLD)
 	ornament.visible = not short_landscape
-	var title := label("WILD WEST\nPARTY ONLINE", 26 if short_landscape else (28 if portrait_phone else (34 if root.size.x < 900 else 44)))
+	var title := label("MIỀN TÂY ĐẠI CHIẾN" if short_landscape else "MIỀN TÂY\nĐẠI CHIẾN", 24 if short_landscape else (30 if portrait_phone else (36 if root.size.x < 900 else 46)), hero_box)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_color_override("font_color", SaloonTheme.GOLD)
 	title.add_theme_color_override("font_shadow_color", Color("#080f17"))
-	title.add_theme_constant_override("shadow_offset_y", 4)
+	title.add_theme_constant_override("shadow_offset_y", 3)
 	if VisualSettings.decorative_motion():
 		var pulse := title.create_tween().set_loops()
 		pulse.tween_property(title, "modulate", Color("#f5c879"), 1.8).set_trans(Tween.TRANS_SINE)
 		pulse.tween_property(title, "modulate", Color.WHITE, 1.8).set_trans(Tween.TRANS_SINE)
-	var subtitle := label("Vào phòng, gọi bạn, bắt đầu đấu súng.", 16)
+	var subtitle := label("Lập hội cao bồi · Giấu vai trò · Quyết đấu trên bàn bài", 15, hero_box)
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.visible = not short_landscape
-	content.add_child(HSeparator.new())
 	if NetworkManager.connecting:
 		var connecting := WesternStatusBadgeScript.new()
 		connecting.configure("◆  ĐANG KẾT NỐI ĐẾN CHỦ PHÒNG…", "warning")
 		content.add_child(connecting)
 		button("HỦY KẾT NỐI", leave).set_variant("danger")
 		return
-	var space := Control.new()
-	space.custom_minimum_size.y = 0 if short_landscape else 12
-	content.add_child(space)
 	if screen == "main":
-		var create := button("★  TẠO PHÒNG", func(): change_menu_screen("host"))
+		var promise := PanelContainer.new()
+		promise.add_theme_stylebox_override("panel", SaloonTheme.ribbon_panel(8))
+		content.add_child(promise)
+		var promise_text := label("2–7 CAO BỒI   •   VAI TRÒ BÍ MẬT   •   CHƠI TRỰC TUYẾN", 12 if portrait_phone else 14, promise)
+		promise_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		promise_text.add_theme_color_override("font_color", Color("#d9c59f"))
+		promise.visible = not short_landscape
+		var create := button("★  TẠO PHÒNG MỚI", func(): change_menu_screen("host"))
 		create.name = "CreateRoomButton"
 		create.set_variant("primary")
-		var join := button("♠  THAM GIA PHÒNG", func(): change_menu_screen("join"))
+		var join := button("♠  VÀO PHÒNG BẰNG MÃ", func(): change_menu_screen("join"))
 		join.name = "JoinRoomButton"
 		join.set_variant("primary")
 		# Stack labelled settings controls on narrow phones so none overflow.
@@ -369,27 +381,40 @@ func build_menu() -> void:
 			secondary_button.set_variant("quiet")
 		if not OS.has_feature("web"):
 			button("THOÁT GAME", func(): get_tree().quit()).set_variant("danger")
-		var footer := label("● Sẵn sàng kết nối  •  v0.9  •  %s" % NetworkConfig.server_url(), 12)
+		var footer := label("● MÁY CHỦ SẴN SÀNG   •   2–7 NGƯỜI   •   v0.9", 12)
 		footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		footer.add_theme_color_override("font_color", Color("#b9aa8f"))
 		return
-	section_header("TẠO PHÒNG MỚI" if screen == "host" else "THAM GIA PHÒNG", content, "★" if screen == "host" else "♠")
+	var section := section_header("TẠO PHÒNG MỚI" if screen == "host" else "VÀO PHÒNG BẰNG MÃ", content, "★" if screen == "host" else "♠")
+	section.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var form := PanelContainer.new()
 	form.add_theme_stylebox_override("panel", SaloonTheme.inset_panel(14))
 	content.add_child(form)
-	var form_box := VBoxContainer.new()
+	var form_box: Container = HBoxContainer.new() if short_landscape else VBoxContainer.new()
 	form_box.add_theme_constant_override("separation", 7)
 	form.add_child(form_box)
-	label("TÊN CAO BỒI", 14, form_box).add_theme_color_override("font_color", SaloonTheme.GOLD)
-	name_field = western_input("Nhập tên của bạn", form_box)
+	var name_group := VBoxContainer.new()
+	name_group.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_group.add_theme_constant_override("separation", 3)
+	form_box.add_child(name_group)
+	label("TÊN CAO BỒI", 12 if short_landscape else 14, name_group).add_theme_color_override("font_color", SaloonTheme.GOLD)
+	name_field = western_input("Nhập tên của bạn", name_group)
+	if short_landscape:
+		name_field.custom_minimum_size.y = 44
 	if menu_name_draft.is_empty():
 		menu_name_draft = NetworkManager.local_name
 	name_field.text = menu_name_draft
 	name_field.max_length = 24
 	name_field.text_changed.connect(func(value: String): menu_name_draft = value)
 	if screen == "join":
-		label("MÃ PHÒNG", 14, form_box).add_theme_color_override("font_color", SaloonTheme.GOLD)
-		room_field = western_input("AB7KQ2", form_box, true)
+		var room_group := VBoxContainer.new()
+		room_group.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		room_group.add_theme_constant_override("separation", 3)
+		form_box.add_child(room_group)
+		label("MÃ PHÒNG  •  6 KÝ TỰ", 12 if short_landscape else 14, room_group).add_theme_color_override("font_color", SaloonTheme.GOLD)
+		room_field = western_input("AB7KQ2", room_group, true)
+		if short_landscape:
+			room_field.custom_minimum_size.y = 44
 		room_field.name = "RoomCode"
 		room_field.max_length = 6
 		room_field.text = menu_room_draft

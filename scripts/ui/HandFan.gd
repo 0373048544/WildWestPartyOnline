@@ -17,6 +17,9 @@ var scroller: HScrollBar
 var configured_size := Vector2.ZERO
 var layout_signature: String = ""
 var gesture_was_drag: bool = false
+var configured_match_id: int = -1
+var hand_content_signature: String = ""
+var scroll_layout_pending: bool = false
 
 static var configure_calls: int = 0
 static var arrange_calls: int = 0
@@ -27,6 +30,11 @@ var layout: Script = preload("res://scripts/ui/MatchLayout.gd")
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	resized.connect(arrange)
+	set_process(false)
+
+
+func _exit_tree() -> void:
+	cancel_active_gesture(false)
 
 
 func configure(
@@ -38,15 +46,33 @@ func configure(
 ) -> void:
 	configure_calls += 1
 	var current_css_size: Vector2 = layout.css_size(self)
-
-	if not configured_size.is_equal_approx(current_css_size):
+	var next_match_id: int = int(get_meta("match_id", -1))
+	var next_hand_content_signature := str(hand.map(func(card): return [
+		int(card.get("instance_id", -1)), str(card.get("card_data_id", "")),
+		str(card.get("suit", "")), int(card.get("rank", 0))
+	]))
+	var match_changed: bool = configured_match_id >= 0 and next_match_id != configured_match_id
+	var hand_content_changed: bool = (
+		not hand_content_signature.is_empty()
+		and next_hand_content_signature != hand_content_signature
+	)
+	if match_changed:
 		focused_uid = -1
 		scroll_offset = 0.0
-		configured_size = current_css_size
+		layout_signature = ""
+	if match_changed or hand_content_changed:
+		cancel_active_gesture()
+	configured_match_id = next_match_id
+	hand_content_signature = next_hand_content_signature
+	# Safari's address bar changes CSS height while the hand and its width stay
+	# the same. Preserve the user's position and let arrange() clamp only when
+	# the actual available width/content range changes.
+	configured_size = current_css_size
 
+	var was_mobile_mode: bool = mobile_mode
 	mobile_mode = bool(layout.mobile(self))
-	if not mobile_mode:
-		_cancel_touch_gesture()
+	if was_mobile_mode and not mobile_mode:
+		cancel_active_gesture()
 
 	var existing: Dictionary = {}
 
@@ -428,9 +454,19 @@ func _input(event: InputEvent) -> void:
 				if is_instance_valid(card_view) and card_view.has_method("cancel_touch_hold_for_drag"):
 					card_view.cancel_touch_hold_for_drag()
 
+		# Offset follows every event, while geometry is coalesced to one update per
+		# rendered frame. Browsers may deliver touch events faster than frame rate.
 		scroll_offset -= event.relative.x
-		arrange()
+		scroll_layout_pending = true
+		set_process(true)
 		get_viewport().set_input_as_handled()
+
+
+func _process(_delta: float) -> void:
+	if scroll_layout_pending:
+		scroll_layout_pending = false
+		arrange()
+	set_process(false)
 
 
 func _cancel_touch_gesture(clear_classification: bool = true) -> void:
@@ -439,3 +475,16 @@ func _cancel_touch_gesture(clear_classification: bool = true) -> void:
 	drag_distance = 0.0 if clear_classification else drag_distance
 	if clear_classification:
 		gesture_was_drag = false
+
+
+func cancel_active_gesture(close_preview: bool = true) -> void:
+	for card_view in cards:
+		if is_instance_valid(card_view) and card_view.has_method("cancel_touch_hold_for_drag"):
+			card_view.cancel_touch_hold_for_drag()
+	_cancel_touch_gesture()
+	if scroll_layout_pending:
+		scroll_layout_pending = false
+		arrange()
+	set_process(false)
+	if close_preview:
+		preview_closed.emit()

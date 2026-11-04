@@ -314,9 +314,11 @@ func _press_ended() -> void:
 func cancel_touch_hold_for_drag() -> void:
 	# Once HandFan classifies the gesture as a drag, neither the long-press timer
 	# nor Button.pressed may turn that same gesture into a second intent.
+	var was_holding: bool = holding or hold_touch_index >= 0
 	holding = false
 	hold_touch_index = -1
-	block_activation = true
+	if was_holding:
+		block_activation = true
 	set_process(false)
 
 func touch_compact(width: float) -> void:
