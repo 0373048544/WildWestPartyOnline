@@ -1,5 +1,13 @@
 extends Button
 
+const CARD_SOURCE_SIZE := Vector2(210.0, 214.0)
+const HEADER_RECT := Rect2(6.0, 6.0, 198.0, 36.0)
+const TITLE_RECT := Rect2(7.0, 1.0, 144.0, 34.0)
+const CORNER_RECT := Rect2(153.0, 1.0, 38.0, 34.0)
+const ARTWORK_RECT := Rect2(12.0, 47.0, 186.0, 101.0)
+const TYPE_RECT := Rect2(55.0, 153.0, 100.0, 22.0)
+const DESCRIPTION_RECT := Rect2(12.0, 180.0, 186.0, 27.0)
+
 signal preview_requested
 signal preview_closed
 
@@ -79,19 +87,27 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	var face := SaloonTheme.card_face(accent, face_state, 10)
 	panel.add_theme_stylebox_override("panel", face)
 	visual.add_child(panel)
+	var header := Control.new()
+	header.name = "HeaderRegion"
+	header.position = HEADER_RECT.position
+	header.size = HEADER_RECT.size
+	header.clip_contents = true
+	header.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	visual.add_child(header)
 	var band := ColorRect.new()
 	band.name = "TitleBand"
 	band.color = Color("#8a7040") if usable else Color("#6f6653")
-	band.position = Vector2(6, 6)
-	band.size = Vector2(198, 33)
+	band.position = Vector2.ZERO
+	band.size = HEADER_RECT.size
 	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	visual.add_child(band)
+	header.add_child(band)
 	var band_glint := ColorRect.new()
+	band_glint.name = "HeaderGlint"
 	band_glint.color = Color(1, 0.86, 0.58, 0.26 if usable else 0.10)
-	band_glint.position = Vector2(8, 39)
-	band_glint.size = Vector2(194, 2)
+	band_glint.position = Vector2(2, HEADER_RECT.size.y - 2)
+	band_glint.size = Vector2(HEADER_RECT.size.x - 4, 2)
 	band_glint.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	visual.add_child(band_glint)
+	header.add_child(band_glint)
 	var status_rail := ColorRect.new()
 	status_rail.name = "PlayableRail"
 	status_rail.color = (SaloonTheme.GOLD if chosen else accent.lightened(0.18)) if usable else Color("#777268")
@@ -101,27 +117,29 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	visual.add_child(status_rail)
 	# WWPO_CARD_LAYOUT_V5: card hand and enlarged preview use one header hierarchy.
 	var display_name: String = str(definition.get("name", "LÁ BÀI"))
-	var card_name := add_text(display_name, Rect2(13, 7, 144, 28), 17, SaloonTheme.CREAM)
+	var card_name := _add_header_text(display_name, TITLE_RECT, 17, SaloonTheme.CREAM, header)
 	card_name.name = "CardName"
 	card_name.set_meta("full_title", display_name)
 	card_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	card_name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	card_name.autowrap_mode = TextServer.AUTOWRAP_OFF
 	card_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	card_name.clip_text = false
+	card_name.clip_text = true
 	card_name.max_lines_visible = 1
 	card_name.z_index = 3
-	var corner := add_text(CardInstance.corner(card), Rect2(158, 7, 40, 28), 17, CardInstance.suit_color(card.suit))
+	var corner := _add_header_text(CardInstance.corner(card), CORNER_RECT, 16, CardInstance.suit_color(card.suit), header)
 	corner.name = "RankSuitCorner"
 	corner.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	corner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	corner.autowrap_mode = TextServer.AUTOWRAP_OFF
-	corner.clip_text = false
+	corner.clip_text = true
+	corner.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	corner.z_index = 3
 	# One real Label hierarchy is shared by hand and preview. The previous V6
 	# paint overlay hid these nodes and created two competing title systems.
 	card_name.visible = true
 	corner.visible = true
+	_fit_single_line_title(card_name, display_name, 1.0, 16.5, 12.0)
 
 	if CardData.is_quick_equipment(str(card.get("card_data_id", ""))):
 		var quick_badge := Panel.new()
@@ -137,8 +155,8 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 		quick_text.visible = false
 	var artwork_frame := Panel.new()
 	artwork_frame.name = "ArtworkFrame"
-	artwork_frame.position = Vector2(12, 44)
-	artwork_frame.size = Vector2(186, 89)
+	artwork_frame.position = ARTWORK_RECT.position
+	artwork_frame.size = ARTWORK_RECT.size
 	artwork_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	artwork_frame.clip_contents = true
 	artwork_frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#2d2722"), accent.darkened(0.15), 3))
@@ -146,22 +164,29 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	var artwork := TextureRect.new()
 	artwork.name = "CardArtwork"
 	artwork.position = Vector2(3, 3)
-	artwork.size = Vector2(180, 83)
+	artwork.size = ARTWORK_RECT.size - Vector2(6, 6)
 	artwork.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	artwork.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	artwork.texture = CardArt.texture(str(card.get("card_data_id", definition.get("id", ""))))
 	artwork.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	artwork_frame.add_child(artwork)
+	var type_region := Control.new()
+	type_region.name = "TypeRegion"
+	type_region.position = TYPE_RECT.position
+	type_region.size = TYPE_RECT.size
+	type_region.clip_contents = true
+	type_region.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	visual.add_child(type_region)
 	var type_badge := Panel.new()
 	type_badge.name = "CardTypeBadge"
-	type_badge.position = Vector2(55, 137)
-	type_badge.size = Vector2(100, 21)
+	type_badge.position = Vector2.ZERO
+	type_badge.size = TYPE_RECT.size
 	type_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	type_badge.add_theme_stylebox_override("panel", SaloonTheme.card_badge(accent, usable))
-	visual.add_child(type_badge)
-	var type_text := add_text(TextCatalog.text(CardData.CardType.keys()[definition.type]), Rect2(58, 139, 94, 17), 11, SaloonTheme.CREAM)
+	type_region.add_child(type_badge)
+	var type_text := add_text(TextCatalog.text(CardData.CardType.keys()[definition.type]), Rect2(3, 2, 94, 18), 11, SaloonTheme.CREAM, type_region)
 	type_text.name = "CardType"
-	var description := add_text(str(definition.get("description", "")), Rect2(12, 164, 186, 43), 12, Color("#29333a"))
+	var description := add_text(str(definition.get("description", "")), DESCRIPTION_RECT, 11, Color("#29333a"))
 	description.name = "CardDescription"
 	description.max_lines_visible = 3
 	description.vertical_alignment = VERTICAL_ALIGNMENT_TOP
@@ -201,7 +226,7 @@ func _apply_dynamic_state(definition: Dictionary, usable: bool, chosen: bool, re
 	if is_instance_valid(panel):
 		var face_state := "selected" if chosen else ("normal" if usable else "disabled")
 		panel.add_theme_stylebox_override("panel", SaloonTheme.card_face(accent, face_state, 10))
-	var band: ColorRect = visual.get_node_or_null("TitleBand") as ColorRect
+	var band: ColorRect = visual.find_child("TitleBand", true, false) as ColorRect
 	if is_instance_valid(band):
 		band.color = Color("#8a7040") if usable else Color("#6f6653")
 	var rail: ColorRect = visual.get_node_or_null("PlayableRail") as ColorRect
@@ -210,7 +235,7 @@ func _apply_dynamic_state(definition: Dictionary, usable: bool, chosen: bool, re
 		rail.size.x = 4 if chosen else 3
 	visual.modulate = Color("#fff8e4") if chosen else (Color.WHITE if usable else Color(0.88, 0.88, 0.84, 0.92))
 
-func add_text(value: String, bounds: Rect2, font_size: int, color: Color) -> Label:
+func add_text(value: String, bounds: Rect2, font_size: int, color: Color, parent: Control = null) -> Label:
 	var text_label := Label.new()
 	text_label.text = value
 	text_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -218,11 +243,61 @@ func add_text(value: String, bounds: Rect2, font_size: int, color: Color) -> Lab
 	text_label.add_theme_font_size_override("font_size", font_size)
 	text_label.add_theme_color_override("font_color", color)
 	text_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	visual.add_child(text_label)
+	(parent if is_instance_valid(parent) else visual).add_child(text_label)
 	# Apply bounds after wrap/font changes so Label minimum-size updates cannot widen it.
 	text_label.position = bounds.position
 	text_label.size = bounds.size
 	return text_label
+
+func _add_header_text(value: String, bounds: Rect2, font_size: int, color: Color, parent: Control) -> Label:
+	# Configure single-line behavior before the Label enters the tree. Creating a
+	# wrapping Label at width zero caches a multi-line minimum height (53px), which
+	# later forces it out of the fixed 36px header even after wrapping is disabled.
+	var text_label := Label.new()
+	text_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	text_label.max_lines_visible = 1
+	text_label.clip_text = true
+	text_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	text_label.text = value
+	text_label.add_theme_font_size_override("font_size", font_size)
+	text_label.add_theme_color_override("font_color", color)
+	text_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(text_label)
+	text_label.position = bounds.position
+	text_label.size = bounds.size
+	return text_label
+
+func _fit_single_line_title(label: Label, full_title: String, readable_scale: float, desired_css: float, _minimum_css: float) -> void:
+	label.text = full_title
+	label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	label.max_lines_visible = 1
+	label.clip_text = true
+	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	var safe_scale := maxf(0.1, readable_scale)
+	var font_size := clampi(ceili(desired_css / safe_scale), 10, 38)
+	var font: Font = label.get_theme_font("font")
+	while font_size > 8 and (
+		font.get_string_size(full_title, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > label.size.x
+		or font.get_height(font_size) > label.size.y
+	):
+		font_size -= 1
+	label.add_theme_font_size_override("font_size", font_size)
+	# Labels otherwise retain a stale minimum height from the previous touch
+	# profile for one layout frame. The fixed header owns clipping and geometry.
+	label.custom_minimum_size = Vector2.ZERO
+	label.size = TITLE_RECT.size
+
+func _fit_corner_label(label: Label, readable_scale: float) -> void:
+	var font: Font = label.get_theme_font("font")
+	var font_size := clampi(ceili(11.0 / maxf(0.1, readable_scale)), 10, 30)
+	while font_size > 10 and (
+		font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_RIGHT, -1, font_size).x > CORNER_RECT.size.x
+		or font.get_height(font_size) > CORNER_RECT.size.y
+	):
+		font_size -= 1
+	label.add_theme_font_size_override("font_size", font_size)
+	label.custom_minimum_size = Vector2.ZERO
+	label.size = CORNER_RECT.size
 
 func _gui_input(event: InputEvent) -> void:
 	# Disabled cards remain inspectable by touch/long press.
@@ -268,7 +343,7 @@ func compact(chosen: bool, reaction: bool) -> void:
 		custom_minimum_size = Vector2(158, 162)
 		size = custom_minimum_size
 		visual.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-		visual.size = Vector2(210, 214)
+		visual.size = CARD_SOURCE_SIZE
 		visual.scale = Vector2.ONE * 0.75 * (1.05 if chosen_state else 1.0)
 	# Selection is a compact hand highlight, not a second preview. Keep the lift
 	# inside the requested 10-18 px range so the rendered face cannot rise behind
@@ -340,48 +415,36 @@ func touch_compact(width: float) -> void:
 	visual.scale = Vector2.ONE * touch_scale
 	visual.position = Vector2.ZERO
 	# Card face stays identical to the desktop face: name/suit above art.
-	var card_name: Label = visual.get_node("CardName") as Label
-	var corner: Label = visual.get_node("RankSuitCorner") as Label
+	var card_name: Label = visual.find_child("CardName", true, false) as Label
+	var corner: Label = visual.find_child("RankSuitCorner", true, false) as Label
 	var narrow: bool = width < load("res://scripts/ui/MatchLayout.gd").units(self, 110.0)
 	var full_title: String = str(card_name.get_meta("full_title", card_name.text))
-	var two_line_title: bool = full_title.length() > 7 and full_title.contains(" ")
-	card_name.text = full_title
-	if two_line_title:
-		var title_words: PackedStringArray = full_title.split(" ", false)
-		var split_at: int = ceili(float(title_words.size()) * 0.5)
-		card_name.text = " ".join(title_words.slice(0, split_at)) + "\n" + " ".join(title_words.slice(split_at))
-	var title_css: float = 11.5 if two_line_title else (14.5 if narrow else 15.5)
-	var title_size: int = clampi(ceili(title_css / readable_scale), 20, 38)
-	card_name.add_theme_font_size_override("font_size", title_size)
-	card_name.position = Vector2(13, 5)
-	card_name.size = Vector2(160, 64 if two_line_title else 46)
+	_fit_single_line_title(card_name, full_title, readable_scale, 12.5 if narrow else 13.5, 10.5)
+	card_name.position = TITLE_RECT.position
+	card_name.size = TITLE_RECT.size
 	card_name.visible = true
-	card_name.clip_text = false
-	card_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if two_line_title else TextServer.AUTOWRAP_OFF
-	card_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	card_name.max_lines_visible = 2 if two_line_title else 1
-	corner.add_theme_font_size_override("font_size", clampi(ceili(11.0 / readable_scale), 14, 30))
-	corner.position = Vector2(174, 5)
-	corner.size = Vector2(24, 42)
+	_fit_corner_label(corner, readable_scale)
+	corner.position = CORNER_RECT.position
+	corner.size = CORNER_RECT.size
 	corner.visible = true
-	corner.clip_text = false
-	var title_band: ColorRect = visual.get_node("TitleBand") as ColorRect
-	title_band.position = Vector2(6, 4)
-	title_band.size = Vector2(198, 69 if two_line_title else 50)
+	corner.clip_text = true
+	var header_region: Control = visual.get_node("HeaderRegion") as Control
+	header_region.position = HEADER_RECT.position
+	header_region.size = HEADER_RECT.size
 	var artwork_frame: Control = visual.get_node("ArtworkFrame") as Control
-	artwork_frame.position.y = 75.0 if two_line_title else 58.0
-	artwork_frame.size.y = 77.0 if two_line_title else 94.0
+	artwork_frame.position = ARTWORK_RECT.position
+	artwork_frame.size = ARTWORK_RECT.size
 	var artwork: TextureRect = artwork_frame.get_node("CardArtwork") as TextureRect
-	artwork.size.y = artwork_frame.size.y - 6.0
+	artwork.position = Vector2(3, 3)
+	artwork.size = artwork_frame.size - Vector2(6, 6)
 	# Full descriptions remain readable in the deliberate long-press preview
 	# instead of competing with title/artwork in the compact hand.
 	var description: Label = visual.get_node("CardDescription") as Label
 	description.add_theme_font_size_override("font_size", clampi(ceili(12.0 / readable_scale), 12, 30))
 	description.visible = false
-	var type_badge: Control = visual.get_node("CardTypeBadge") as Control
-	var type_text: Label = visual.get_node("CardType") as Label
-	type_badge.position.y = 160.0 if narrow else 153.0
-	type_text.position.y = 162.0 if narrow else 155.0
+	var type_region: Control = visual.get_node("TypeRegion") as Control
+	type_region.position = TYPE_RECT.position
+	type_region.size = TYPE_RECT.size
 	visual.get_node("RankSuitLower").visible = false
 	var quick_badge: Control = visual.get_node_or_null("QuickEquipBadge") as Control
 	var quick_text: Control = visual.get_node_or_null("QuickEquipText") as Control

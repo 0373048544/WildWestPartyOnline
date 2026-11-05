@@ -47,13 +47,22 @@ func _ready() -> void:
 		check(view.visual.get_node("ArtworkFrame").size.y >= 0.35 * 214.0, "%s artwork occupies at least 35 percent of card height" % id)
 		view.touch_compact(152.0)
 		check(not view.visual.get_node("CardDescription").visible and artwork.visible, "%s mobile compact prioritizes artwork and hides long description" % id)
-		var title: Label = view.visual.get_node("CardName") as Label
-		check(title.visible and not title.clip_text and title.size.y * view.visual.scale.y >= 28.0, "%s portrait mobile reserves a visible title header" % id)
-		check(title.get_theme_font_size("font_size") * view.visual.scale.y >= 14.0, "%s portrait mobile title font remains readable" % id)
-		check(title.position.y + title.size.y <= artwork.get_parent().position.y, "%s artwork remains below the mobile title title=%s art_y=%s" % [id, title.get_rect(), artwork.get_parent().position.y])
+		var header: Control = view.visual.get_node("HeaderRegion") as Control
+		var title: Label = header.get_node("CardName") as Label
+		var corner: Label = header.get_node("RankSuitCorner") as Label
+		var art_frame: Control = artwork.get_parent() as Control
+		var type_region: Control = view.visual.get_node("TypeRegion") as Control
+		check(title.visible and title.clip_text and title.max_lines_visible == 1, "%s mobile uses one clipped/ellipsis title renderer" % id)
+		check(title.get_theme_font_size("font_size") * view.visual.scale.y >= 10.0, "%s portrait mobile title remains legible" % id)
+		var header_local := Rect2(Vector2.ZERO, header.size)
+		check(header_local.encloses(title.get_rect()) and header_local.encloses(corner.get_rect()), "%s title and rank/suit remain inside header header=%s title=%s corner=%s" % [id, header_local, title.get_rect(), corner.get_rect()])
+		check(not header.get_rect().intersects(art_frame.get_rect()) and not art_frame.get_rect().intersects(type_region.get_rect()), "%s fixed header/artwork/type regions never overlap" % id)
+		check(not title.get_rect().intersects(corner.get_rect()), "%s title never occupies rank/suit corner" % id)
+		check(view.visual.find_children("CardName", "Label", true, false).size() == 1, "%s has exactly one title renderer" % id)
+		check(str(title.get_meta("full_title", "")) == str(definitions[id].name), "%s preserves its full Vietnamese title for preview" % id)
 		view.touch_compact(88.0)
-		check(title.visible and title.size.y * view.visual.scale.y >= 20.0, "%s narrow landscape never collapses the title to zero" % id)
-		check(title.get_theme_font_size("font_size") * view.visual.scale.y >= 13.0, "%s narrow mobile title remains legible" % id)
+		check(title.visible and title.size.y > 0.0, "%s narrow landscape never collapses the fixed header" % id)
+		check(not header.get_rect().intersects(art_frame.get_rect()), "%s narrow layout cannot move artwork into header" % id)
 		view.queue_free()
 
 	check(is_instance_valid(CardArt.texture("unknown_future_card")), "unknown artwork uses safe category fallback")

@@ -46,6 +46,58 @@ func _ready() -> void:
 	HAND_FAN.arrange_calls = 0
 	hand.configure(cards, usable, [], false, {})
 	await get_tree().process_frame
+	# Exercise Godot's real input dispatch order. Calling HandFan/CardView methods
+	# directly cannot detect an _input() handler that consumes the event before
+	# Controls receive _gui_input(). A clean viewport-dispatched tap must reach the
+	# Button and emit exactly one card action.
+	var dispatch_center: Vector2 = hand.cards[0].get_global_rect().get_center()
+	var dispatch_down := InputEventScreenTouch.new()
+	dispatch_down.index = 19
+	dispatch_down.pressed = true
+	dispatch_down.position = dispatch_center
+	Input.parse_input_event(dispatch_down)
+	await get_tree().process_frame
+	var dispatch_up := InputEventScreenTouch.new()
+	dispatch_up.index = 19
+	dispatch_up.pressed = false
+	dispatch_up.position = dispatch_center
+	Input.parse_input_event(dispatch_up)
+	await get_tree().process_frame
+	expect(click_count == 1, "viewport-dispatched mobile tap must emit exactly one card intent")
+	click_count = 0
+	# The same real dispatch path must classify a horizontal gesture as scroll,
+	# cancel CardView's hold, and suppress the Button activation on release.
+	dispatch_down.index = 20
+	dispatch_down.pressed = true
+	dispatch_down.position = dispatch_center
+	Input.parse_input_event(dispatch_down)
+	await get_tree().process_frame
+	var dispatch_drag := InputEventScreenDrag.new()
+	dispatch_drag.index = 20
+	dispatch_drag.position = dispatch_center + Vector2(-80.0, 0.0)
+	dispatch_drag.relative = Vector2(-80.0, 0.0)
+	Input.parse_input_event(dispatch_drag)
+	await get_tree().process_frame
+	dispatch_up.index = 20
+	dispatch_up.position = dispatch_drag.position
+	Input.parse_input_event(dispatch_up)
+	await get_tree().process_frame
+	expect(click_count == 0, "viewport-dispatched drag must not emit a card intent")
+	expect(preview_count == 0, "viewport-dispatched drag must not open a preview")
+	# Long press is also verified through Viewport dispatch rather than private
+	# helper calls: one preview, no card action when the finger is released.
+	var hold_center: Vector2 = hand.cards[1].get_global_rect().get_center()
+	dispatch_down.index = 21
+	dispatch_down.position = hold_center
+	Input.parse_input_event(dispatch_down)
+	await get_tree().create_timer(0.48).timeout
+	dispatch_up.index = 21
+	dispatch_up.position = hold_center
+	Input.parse_input_event(dispatch_up)
+	await get_tree().process_frame
+	expect(preview_count == 1, "viewport-dispatched long press must open exactly one preview")
+	expect(click_count == 0, "viewport-dispatched long press must not emit a card intent")
+	preview_count = 0
 	var initial_nodes := count_nodes(hand)
 	var initial_rebuilds: int = CARD_VIEW.visual_rebuilds
 	var initial_arranges: int = HAND_FAN.arrange_calls
@@ -241,13 +293,17 @@ func _ready() -> void:
 		title_view.configure(make_card(13000 + checks, card_id), definition, true, false)
 		title_view.compact(false, false)
 		title_view.touch_compact(load("res://scripts/ui/MatchLayout.gd").touch_card_width(title_view))
-		var title: Label = title_view.visual.get_node("CardName") as Label
+		var header: Control = title_view.visual.get_node("HeaderRegion") as Control
+		var title: Label = header.get_node("CardName") as Label
+		var corner: Label = header.get_node("RankSuitCorner") as Label
 		var art: Control = title_view.visual.get_node("ArtworkFrame") as Control
+		var type_region: Control = title_view.visual.get_node("TypeRegion") as Control
 		expect(title.visible and not title.text.is_empty(), "%s title must be visible" % card_id)
-		expect(title.position.y + title.size.y <= art.position.y + 0.5, "%s header must not overlap artwork" % card_id)
-		expect(title.max_lines_visible <= 2, "%s compact title must use at most two lines" % card_id)
-		if title.text.length() <= 11:
-			expect(title.get_minimum_size().x <= title.size.x + 0.5, "%s single-line title must fit its header" % card_id)
+		expect(not header.get_rect().intersects(art.get_rect()), "%s header must not overlap artwork" % card_id)
+		expect(not art.get_rect().intersects(type_region.get_rect()), "%s artwork must not overlap card type" % card_id)
+		expect(title.max_lines_visible == 1 and title.clip_text, "%s compact title must use controlled single-line ellipsis" % card_id)
+		expect(not title.get_rect().intersects(corner.get_rect()), "%s title must not overlap rank/suit" % card_id)
+		expect(title_view.visual.find_children("CardName", "Label", true, false).size() == 1, "%s must have one title renderer" % card_id)
 		title_view.queue_free()
 
 	print("V12 PROFILE identical_hand_update avg_usec=", float(total_usec) / 50.0,

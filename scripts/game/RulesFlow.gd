@@ -68,8 +68,11 @@ func attack(job: Dictionary) -> void:
 		judge(target, "barrel", job)
 		return
 	var cards: Array = game.abilities.response_cards(game, target, "dodge")
-	prompt(target, "dodge", job, {"title": "BẠN ĐANG BỊ BẮN! • NÉ %d/%d" % [int(job.total_required) - required, int(job.total_required)],
-		"allowed_cards": cards.map(func(c): return c.instance_id), "allowed_actions": ["card", "pass"]})
+	var payload := {"title": "BẠN ĐANG BỊ BẮN! • NÉ %d/%d" % [int(job.total_required) - required, int(job.total_required)],
+		"allowed_cards": cards.map(func(c): return c.instance_id), "allowed_actions": ["card", "pass"]}
+	if job.has("last_judgement"):
+		payload["judgement"] = job.last_judgement.duplicate(true)
+	prompt(target, "dodge", job, payload)
 
 func duel(job: Dictionary) -> void:
 	if not game.living(job.target) or not game.living(job.source):
@@ -121,7 +124,13 @@ func judged(job: Dictionary) -> void:
 			attack_context.checks -= 1
 			if card.get("suit", "") == "HEART":
 				attack_context.required -= 1
+				attack_context["resolved"] = int(attack_context.get("resolved", 0)) + 1
 			var success: bool = card.get("suit", "") == "HEART"
+			attack_context["last_judgement"] = {
+				"purpose": "barrel", "card": card.duplicate(true), "success": success,
+				"resolved": int(attack_context.total_required) - int(attack_context.required),
+				"required": int(attack_context.total_required)
+			}
 			game.record("%s: %s" % ["THÙNG / JOURDONNAIS", "NÉ THÀNH CÔNG" if success else "PHÁN ĐỊNH THẤT BẠI"])
 			game.emit_event("JUDGEMENT_RESOLVED", id, {"kind": "barrel_result", "success": success, "resolved": int(attack_context.total_required) - int(attack_context.required), "required": attack_context.total_required})
 			push(attack_context, true)

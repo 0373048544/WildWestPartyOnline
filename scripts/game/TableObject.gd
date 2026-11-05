@@ -4,6 +4,7 @@ extends Node3D
 var area: Area3D
 var frame_material: StandardMaterial3D
 var title: Label3D
+var artwork: Sprite3D
 var token: Dictionary = {}
 var enabled: bool = false
 var corner_label: Label3D
@@ -24,10 +25,33 @@ func set_face(card: Dictionary) -> void:
 		corner_label.position = Vector3(-0.13, 0.13, -0.28)
 		corner_label.font_size = 28
 		corner_label.pixel_size = 0.0034
-		corner_label.outline_size = 0
+		corner_label.outline_size = 4
+		corner_label.outline_modulate = Color("#f4dfaf")
+		corner_label.no_depth_test = true
 		add_child(corner_label)
 	corner_label.text = CardInstance.corner(card)
 	corner_label.modulate = CardInstance.suit_color(str(card.get("suit", "")))
+	var card_id := str(card.get("card_data_id", ""))
+	if not card_id.is_empty():
+		_set_artwork(card_id)
+
+func _set_artwork(card_data_id: String) -> void:
+	if card_data_id.is_empty():
+		return
+	if not is_instance_valid(artwork):
+		artwork = Sprite3D.new()
+		artwork.name = "CardArtwork"
+		artwork.pixel_size = 0.00082
+		artwork.position = Vector3(0, 0.073, -0.105)
+		artwork.rotation.x = -PI / 2.0
+		artwork.double_sided = true
+		# The illustration is the printed card face. Props stay above it and hover
+		# only raises/highlights the complete card instead of revealing its content.
+		artwork.no_depth_test = false
+		artwork.render_priority = -1
+		add_child(artwork)
+	artwork.texture = CardArt.texture(card_data_id)
+	artwork.visible = artwork.texture != null
 
 func mesh(mesh_data: Mesh, at: Vector3, color: Color) -> MeshInstance3D:
 	var item := MeshInstance3D.new()
@@ -78,29 +102,26 @@ func configure(kind: String, data: Dictionary, metadata: Dictionary) -> void:
 	title = Label3D.new()
 	title.font_size = 28
 	title.pixel_size = 0.0034
-	title.outline_size = 2
-	title.modulate = Color("#ffedba")
 	title.modulate = Color("#2c343c")
-	title.outline_size = 0
+	title.outline_size = 4
+	title.outline_modulate = Color("#f4dfaf")
+	title.no_depth_test = true
 	title.width = 180
 	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	title.rotation.x = -PI / 2
 	title.position = Vector3(0, 0.12, 0.27)
 	add_child(title)
 	title.text = str(data.get("name", "TAY BÀI KÍN"))
+	var public_card_id := str(data.get("card_data_id", data.get("id", "")))
+	if kind not in ["hand"] and not public_card_id.is_empty():
+		_set_artwork(public_card_id)
 	match kind:
 		"card":
 			title.text += "\n%s %s" % [TextCatalog.text(data.get("suit", "")), str(data.get("rank_label", ""))]
 			title.font_size = 24
 			set_face({"rank": data.get("rank_label", ""), "suit": data.get("suit", "")})
-			var artwork := Sprite3D.new()
-			artwork.name = "CardArtwork"
-			artwork.texture = CardArt.texture(str(data.get("card_data_id", data.get("id", ""))))
-			artwork.pixel_size = 0.001
-			artwork.position = Vector3(0, 0.074, -0.09)
-			artwork.rotation.x = -PI / 2.0
-			artwork.no_depth_test = true
-			add_child(artwork)
+			if is_instance_valid(artwork):
+				artwork.pixel_size = 0.001
 		"hand":
 			for index in range(3):
 				var back := box(Vector3(0.26, 0.04, 0.4), Vector3(-0.16 + index * 0.16, 0.09 + index * 0.025, -0.12), Color("#844e46"))
@@ -165,7 +186,8 @@ func configure(kind: String, data: Dictionary, metadata: Dictionary) -> void:
 func highlight(value: bool) -> void:
 	enabled = value
 	frame_material.albedo_color = Color("#f3c268") if value or hovered else (Color("#a68145") if attention else base_color)
-	title.modulate = Color("#2c343c")
+	# Title/artwork are permanent public information. Selection changes only the
+	# brass frame so hover can never become a prerequisite for readability.
 
 func set_attention(value: bool) -> void:
 	attention = value

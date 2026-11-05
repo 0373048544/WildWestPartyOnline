@@ -106,6 +106,18 @@ func _ready() -> void:
 		await capture("landscape_844x390_hand_10")
 		app.match_hud.show_preview(NetworkManager.private_state.hand[0])
 		await capture("landscape_v12_preview")
+		app.match_hud.close_preview()
+		await set_view(Vector2i(390, 844), true)
+		var dodge_uid: int = int(GameManager.players[1].hand[1].instance_id)
+		app.reaction_banner.present(app, {
+			"request_id": 1801, "reaction_type": "dodge", "source_player_id": 2,
+			"allowed_card_types": [dodge_uid], "required_count": 1, "resolved_count": 0,
+			"remaining": 7.5, "judgement": {
+				"purpose": "barrel", "card": CardInstance.make(18999, "shoot", "SPADE", 7),
+				"success": false, "resolved": 0, "required": 1
+			}
+		}, NetworkManager.public_state)
+		await capture("portrait_v18_barrel_failed")
 		print("VISUAL V12 FOCUSED CAPTURE PASS")
 		get_tree().quit(0)
 		return

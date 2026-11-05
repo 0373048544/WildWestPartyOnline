@@ -43,11 +43,18 @@ var menu_refresh_pending := false
 var last_room_submit_at := -1000
 var connection_roster_key := ""
 var known_player_connections: Dictionary = {}
+var responsive_reflow_queued := false
+var pending_layout_change: Dictionary = {}
+var applied_layout_generation := -1
 
 func _ready() -> void:
 	set_process(false)
 	web_layout = load("res://scripts/ui/WebLayout.gd").new()
 	add_child(web_layout)
+	# Measure the browser before constructing the first menu. Without this the
+	# export's 1440x900 desktop profile is visible for one frame on iPhone.
+	if OS.has_feature("web"):
+		web_layout.resize(false)
 	var theme := SaloonTheme.create()
 	canvas = CanvasLayer.new()
 	add_child(canvas)
@@ -66,10 +73,10 @@ func _ready() -> void:
 	connection_banner = load("res://scripts/ui/ConnectionStatusBanner.gd").new()
 	canvas.add_child(connection_banner)
 	connection_banner.setup(self)
-	root.resized.connect(func():
-		if not layout_refresh_queued:
-			layout_refresh_queued = true
-			call_deferred("refresh_layout"))
+	root.resized.connect(func(): responsive_layout_changed({
+		"generation": int(get_viewport().get_meta("match_layout_generation", 0)),
+		"height_only": true
+	}))
 	NetworkManager.updated.connect(refresh)
 	NetworkManager.error_received.connect(func(message): error_text = message; refresh())
 	NetworkManager.visual_event.connect(func(a, k, t):
@@ -92,21 +99,46 @@ func _process(_delta: float) -> void:
 		var remaining: float = maxf(0, reaction_until - Time.get_ticks_msec() / 1000.0)
 		reaction_label.text = "Còn %.1f giây để chọn nhân vật" % remaining if NetworkManager.public_state.get("phase", "") == "CHARACTER_SELECTION" else TextCatalog.text("Respond in %.1f seconds") % remaining
 
+func responsive_layout_changed(change: Dictionary = {}) -> void:
+	var generation := int(change.get("generation", get_viewport().get_meta("match_layout_generation", 0)))
+	if generation < applied_layout_generation:
+		return
+	pending_layout_change.merge(change, true)
+	pending_layout_change["generation"] = generation
+	if responsive_reflow_queued:
+		return
+	responsive_reflow_queued = true
+	call_deferred("_apply_responsive_reflow")
+
+func _apply_responsive_reflow() -> void:
+	responsive_reflow_queued = false
+	var change := pending_layout_change.duplicate(true)
+	pending_layout_change.clear()
+	applied_layout_generation = maxi(applied_layout_generation, int(change.get("generation", 0)))
+	if is_instance_valid(web_layout) and web_layout.is_text_edit_active():
+		menu_refresh_pending = true
+		return
+	var in_match: bool = not NetworkManager.public_state.is_empty() and bool(NetworkManager.public_state.get("started", false))
+	if in_match and is_instance_valid(match_hud):
+		match_hud.reflow_responsive_layout(change)
+		if is_instance_valid(reaction_banner):
+			reaction_banner.call_deferred("_apply_layout")
+		if is_instance_valid(chat_panel):
+			chat_panel.call_deferred("layout_chat")
+		if is_instance_valid(table):
+			table.plate_layout_key = ""
+			table.call_deferred("layout_nameplates")
+		return
+	# Menus/lobby have no gameplay selection or scroll state to preserve and need
+	# a real rebuild when switching responsive profile.
+	refresh()
+
 func refresh_layout() -> void:
 	layout_refresh_queued = false
 	if is_instance_valid(web_layout) and web_layout.is_text_edit_active():
 		menu_refresh_pending = true
 		return
-	if is_instance_valid(root):
-		# Rebuild only responsive UI sections/modal; the table, HUD and CardViews
-		# remain persistent and authoritative state is untouched.
-		if is_instance_valid(match_hud):
-			match_hud.top_signature = ""
-			match_hud.hand_signature = ""
-			match_hud.flow_signature = ""
-		if is_instance_valid(overlay):
-			clear_game_modal()
-		refresh()
+	responsive_layout_changed({"generation": int(get_viewport().get_meta("match_layout_generation", 0))})
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):

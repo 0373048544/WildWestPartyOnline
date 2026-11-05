@@ -21,6 +21,18 @@ var department_give_request_id: int = -1
 var department_give_selected: int = -1
 var result_celebrated_match: int = -1
 
+func reflow_responsive_layout(_change: Dictionary = {}) -> void:
+	# Rebuild only geometry-owning chrome. Flow signature deliberately remains
+	# intact so Safari toolbar changes cannot close/reopen a reaction or modal.
+	top_signature = ""
+	hand_signature = ""
+	choice_status_signature = ""
+	initialize(app, state, own)
+	if is_instance_valid(action_history):
+		action_history.call_deferred("_apply_layout")
+	if is_instance_valid(loadout_panel):
+		loadout_panel.call_deferred("_apply_layout")
+
 
 func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> void:
 	app = owner_app

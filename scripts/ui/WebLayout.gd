@@ -5,6 +5,7 @@ var _current_text_input: Control
 var _resize_pending := false
 var _resize_timer: Timer
 var _viewport_timer: Timer
+var _layout_generation := 0
 
 
 func _ready() -> void:
@@ -16,7 +17,7 @@ func _ready() -> void:
 	if OS.has_feature("web"):
 		_resize_timer = Timer.new()
 		_resize_timer.one_shot = true
-		_resize_timer.wait_time = 0.075
+		_resize_timer.wait_time = 0.12
 		_resize_timer.timeout.connect(_flush_resize)
 		add_child(_resize_timer)
 		_viewport_timer = Timer.new()
@@ -156,7 +157,7 @@ func _hide_virtual_keyboard() -> void:
 		DisplayServer.virtual_keyboard_hide()
 
 
-func resize() -> void:
+func resize(notify_parent: bool = true) -> void:
 	if not OS.has_feature("web"):
 		return
 	if is_text_edit_active():
@@ -192,6 +193,9 @@ func resize() -> void:
 			int(1440.0 * height / maxi(1, width))
 		)
 
+	var profile_changed := previous_target.x != target.x
+	var width_changed := previous_css == Vector2.ZERO or absf(previous_css.x - width) > 1.0
+	var height_only := not profile_changed and not width_changed and absf(previous_css.y - height) > 1.0
 	if get_window().content_scale_size != target:
 		get_window().content_scale_size = target
 
@@ -223,6 +227,8 @@ return result;
 		str(encoded)
 	)
 
+	var previous_insets: Vector4 = get_viewport().get_meta("match_safe_insets", Vector4.ZERO)
+	var insets: Vector4 = previous_insets
 	if padding is Array and padding.size() == 4:
 		var sx: float = (
 			float(target.x)
@@ -234,16 +240,11 @@ return result;
 			/ maxi(1, height)
 		)
 
-		var insets := Vector4(
+		insets = Vector4(
 			padding[0] * sx,
 			padding[1] * sy,
 			padding[2] * sx,
 			padding[3] * sy
-		)
-
-		var previous: Vector4 = get_viewport().get_meta(
-			"match_safe_insets",
-			Vector4.ZERO
 		)
 
 		get_viewport().set_meta(
@@ -251,12 +252,17 @@ return result;
 			insets
 		)
 
-		if (
-			(previous != insets
-			or previous_css != Vector2(width, height)
-			or previous_target != target)
-			and get_parent().has_method("refresh_layout")
-		):
-			get_parent().call_deferred(
-				"refresh_layout"
-			)
+	var changed := previous_css != Vector2(width, height) or previous_target != target or previous_insets != insets
+	if changed:
+		_layout_generation += 1
+		get_viewport().set_meta("match_layout_generation", _layout_generation)
+		if notify_parent and get_parent().has_method("responsive_layout_changed"):
+			get_parent().call_deferred("responsive_layout_changed", {
+				"generation": _layout_generation,
+				"height_only": height_only,
+				"profile_changed": profile_changed,
+				"width_changed": width_changed,
+				"css_size": Vector2(width, height),
+				"logical_size": Vector2(target),
+				"safe_insets": insets
+			})

@@ -211,20 +211,19 @@ static func equipment_rect(node: Node, expanded: bool = false) -> Rect2:
 	var safe := safe_rect(node, 8.0 if mobile(node) else 16.0)
 	var action_zone := action_rect(node)
 	var width: float
+	var height: float
 	if mobile(node):
 		width = minf(
-			units(node, 236.0 if expanded else 124.0),
-			safe.size.x * (0.66 if expanded else 0.34)
+			units(node, 190.0 if expanded else 155.0),
+			safe.size.x * (0.54 if expanded else 0.42)
 		)
+		var expanded_height := 112.0 if mobile_landscape(node) else 230.0
+		height = minf(units(node, expanded_height), safe.size.y * 0.48) if expanded else units(node, 82.0)
 	else:
-		width = minf(320.0, safe.size.x * 0.30)
-	# PanelContainer includes its border/content margins in addition to the 42px
-	# title hit target. Reserving only 52px let the real 68px compact panel spill
-	# into End Turn in short landscape viewports.
-	# The collapsed visual is about 40 CSS px, while PanelContainer margins make
-	# its measured box roughly 58 px. Reserve 76 px so it never touches actions.
-	var height := units(node, 112.0 if expanded else 76.0) if mobile(node) else (124.0 if expanded else 76.0)
-	return Rect2(Vector2(safe.end.x - width, action_zone.position.y - height - units(node, 6.0)), Vector2(width, height))
+		width = minf(210.0 if expanded else 190.0, safe.size.x * 0.22)
+		height = minf(254.0 if expanded else 76.0, safe.size.y * (0.44 if expanded else 0.16))
+	var action_gap := units(node, 16.0 if mobile(node) else 10.0)
+	return Rect2(Vector2(safe.end.x - width, action_zone.position.y - height - action_gap), Vector2(width, height))
 
 static func modal_rect(node: Node) -> Rect2:
 	var margin_css := 12.0 if mobile_landscape(node) else (16.0 if mobile(node) else 28.0)

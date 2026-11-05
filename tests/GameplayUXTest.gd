@@ -254,7 +254,9 @@ func _ready() -> void:
 	GameManager.publish()
 	await settle()
 	check(not app.table.objects.token_allowed({"kind": "market", "card": GameManager.flow.market[0].instance_id}), "other player's store pick cannot be clicked")
-	check(is_instance_valid(app.match_hud.loadout_panel) and not app.match_hud.loadout_panel.visible, "empty equipment HUD stays hidden")
+	var default_loadout = app.match_hud.loadout_panel
+	check(is_instance_valid(default_loadout) and default_loadout.visible, "default Colt loadout information remains visible")
+	check(default_loadout.current_equipment_count == 0 and default_loadout.items.get_child_count() == 1, "default Colt is presentation-only and creates no equipped-card count")
 	setup()
 	give(1, "shoot")
 	GameManager.players[2].equipment.jail = give(2, "jail")

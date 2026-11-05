@@ -121,7 +121,7 @@ func _ready() -> void:
 			var minimum_card_width: float = 95.0 if css.y>css.x else 84.0
 			var rendered_body_size: float = first.visual.get_node("CardDescription").get_theme_font_size("font_size")*first.visual.scale.y/sy
 			check(first.size.x/sx>=minimum_card_width and rendered_body_size>=12,"orientation-specific mobile card and body text stay readable width=%s body=%s css=%s" % [first.size.x/sx,rendered_body_size,css])
-			var rendered_title: Label = first.visual.get_node("CardName") as Label
+			var rendered_title: Label = first.visual.get_node("HeaderRegion/CardName") as Label
 			check(rendered_title.visible and not rendered_title.text.is_empty() and rendered_title.get_global_rect().intersects(first.get_global_rect()),"real card title is visibly rendered inside compact hand card %s title=%s" % [css,rendered_title.get_global_rect()])
 			var visible_ratio: float = (fan.size.y-first.position.y)/first.size.y
 			check(visible_ratio>=1.0,"resting hand shows the complete card body")

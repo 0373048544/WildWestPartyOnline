@@ -3,9 +3,11 @@ extends Node
 var app: Node
 var host: bool
 var last_error: String = ""
+var failed: bool = false
 
 func require(value: bool, message: String) -> void:
 	if not value:
+		failed = true
 		push_error("LOBBY FAILED: " + message)
 		get_tree().quit(1)
 		assert(value, message)
@@ -60,7 +62,7 @@ func _ready() -> void:
 		await test_host()
 	else:
 		await test_client()
-	get_tree().quit()
+	get_tree().quit(1 if failed else 0)
 
 func test_host() -> void:
 	app.screen = "host"

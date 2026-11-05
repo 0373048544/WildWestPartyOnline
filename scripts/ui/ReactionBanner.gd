@@ -41,6 +41,12 @@ func present(owner_app: Node, active: Dictionary, state: Dictionary) -> void:
 	set_meta("required_count", int(active.get("required_count", 1)))
 	set_meta("resolved_count", int(active.get("resolved_count", 0)))
 	var copy := _copy_for(kind, actor, active)
+	if kind == "dodge" and active.get("judgement", {}) is Dictionary:
+		var judgement: Dictionary = active.get("judgement", {})
+		if str(judgement.get("purpose", "")) == "barrel":
+			var judged_card: Dictionary = judgement.get("card", {})
+			var result_text := "NÉ THÀNH CÔNG" if bool(judgement.get("success", false)) else "PHÁN ĐỊNH THẤT BẠI"
+			copy.detail = "THÙNG %s: %s · %s" % [CardInstance.corner(judged_card), result_text, str(copy.detail)]
 	title_label.text = copy.title
 	detail_label.text = copy.detail
 	icon.text = copy.icon

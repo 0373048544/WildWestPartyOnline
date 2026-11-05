@@ -430,17 +430,19 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		if event.pressed:
 			# A gesture keeps one owner from press through release. Ignore other
-			# fingers until that owner's gesture finishes.
+			# fingers until that owner's gesture finishes. Do not mark the initial
+			# press handled here: Godot dispatches _input before Control GUI input,
+			# and CardView must receive the press to start Button/long-press state.
 			if touch_index < 0 and get_global_rect().has_point(event.position):
 				touch_index = event.index
 				drag_origin = event.position
 				dragging = true
 				drag_distance = 0.0
 				gesture_was_drag = false
-				get_viewport().set_input_as_handled()
 		elif event.index == touch_index:
-			if dragging:
-				get_viewport().set_input_as_handled()
+			# Release must also reach Button so it can clear its pressed state and
+			# emit exactly one activation for a tap. Drag classification is kept
+			# until that activation callback has rejected/accepted the gesture.
 			_cancel_touch_gesture(false)
 
 	elif event is InputEventScreenDrag and dragging and event.index == touch_index:

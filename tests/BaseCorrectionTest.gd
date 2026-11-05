@@ -58,7 +58,7 @@ func _ready() -> void:
 		add_child(view)
 		var physical := CardInstance.make(900, "schofield", sample[1], sample[0])
 		view.configure(physical, CardData.data("schofield"), false, false, "Không phải lượt hành động của bạn.")
-		var corner: Label = view.visual.get_node("RankSuitCorner")
+		var corner: Label = view.visual.get_node("HeaderRegion/RankSuitCorner")
 		check(corner.text == sample[2], "real card UI corner " + sample[2])
 		check(corner.get_theme_color("font_color") == CardInstance.suit_color(sample[1]), "red/dark suit rendering")
 		check(view.tooltip_text.is_empty() and str(view.get_meta("disabled_reason", "")).contains("Không phải lượt") and CardData.data("schofield").weapon_range == 2, "custom preview owns disabled inspection; weapon range separate from rank")

@@ -56,15 +56,23 @@ func sync(snapshot: Dictionary, owner: int, request: Dictionary) -> void:
 			var slot: Vector3 = radial * (2.55 + row * 0.68) + tangent * ((column - (columns - 1) / 2.0) * 0.62) + Vector3.UP * 1.43
 			objects[key].position.x = slot.x
 			objects[key].position.z = slot.z
-			# The local hidden-hand pile sits directly between a seated phone
-			# camera and the table center. It remains in authoritative state and is
-			# still rendered for every other client; only its owner's first-person
-			# presentation hides this redundant public proxy.
-			objects[key].visible = not (
-				table.mobile_camera.enabled
-				and int(p.player_id) == local_id
-				and str(zone.zone) == "hand"
-			)
+			var local_first_person: bool = table.mobile_camera.enabled and int(p.player_id) == local_id
+			# At the seated phone camera, the normal local radius puts public cards
+			# centimetres from the lens. Keep them physically visible, but arrange a
+			# smaller strip farther toward table center. Only the redundant secret
+			# hand proxy remains hidden from its owner.
+			if local_first_person and str(zone.zone) != "hand":
+				var has_hand_proxy: int = 1 if not zones.is_empty() and str(zones[0].zone) == "hand" else 0
+				var public_index: int = index - has_hand_proxy
+				var public_count: int = zones.size() - has_hand_proxy
+				var public_column: int = public_index % 4
+				var public_row: int = public_index / 4
+				var public_columns: int = mini(4, public_count - public_row * 4)
+				var compact_slot := radial * (1.55 + public_row * 0.46) + tangent * ((public_column - (public_columns - 1) / 2.0) * 0.42) + Vector3.UP * 1.43
+				objects[key].position.x = compact_slot.x
+				objects[key].position.z = compact_slot.z
+			objects[key].visible = not (local_first_person and str(zone.zone) == "hand")
+			objects[key].scale = Vector3.ONE * (0.48 if local_first_person else (0.64 if int(p.player_id) == local_id else 0.82))
 			objects[key].title.text = zone.name
 			objects[key].token["card"] = int(zone.get("card", {}).get("instance_id", 0))
 			if not zone.get("card", {}).is_empty():
