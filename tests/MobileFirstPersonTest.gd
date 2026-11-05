@@ -180,10 +180,9 @@ func test_touch_targeting() -> void:
 	table.targeting.begin_targeting(99001, 1, [target_id], {target_id: {"distance": 1, "range": 1}}, "BANG")
 	var target_point: Vector2 = table.camera.unproject_position(table.avatars[target_id].global_position + Vector3.UP * 1.6)
 	check(LAYOUT.get_table_focus_rect(table).has_point(target_point), "opponent is inside the touchable table region")
-	for index in [20, 21]:
-		table.mobile_camera._unhandled_input(screen_touch(index, target_point, true))
-		table.mobile_camera._unhandled_input(screen_touch(index, target_point, false))
-	check(chosen[0] == target_id, "two clear taps select and confirm the authoritative target")
+	table.mobile_camera._unhandled_input(screen_touch(20, target_point, true))
+	table.mobile_camera._unhandled_input(screen_touch(20, target_point, false))
+	check(chosen[0] == target_id, "one clear tap selects the authoritative target")
 	check(table.targeting.selected_card < 0, "confirmed target leaves no stuck targeting state")
 
 	# Repeat in the short landscape geometry used by the real browser E2E test.
@@ -199,9 +198,7 @@ func test_touch_targeting() -> void:
 	target_point = table.camera.unproject_position(table.avatars[target_id].global_position + Vector3.UP * 1.6)
 	table.mobile_camera._unhandled_input(screen_touch(22, target_point, true))
 	table.mobile_camera._unhandled_input(screen_touch(22, target_point, false))
-	table.mobile_camera._unhandled_input(screen_touch(23, target_point, true))
-	table.mobile_camera._unhandled_input(screen_touch(23, target_point, false))
-	check(chosen[0] == target_id, "landscape raised camera keeps two-tap target confirmation reliable")
+	check(chosen[0] == target_id, "landscape raised camera keeps one-tap target confirmation reliable")
 	get_window().size = Vector2i(390, 844)
 	get_window().content_scale_size = Vector2i(600, 1298)
 	get_viewport().set_meta("match_css_size", Vector2(390, 844))

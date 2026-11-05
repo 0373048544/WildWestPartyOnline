@@ -77,7 +77,7 @@ func verify_compact_panel(css: Vector2i, mobile: bool, label: String) -> void:
 	check(not panel.expanded and not panel.details_scroll.visible, label + " starts collapsed")
 	check(collapsed_rect.size.x / scale <= (155.5 if mobile else 210.5), "%s collapsed width stays within target: %.2f CSS px" % [label, collapsed_rect.size.x / scale])
 	check(collapsed_rect.size.y / scale <= 85.0, label + " collapsed height stays within target")
-	check("WINCHESTER" in panel.title_button.text and "TẦM 5" in panel.title_button.text and "+5" in panel.title_button.text, label + " summary shows weapon, range and count")
+	check("WINCHESTER" in panel.title_button.text and "TẦM 5" in panel.title_button.text and "5 LÁ" in panel.title_button.text, label + " summary shows weapon, range and count")
 	check(not collapsed_rect.intersects(app.match_hud.hand.get_global_rect()), label + " collapsed panel clears hand")
 	check(not collapsed_rect.intersects(app.match_hud.get_node("HandActions").get_global_rect()), label + " collapsed panel clears gameplay buttons")
 	check(not collapsed_rect.intersects(app.match_hud.get_node("TopBar").get_global_rect()), label + " collapsed panel clears top HUD")

@@ -237,6 +237,7 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 	var count: int = state.players.size()
 	var local_seat := 0
 	var local_position := Vector3(0, 0, 3.9)
+	var phone_first_person: bool = load("res://scripts/ui/MatchLayout.gd").mobile_first_person(self)
 	for p in state.players:
 		var id: int = p.player_id
 		player_rows[id] = p
@@ -289,6 +290,12 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 		rings[id].material_override.albedo_color = Color("#ffda7b") if targets.has(id) or choosing else seat_color
 		rings[id].material_override.emission_enabled = targets.has(id) or choosing
 		rings[id].material_override.emission = Color("#ffc775")
+		# The seated phone camera sees the ring at a shallow table angle. Enlarge
+		# valid targets slightly and lift them a few centimetres so the marker stays
+		# readable without neon, particles or a desktop-camera change.
+		var mobile_valid_target: bool = phone_first_person and targets.has(id)
+		rings[id].scale = Vector3.ONE * (1.16 if mobile_valid_target else 1.0)
+		rings[id].position.y = 0.14 if mobile_valid_target else 0.1
 		if not p.is_alive and not avatars[id].dead:
 			avatars[id].act("death")
 		if id == local_id:

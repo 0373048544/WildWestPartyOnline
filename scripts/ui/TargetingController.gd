@@ -174,7 +174,7 @@ func pick_at(screen_position: Vector2) -> int:
 	var result: Dictionary = table.get_world_3d().direct_space_state.intersect_ray(ray)
 	return int(result.collider.get_meta("player_id", 0)) if not result.is_empty() else 0
 
-func pick_touch_player(at: Vector2) -> int:
+func pick_touch_player(at: Vector2, valid_only: bool = true) -> int:
 	# First-person opponents become physically smaller when the seated camera is
 	# raised. Keep a generous presentation-only touch halo; authority still
 	# validates the selected player and card range.
@@ -184,10 +184,10 @@ func pick_touch_player(at: Vector2) -> int:
 	# Nameplates are screen-space controls: resolve their full bounds before rays
 	# can hit a different model behind the visible panel.
 	for id in table.avatars:
-		if (selected_card < 0 or valid_target_ids.has(id)) and table.nameplates[id].screen_rect.has_point(at):
+		if (selected_card < 0 or not valid_only or valid_target_ids.has(id)) and table.nameplates[id].screen_rect.has_point(at):
 			return id
 	for id in table.avatars:
-		if selected_card >= 0 and not valid_target_ids.has(id):
+		if selected_card >= 0 and valid_only and not valid_target_ids.has(id):
 			continue
 		var center: Vector2 = table.camera.unproject_position(table.avatars[id].global_position+Vector3.UP*1.6)
 		var distance: float = at.distance_to(center)
@@ -197,10 +197,10 @@ func pick_touch_player(at: Vector2) -> int:
 	if chosen > 0:
 		return chosen
 	var exact: int = pick_at(at)
-	if exact > 0 and (selected_card < 0 or valid_target_ids.has(exact)):
+	if exact > 0 and (selected_card < 0 or not valid_only or valid_target_ids.has(exact)):
 		return exact
 	for id in table.avatars:
-		if selected_card >= 0 and not valid_target_ids.has(id):
+		if selected_card >= 0 and valid_only and not valid_target_ids.has(id):
 			continue
 		var panel: Rect2 = table.nameplates[id].screen_rect
 		var closest := Vector2(clampf(at.x,panel.position.x,panel.end.x),clampf(at.y,panel.position.y,panel.end.y))
@@ -239,18 +239,23 @@ func handle_mobile_table_tap(at: Vector2) -> void:
 	if blocked:
 		return
 	if selected_card >= 0:
-		var id := pick_touch_player(at)
-		if id == selected_target and valid_target_ids.has(id):
+		# Selecting the card is already an explicit action, so a valid opponent is
+		# confirmed with one clear tap on mobile. The authority still validates the
+		# submitted card, range and player. Invalid visible opponents are resolved
+		# only for feedback and never emit target_chosen.
+		var id := pick_touch_player(at, false)
+		if valid_target_ids.has(id):
+			selected_target = id
+			update_hover_target(id)
+			if table.nameplates.has(id):
+				table.nameplates[id].flash_target()
 			AudioManager.play_ui("confirm")
 			confirm_target()
 		else:
-			selected_target = id
+			selected_target = 0
 			update_hover_target(id)
-			if valid_target_ids.has(id):
-				AudioManager.play_ui("button")
-				if table.nameplates.has(id):
-					table.nameplates[id].flash_target()
-				tooltip.text += "\nChạm lần nữa để xác nhận"
+			if id > 0:
+				AudioManager.play_ui("error")
 	else:
 		interact(at, true)
 

@@ -157,6 +157,41 @@ func _ready() -> void:
 		print("VISUAL V20 MOBILE UX CAPTURE PASS")
 		get_tree().quit(0)
 		return
+	if "--v21-mobile-gameplay" in OS.get_cmdline_user_args():
+		await set_view(Vector2i(390, 844), true)
+		await set_hand(7)
+		var shoot: Dictionary = NetworkManager.private_state.hand.filter(
+			func(card): return str(card.get("card_data_id", "")) == "shoot"
+		)[0]
+		app.choose_card(int(shoot.instance_id))
+		await settle()
+		if not app.table.targeting.valid_target_ids.is_empty():
+			app.table.targeting.update_hover_target(int(app.table.targeting.valid_target_ids[0]))
+		await capture("portrait_v21_targeting")
+		app.match_hud.cancel_selection()
+		var dodge_uid: int = int(GameManager.players[1].hand[1].instance_id)
+		app.reaction_banner.present(app, {
+			"request_id": 2121, "reaction_type": "dodge", "source_player_id": 2,
+			"allowed_card_types": [dodge_uid], "required_count": 2,
+			"resolved_count": 1, "remaining": 7.5
+		}, NetworkManager.public_state)
+		await capture("portrait_v21_slab_1_of_2")
+		app.reaction_banner.hide_banner()
+		app.chat_panel.open_chat()
+		await capture("portrait_v21_chat_open")
+		app.chat_panel.close_chat()
+		app.match_hud.loadout_panel.title_button.pressed.emit()
+		await capture("portrait_v21_loadout_open")
+		app.match_hud.loadout_panel.title_button.pressed.emit()
+		await set_view(Vector2i(844, 390), true)
+		app.choose_card(int(shoot.instance_id))
+		await settle()
+		if not app.table.targeting.valid_target_ids.is_empty():
+			app.table.targeting.update_hover_target(int(app.table.targeting.valid_target_ids[0]))
+		await capture("landscape_v21_targeting")
+		print("VISUAL V21 MOBILE GAMEPLAY CAPTURE PASS")
+		get_tree().quit(0)
+		return
 
 	# Required portrait card-count states.
 	await set_view(Vector2i(390, 844), true)
