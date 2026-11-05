@@ -49,6 +49,8 @@ func _ready() -> void:
 	hand.scroll_offset = minf(80.0, maxf(0.0, hand.content_width() - hand.size.x))
 	hand.arrange()
 	var scroll_before: float = hand.scroll_offset
+	var yaw_before: float = app.table.mobile_camera.yaw
+	var pitch_before: float = app.table.mobile_camera.pitch
 	var modal_content: Control = app.modal()
 	var overlay_id: int = app.overlay.get_instance_id()
 	modal_content.add_child(Label.new())
@@ -71,6 +73,8 @@ func _ready() -> void:
 		"height-only toolbar change does not close/recreate blocking modal")
 	expect(load("res://scripts/ui/MatchLayout.gd").mobile_portrait(app),
 		"Safari height change stays in the same portrait profile")
+	expect(is_equal_approx(app.table.mobile_camera.yaw, yaw_before) and is_equal_approx(app.table.mobile_camera.pitch, pitch_before),
+		"Safari toolbar height change preserves camera yaw and pitch")
 
 	# Orientation is a real profile transition, but persistent match objects still
 	# survive and all hit geometry is rebuilt in the new logical viewport.

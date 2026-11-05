@@ -121,6 +121,20 @@ func _ready() -> void:
 		print("VISUAL V12 FOCUSED CAPTURE PASS")
 		get_tree().quit(0)
 		return
+	if "--v19-camera" in OS.get_cmdline_user_args():
+		await set_view(Vector2i(390, 844), true)
+		await set_hand(7)
+		await capture("portrait_v19_camera_raised")
+		app.table.mobile_camera.yaw += deg_to_rad(32.0)
+		app.table.mobile_camera.apply_camera()
+		app.table.plate_layout_key = ""
+		await capture("portrait_v19_camera_rotated")
+		app.table.mobile_camera.reset_toward_table()
+		await set_view(Vector2i(844, 390), true)
+		await capture("landscape_v19_camera_raised")
+		print("VISUAL V19 CAMERA CAPTURE PASS")
+		get_tree().quit(0)
+		return
 
 	# Required portrait card-count states.
 	await set_view(Vector2i(390, 844), true)

@@ -1,7 +1,7 @@
 html,
 body {
-	width: 100%;
-	height: 100%;
+	width: var(--wwpo-viewport-width, 100vw);
+	height: var(--wwpo-viewport-height, 100dvh);
 	margin: 0;
 	padding: 0;
 	overflow: hidden;
@@ -12,9 +12,9 @@ body {
 
 body {
 	position: fixed;
-	inset: 0;
-	width: 100vw;
-	height: 100dvh;
+	inset: auto;
+	left: var(--wwpo-viewport-left, 0px);
+	top: var(--wwpo-viewport-top, 0px);
 	touch-action: none;
 	-webkit-user-select: none;
 	user-select: none;
@@ -22,7 +22,9 @@ body {
 
 #canvas {
 	display: block;
-	width: 100%;
-	height: 100%;
+	width: var(--wwpo-viewport-width, 100vw) !important;
+	height: var(--wwpo-viewport-height, 100dvh) !important;
+	max-width: none;
+	max-height: none;
 	touch-action: none;
 }

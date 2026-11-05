@@ -58,11 +58,11 @@ func test_seat_count(player_count: int) -> void:
 		unique_positions[str(table.avatars[id].position.snapped(Vector3(0.001, 0.001, 0.001)))] = true
 	check(visible_world_players == player_count - 1, "%d players keeps every opponent rendered" % player_count)
 	check(unique_positions.size() == player_count, "%d players retains distinct seats" % player_count)
-	check(absf(table.camera.position.y - 2.18) < 0.02, "camera stays at seated eye height")
+	check(absf(table.camera.position.y - 2.30) < 0.02, "camera uses the raised seated eye height")
 	check(absf(Vector2(table.camera.position.x, table.camera.position.z).length() - 3.52) < 0.03,
 		"camera remains inside the local seat instead of using an overhead view")
 	mobile_camera.reset_toward_table()
-	check(not table.camera.is_position_behind(Vector3(0.0, 0.95, 0.0)), "reset points back toward table center")
+	check(not table.camera.is_position_behind(Vector3(0.0, 0.86, 0.0)), "reset points down toward the visible table center")
 
 	# Exercise every possible local seat, not just the host seat. This changes only
 	# the local presentation input passed to TableView; authoritative seat order is
@@ -73,7 +73,7 @@ func test_seat_count(player_count: int) -> void:
 		table.update_state(snapshot, local_id, [])
 		var expected_seat: int = int(snapshot.players[local_id - 1].seat_index)
 		var expected_angle: float = TAU * float(expected_seat) / player_count
-		var expected_eye := Vector3(sin(expected_angle) * 3.52, 2.18, cos(expected_angle) * 3.52)
+		var expected_eye := Vector3(sin(expected_angle) * 3.52, 2.30, cos(expected_angle) * 3.52)
 		check(table.camera.position.distance_to(expected_eye) < 0.04,
 			"%d players local seat %d places camera at its own chair" % [player_count, expected_seat])
 		check(not table.avatars[local_id].visible, "local seat %d hides only its own avatar" % expected_seat)
@@ -143,6 +143,11 @@ func test_orientation_reflow() -> void:
 	var table: Node3D = app.table
 	var table_instance: int = table.get_instance_id()
 	var camera_instance: int = table.camera.get_instance_id()
+	table.mobile_camera.yaw += deg_to_rad(11.0)
+	table.mobile_camera.pitch = clampf(table.mobile_camera.pitch - deg_to_rad(4.0), table.mobile_camera.MIN_PITCH, table.mobile_camera.MAX_PITCH)
+	table.mobile_camera.apply_camera()
+	var yaw_before: float = table.mobile_camera.yaw
+	var pitch_before: float = table.mobile_camera.pitch
 	get_window().size = Vector2i(844, 390)
 	get_window().content_scale_size = Vector2i(960, 444)
 	get_viewport().set_meta("match_css_size", Vector2(844, 390))
@@ -153,6 +158,8 @@ func test_orientation_reflow() -> void:
 	check(is_equal_approx(table.camera.fov, 72.0), "landscape uses the wider first-person projection")
 	check(table.get_instance_id() == table_instance and table.camera.get_instance_id() == camera_instance,
 		"orientation change reuses the match and camera nodes")
+	check(is_equal_approx(table.mobile_camera.yaw, yaw_before) and is_equal_approx(table.mobile_camera.pitch, pitch_before),
+		"orientation change preserves first-person yaw and pitch")
 	get_window().size = Vector2i(390, 844)
 	get_window().content_scale_size = Vector2i(600, 1298)
 	get_viewport().set_meta("match_css_size", Vector2(390, 844))
@@ -161,6 +168,8 @@ func test_orientation_reflow() -> void:
 	await settle()
 	check(LAYOUT.mobile_portrait(table) and is_equal_approx(table.camera.fov, 68.0),
 		"portrait projection restores without rebuilding the match")
+	check(is_equal_approx(table.mobile_camera.yaw, yaw_before) and is_equal_approx(table.mobile_camera.pitch, pitch_before),
+		"returning to portrait does not reset camera orientation")
 
 func test_touch_targeting() -> void:
 	await build_match(2)
@@ -176,6 +185,26 @@ func test_touch_targeting() -> void:
 		table.mobile_camera._unhandled_input(screen_touch(index, target_point, false))
 	check(chosen[0] == target_id, "two clear taps select and confirm the authoritative target")
 	check(table.targeting.selected_card < 0, "confirmed target leaves no stuck targeting state")
+
+	# Repeat in the short landscape geometry used by the real browser E2E test.
+	get_window().size = Vector2i(844, 390)
+	get_window().content_scale_size = Vector2i(960, 444)
+	get_viewport().set_meta("match_css_size", Vector2(844, 390))
+	table.state_signature = ""
+	table.update_state(NetworkManager.public_state, 1, [])
+	await settle()
+	chosen[0] = 0
+	table.targeting.target_chosen.connect(func(id: int): chosen[0] = id, CONNECT_ONE_SHOT)
+	table.targeting.begin_targeting(99002, 1, [target_id], {target_id: {"distance": 1, "range": 1}}, "BANG")
+	target_point = table.camera.unproject_position(table.avatars[target_id].global_position + Vector3.UP * 1.6)
+	table.mobile_camera._unhandled_input(screen_touch(22, target_point, true))
+	table.mobile_camera._unhandled_input(screen_touch(22, target_point, false))
+	table.mobile_camera._unhandled_input(screen_touch(23, target_point, true))
+	table.mobile_camera._unhandled_input(screen_touch(23, target_point, false))
+	check(chosen[0] == target_id, "landscape raised camera keeps two-tap target confirmation reliable")
+	get_window().size = Vector2i(390, 844)
+	get_window().content_scale_size = Vector2i(600, 1298)
+	get_viewport().set_meta("match_css_size", Vector2(390, 844))
 
 func test_desktop_unchanged() -> void:
 	get_viewport().set_meta("match_force_mobile_device", false)

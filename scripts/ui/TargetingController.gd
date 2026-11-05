@@ -175,8 +175,11 @@ func pick_at(screen_position: Vector2) -> int:
 	return int(result.collider.get_meta("player_id", 0)) if not result.is_empty() else 0
 
 func pick_touch_player(at: Vector2) -> int:
-	# A forgiving 56 CSS-pixel diameter around avatars and nameplates.
-	var best: float = load("res://scripts/ui/MatchLayout.gd").units(self,28)
+	# First-person opponents become physically smaller when the seated camera is
+	# raised. Keep a generous presentation-only touch halo; authority still
+	# validates the selected player and card range.
+	var layout: Script = load("res://scripts/ui/MatchLayout.gd")
+	var best: float = layout.units(self, 40.0 if layout.mobile_first_person(table) else 28.0)
 	var chosen: int = 0
 	# Nameplates are screen-space controls: resolve their full bounds before rays
 	# can hit a different model behind the visible panel.

@@ -3,8 +3,9 @@ extends Node
 
 const MIN_PITCH := deg_to_rad(-25.0)
 const MAX_PITCH := deg_to_rad(20.0)
-const EYE_HEIGHT := 2.18
+const EYE_HEIGHT := 2.30
 const EYE_INSET := 0.38
+const LOOK_TARGET_HEIGHT := 0.86
 
 var table: Node3D
 var enabled := false
@@ -42,7 +43,7 @@ func configure(local_seat_position: Vector3, local_seat_index: int, player_count
 	table.camera.h_offset = 0.0
 	table.camera.v_offset = 0.0
 	if reset_view:
-		table.camera.look_at(Vector3(0.0, 0.95, 0.0), Vector3.UP)
+		table.camera.look_at(Vector3(0.0, LOOK_TARGET_HEIGHT, 0.0), Vector3.UP)
 		yaw = table.camera.rotation.y
 		pitch = clampf(table.camera.rotation.x, MIN_PITCH, MAX_PITCH)
 		initial_yaw = yaw
@@ -58,7 +59,7 @@ func reset_toward_table() -> void:
 	if not enabled:
 		return
 	table.camera.position = eye_position
-	table.camera.look_at(Vector3(0.0, 0.95, 0.0), Vector3.UP)
+	table.camera.look_at(Vector3(0.0, LOOK_TARGET_HEIGHT, 0.0), Vector3.UP)
 	pitch = clampf(table.camera.rotation.x, MIN_PITCH, MAX_PITCH)
 	initial_yaw = table.camera.rotation.y
 	yaw = initial_yaw

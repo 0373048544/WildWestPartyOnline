@@ -115,7 +115,7 @@ func _apply_responsive_reflow() -> void:
 	var change := pending_layout_change.duplicate(true)
 	pending_layout_change.clear()
 	applied_layout_generation = maxi(applied_layout_generation, int(change.get("generation", 0)))
-	if is_instance_valid(web_layout) and web_layout.is_text_edit_active():
+	if is_instance_valid(web_layout) and (web_layout.is_text_edit_active() or web_layout.is_viewport_recovering()):
 		menu_refresh_pending = true
 		return
 	var in_match: bool = not NetworkManager.public_state.is_empty() and bool(NetworkManager.public_state.get("started", false))
@@ -135,7 +135,7 @@ func _apply_responsive_reflow() -> void:
 
 func refresh_layout() -> void:
 	layout_refresh_queued = false
-	if is_instance_valid(web_layout) and web_layout.is_text_edit_active():
+	if is_instance_valid(web_layout) and (web_layout.is_text_edit_active() or web_layout.is_viewport_recovering()):
 		menu_refresh_pending = true
 		return
 	responsive_layout_changed({"generation": int(get_viewport().get_meta("match_layout_generation", 0))})
@@ -199,7 +199,10 @@ func western_input(placeholder: String, parent: Node = content, code: bool = fal
 func text_input_settled() -> void:
 	if menu_refresh_pending:
 		menu_refresh_pending = false
-		refresh_layout()
+		# A network snapshot may have arrived while the temporary keyboard viewport
+		# was deliberately ignored. Render the latest authoritative state now;
+		# persistent match objects still prevent table/hand/camera reconstruction.
+		refresh()
 
 func finish_text_input(control: Control = null) -> void:
 	if is_instance_valid(web_layout):
@@ -238,6 +241,11 @@ func show_help() -> void:
 	button("ĐÃ HIỂU", func(): clear_game_modal(); refresh(), box).set_variant("primary")
 
 func refresh() -> void:
+	# Network state continues updating while Safari restores its visual viewport,
+	# but do not construct a lobby/match from the temporary keyboard geometry.
+	if is_instance_valid(web_layout) and web_layout.is_viewport_recovering():
+		menu_refresh_pending = true
+		return
 	var state: Dictionary = NetworkManager.public_state
 	_observe_player_connections(state)
 	var in_game: bool = not state.is_empty() and state.get("started", false)

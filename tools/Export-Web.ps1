@@ -7,6 +7,7 @@ $mode = if ($Release) { '--export-release' } else { '--export-debug' }
 if ($LASTEXITCODE -ne 0) { throw 'Godot Web export failed.' }
 Copy-Item -LiteralPath (Join-Path $projectPath 'web/network-config.js') -Destination (Join-Path $projectPath 'build/web/network-config.js') -Force
 Copy-Item -LiteralPath (Join-Path $projectPath 'web/mobile-shell.css') -Destination (Join-Path $projectPath 'build/web/mobile-shell.css') -Force
+Copy-Item -LiteralPath (Join-Path $projectPath 'web/viewport-bootstrap.js') -Destination (Join-Path $projectPath 'build/web/viewport-bootstrap.js') -Force
 $indexPath = Join-Path $projectPath 'build/web/index.html'
 $html = Get-Content -LiteralPath $indexPath -Raw
 # Godot's stock shell owns the single viewport tag. Normalize it after every

@@ -10,6 +10,7 @@ const edge=process.env.WWPO_BROWSER || 'C:/Program Files (x86)/Microsoft/Edge/Ap
 let browser,ws,next=1;
 const keepAlive=setInterval(()=>{},1000);
 const mobile=process.argv.includes('--mobile');
+const v19KeyboardOnly=process.argv.includes('--v19-keyboard-only');
 const cdpPort=Number(process.env.WWPO_CDP_PORT||9223);
 const touchPages=new Set();
 const testPages=[];
@@ -199,13 +200,15 @@ async function save(page,name) {
   if(mobile){
     const mobileWidth=Number(process.env.WWPO_MOBILE_WIDTH||844),mobileHeight=Number(process.env.WWPO_MOBILE_HEIGHT||390);
     const keyboardHeight=Math.max(240,Math.floor(mobileHeight*0.62));
-    await command('Emulation.setDeviceMetricsOverride',{width:mobileWidth,height:keyboardHeight,screenWidth:mobileWidth,screenHeight:mobileHeight,deviceScaleFactor:1,mobile:true},b);
-    await delay(500);
-    let duringKeyboard=await snapshot(b);
-    assert(duringKeyboard.controls.some(c=>c.kind==='input'&&c.name==='RoomCode'&&c.text===room.toLowerCase()&&c.focused),'keyboard viewport resize preserves room text, node and focus');
-    assert(duringKeyboard.controls.some(c=>c.kind==='input'&&c.name!=='RoomCode'&&c.text===typedName),'keyboard viewport resize preserves name draft');
-    await command('Emulation.setDeviceMetricsOverride',{width:mobileWidth,height:mobileHeight,screenWidth:mobileWidth,screenHeight:mobileHeight,deviceScaleFactor:1,mobile:true},b);
-    await delay(500);
+    for(let keyboardCycle=0;keyboardCycle<5;keyboardCycle++){
+      await command('Emulation.setDeviceMetricsOverride',{width:mobileWidth,height:keyboardHeight,screenWidth:mobileWidth,screenHeight:mobileHeight,deviceScaleFactor:1,mobile:true},b);
+      await delay(500);
+      const duringKeyboard=await snapshot(b);
+      assert(duringKeyboard.controls.some(c=>c.kind==='input'&&c.name==='RoomCode'&&c.text===room.toLowerCase()&&c.focused),'keyboard viewport resize preserves room text, node and focus');
+      assert(duringKeyboard.controls.some(c=>c.kind==='input'&&c.name!=='RoomCode'&&c.text===typedName),'keyboard viewport resize preserves name draft');
+      await command('Emulation.setDeviceMetricsOverride',{width:mobileWidth,height:mobileHeight,screenWidth:mobileWidth,screenHeight:mobileHeight,deviceScaleFactor:1,mobile:true},b);
+      await delay(900);
+    }
   }
   for(let switchIndex=0;switchIndex<10;switchIndex++){
     const wantsRoom=switchIndex%2===0;
@@ -220,6 +223,18 @@ async function save(page,name) {
   await wait(async()=>{const s=await snapshot(b);return s?.public.players?.length===2;},'same lobby');
   assert.equal((await snapshot(a)).room,(await snapshot(b)).room);
   assert((await snapshot(a)).public.players.some(p=>p.display_name===joinedName),'Unicode player name reaches authoritative server unchanged');
+  if(v19KeyboardOnly){
+    const geometry=JSON.parse(await evaluate(b,"JSON.stringify((()=>{const vv=window.visualViewport;const r=document.querySelector('#canvas').getBoundingClientRect();return {canvas:{x:r.x,y:r.y,w:r.width,h:r.height},viewport:{x:vv?.offsetLeft||0,y:vv?.offsetTop||0,w:vv?.width||innerWidth,h:vv?.height||innerHeight},inner:{w:innerWidth,h:innerHeight},client:{w:document.documentElement.clientWidth,h:document.documentElement.clientHeight}}})())"));
+    const close=(a,b)=>Math.abs(a-b)<=1.25;
+    assert(close(geometry.canvas.x,geometry.viewport.x)&&close(geometry.canvas.y,geometry.viewport.y),'canvas origin follows restored visual viewport');
+    assert(close(geometry.canvas.w,geometry.viewport.w)&&close(geometry.canvas.h,geometry.viewport.h),'canvas fills restored visual viewport without a black gap');
+    assert((await snapshot(b)).controls.some(c=>c.name==='LeaveLobbyButton'),'lobby remains complete and interactive after keyboard recovery');
+    await save(b,'v19-keyboard-recovered');
+    assert.equal(errors.length,0,'Godot browser errors: '+errors.join('\n'));
+    console.log('PASS: V19 mobile browser keyboard recovery; 5 viewport cycles, 10 focus switches, one-tap join, exact canvas/visualViewport geometry');
+    await command('Browser.close');
+    return;
+  }
   await click(a,c=>c.name==='ReadyButton');
   await click(b,c=>c.name==='ReadyButton');
   await wait(async()=>(await snapshot(a)).public.players.every(p=>p.ready),'ready synchronized');
