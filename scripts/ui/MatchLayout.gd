@@ -15,7 +15,7 @@ const Z_ACTION := 300
 const Z_CHAT := 500
 const Z_TOAST := 600
 const Z_REACTION := 700
-const Z_PREVIEW := 750
+const Z_PREVIEW := 650
 const Z_MODAL_BACKDROP := 900
 const Z_MODAL_CONTENT := 910
 
@@ -102,12 +102,12 @@ static func hand_height(node: Node, targeting: bool = false) -> float:
 	# Portrait keeps the complete card touchable without consuming roughly one
 	# third of a short iPhone viewport.
 	if mobile_portrait(node):
-		return units(node, 120.0 if targeting else 128.0)
+		return units(node, 116.0 if targeting else 124.0)
 	# Landscape is proportional to the short side: a real phone gets 24–28%
 	# instead of the old fixed 142px zone that could consume over one third.
 	var css: Vector2 = css_size(node)
 	var ratio := 0.28 if targeting else 0.32
-	return units(node, clampf(css.y * ratio, 100.0, 128.0))
+	return units(node, clampf(css.y * ratio, 110.0, 125.0))
 
 static func get_hand_zone_height(node: Node, targeting: bool = false) -> float:
 	return hand_height(node, targeting)
@@ -117,13 +117,13 @@ static func touch_card_width(node: Node) -> float:
 		return units(node, 150.0)
 	if mobile_portrait(node):
 		var css: Vector2 = css_size(node)
-		return units(node, clampf(100.0 + maxf(0.0, css.x - 360.0) * 0.10, 100.0, 108.0))
+		return units(node, clampf(98.0 + maxf(0.0, css.x - 360.0) * 0.10, 98.0, 105.0))
 	if mobile_landscape(node):
 		var css: Vector2 = css_size(node)
 		var targeting: bool = bool(node.get_meta("target_mode", false)) if node != null else false
 		var hand_css := clampf(css.y * (0.28 if targeting else 0.32), 100.0, 128.0)
 		var height_limited := (hand_css - 10.0) * 210.0 / 214.0
-		return units(node, clampf(minf(css.x * 0.105, height_limited), 84.0, 108.0))
+		return units(node, clampf(minf(css.x * 0.105, height_limited), 90.0, 105.0))
 	return 158.0
 
 static func get_mobile_card_width(node: Node) -> float:
@@ -179,8 +179,8 @@ static func chat_button_rect(node: Node) -> Rect2:
 	var safe := safe_rect(node, 8.0)
 	# Matches the collapsed Journal control; ChatPanel replaces this fallback with
 	# the Journal's measured rect once MatchHUD is present.
-	var width := units(node, 82.0 if mobile(node) else 135.0)
-	var height := units(node, 44.0 if mobile(node) else 42.0)
+	var width := units(node, 72.0 if mobile(node) else 135.0)
+	var height := units(node, 40.0 if mobile(node) else 42.0)
 	return Rect2(
 		Vector2(safe.position.x + units(node, 4.0), safe.position.y + units(node, 48.0)),
 		Vector2(width, height)
@@ -193,11 +193,11 @@ static func chat_panel_rect(node: Node) -> Rect2:
 	var width: float
 	var height: float
 	if mobile_portrait(node):
-		width = safe.size.x * 0.78
-		height = safe.size.y * 0.29
+		width = safe.size.x * 0.72
+		height = safe.size.y * 0.25
 	elif mobile_landscape(node):
-		width = safe.size.x * 0.38
-		height = safe.size.y * 0.45
+		width = safe.size.x * 0.34
+		height = safe.size.y * 0.38
 	else:
 		width = minf(360.0, safe.size.x * 0.30)
 		height = minf(270.0, safe.size.y * 0.30)
@@ -214,11 +214,11 @@ static func equipment_rect(node: Node, expanded: bool = false) -> Rect2:
 	var height: float
 	if mobile(node):
 		width = minf(
-			units(node, 190.0 if expanded else 155.0),
+			units(node, 175.0 if expanded else 138.0),
 			safe.size.x * (0.54 if expanded else 0.42)
 		)
-		var expanded_height := 112.0 if mobile_landscape(node) else 230.0
-		height = minf(units(node, expanded_height), safe.size.y * 0.48) if expanded else units(node, 82.0)
+		var expanded_height := 96.0 if mobile_landscape(node) else 170.0
+		height = minf(units(node, expanded_height), safe.size.y * 0.40) if expanded else units(node, 54.0)
 	else:
 		width = minf(210.0 if expanded else 190.0, safe.size.x * 0.22)
 		height = minf(254.0 if expanded else 76.0, safe.size.y * (0.44 if expanded else 0.16))

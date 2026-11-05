@@ -135,6 +135,28 @@ func _ready() -> void:
 		print("VISUAL V19 CAMERA CAPTURE PASS")
 		get_tree().quit(0)
 		return
+	if "--v20-mobile-ux" in OS.get_cmdline_user_args():
+		await set_view(Vector2i(390, 844), true)
+		await set_hand(10)
+		await capture("portrait_v20_hand_10")
+		app.reaction_banner.present(app, {
+			"request_id": 2020, "reaction_type": "dodge", "source_player_id": 2,
+			"allowed_card_types": [GameManager.players[1].hand[1].instance_id], "remaining": 8.0
+		}, NetworkManager.public_state)
+		app.match_hud.show_preview(NetworkManager.private_state.hand[0])
+		await capture("portrait_v20_preview_reaction")
+		app.match_hud.close_preview()
+		app.reaction_banner.hide_banner()
+		if is_instance_valid(app.match_hud.loadout_panel):
+			app.match_hud.loadout_panel.title_button.pressed.emit()
+			await capture("portrait_v20_loadout_open")
+			app.match_hud.loadout_panel.title_button.pressed.emit()
+		await set_view(Vector2i(844, 390), true)
+		await set_hand(10)
+		await capture("landscape_v20_hand_10")
+		print("VISUAL V20 MOBILE UX CAPTURE PASS")
+		get_tree().quit(0)
+		return
 
 	# Required portrait card-count states.
 	await set_view(Vector2i(390, 844), true)

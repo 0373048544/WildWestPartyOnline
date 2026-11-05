@@ -144,14 +144,14 @@ func _apply_layout() -> void:
 	var safe: Vector4 = layout.safe_insets(self) if mobile else Vector4.ZERO
 	var target_width: float = minf(layout.units(self, 360.0) if mobile else 340.0, get_viewport_rect().size.x - safe.x - safe.z - layout.units(self, 16.0))
 	var target_height: float = (
-		minf(layout.units(self, 250.0), get_viewport_rect().size.y * 0.34)
+		minf(layout.units(self, 218.0), get_viewport_rect().size.y * 0.30)
 		if mobile
 		else 238.0
 	)
 	position = Vector2(safe.x + layout.units(self, 8.0), safe.y + layout.get_mobile_banner_height(self) + layout.units(self, 8.0)) if mobile else Vector2(12, 62)
 	var intended_size := Vector2(
-		target_width if expanded else layout.units(self, 104.0) if mobile else 118.0,
-		target_height if expanded else layout.units(self, 44.0) if mobile else 42.0
+		minf(target_width, layout.units(self, 300.0)) if expanded and mobile else target_width if expanded else layout.units(self, 86.0) if mobile else 118.0,
+		target_height if expanded else layout.units(self, 40.0) if mobile else 42.0
 	)
 	# Never copy Control.size back into minimum size: Containers may temporarily
 	# clamp it to a stale child minimum during an orientation change.

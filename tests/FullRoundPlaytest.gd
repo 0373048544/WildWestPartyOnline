@@ -417,11 +417,20 @@ func run_round(layout_name: String, viewport_size: Vector2i) -> void:
 	check(tea_events.size() == 2, layout_name + ": exactly normal and rescue tea heal events exist")
 	if not tea_events.is_empty():
 		await drain_presentation()
-		var before_replay: int = played_audio.size()
+		# Sparse ambience is intentionally allowed to fire while this assertion is
+		# running. Count only the semantic cues owned by the accepted tea event so
+		# an unrelated wood creak/wind sample cannot masquerade as a duplicate.
+		var tea_before_replay: int = played_audio.count("iced_tea_drink")
+		var heal_before_replay: int = played_audio.count("heal")
 		var seen_before: int = app.table.seen_presentation.size()
 		NetworkManager.receive_table_event(tea_events[0])
 		await settle(0.16)
-		check(played_audio.size() == before_replay and app.table.seen_presentation.size() == seen_before, layout_name + ": duplicate event replays neither audio nor animation")
+		check(
+			played_audio.count("iced_tea_drink") == tea_before_replay
+			and played_audio.count("heal") == heal_before_replay
+			and app.table.seen_presentation.size() == seen_before,
+			layout_name + ": duplicate event replays neither audio nor animation"
+		)
 
 	# End turn, real discard phase if over hand limit, then next player's draw/action.
 	GameManager.rate_limits.erase(2)

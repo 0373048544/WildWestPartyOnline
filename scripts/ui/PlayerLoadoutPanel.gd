@@ -46,6 +46,7 @@ func _ready() -> void:
 	items = GridContainer.new()
 	items.columns = 1
 	items.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	items.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	items.add_theme_constant_override("separation", 5)
 	details_scroll.add_child(items)
 
@@ -74,19 +75,15 @@ func update_loadout(row: Dictionary) -> void:
 		+ row.get("delayed_cards", []).size()
 	)
 	current_public_icons.clear()
-	_add_item(weapon_name, "♠", weapon, "Súng hiện tại · Tầm %d" % int(row.get("weapon_range", 1)))
+	_add_item(weapon_name, "", weapon, "Súng hiện tại · Tầm %d" % int(row.get("weapon_range", 1)))
 	for card in row.get("equipment_cards", []):
 		var data: Dictionary = CardData.data(card.get("card_data_id", ""))
-		var icon := _icon(str(card.get("card_data_id", "")))
 		var label := str(data.get("name", ""))
-		current_public_icons.append(icon)
-		_add_item(label, icon, card, str(data.get("description", "")))
+		_add_item(label, "", card, str(data.get("description", "")))
 	for card in row.get("delayed_cards", []):
 		var data: Dictionary = CardData.data(card.get("card_data_id", ""))
-		var icon := _icon(str(card.get("card_data_id", "")))
 		var label := str(data.get("name", ""))
-		current_public_icons.append(icon)
-		_add_item(label, icon, card, "HIỆU ỨNG TRÌ HOÃN • " + str(data.get("description", "")))
+		_add_item(label, "", card, "HIỆU ỨNG TRÌ HOÃN • " + str(data.get("description", "")))
 	_apply_layout()
 	if had_loadout and visible and not VisualSettings.reduced_motion:
 		modulate = Color("#fff0bf")
@@ -107,11 +104,12 @@ func _toggle_details() -> void:
 func _add_item(label_text: String, icon: String, card: Dictionary, detail: String) -> void:
 	var button := Button.new()
 	button.name = "Loadout_" + str(items.get_child_count())
-	button.text = icon + "  " + label_text.left(20)
-	button.custom_minimum_size = Vector2(0.0, layout.units(self, 44.0))
+	button.text = label_text.left(20) if icon.is_empty() else icon + "  " + label_text.left(20)
+	button.custom_minimum_size = Vector2(0.0, layout.units(self, 38.0))
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	button.add_theme_font_size_override("font_size", roundi(layout.units(self, 11.0)))
+	button.add_theme_font_size_override("font_size", roundi(layout.units(self, 9.5)))
 	button.tooltip_text = label_text + "\n" + detail
 	button.add_theme_stylebox_override("normal", SaloonTheme.panel(Color("#26333a"), Color("#806445"), 5))
 	button.add_theme_stylebox_override("hover", SaloonTheme.panel(Color("#3e4846"), SaloonTheme.GOLD, 5))
@@ -121,46 +119,43 @@ func _add_item(label_text: String, icon: String, card: Dictionary, detail: Strin
 			card_inspected.emit(card))
 	items.add_child(button)
 
-func _icon(card_id: String) -> String:
-	return {
-		"horse": "♞", "spyglass": "⌕", "barrel": "▣",
-		"dynamite": "✹", "jail": "▥"
-	}.get(card_id, "◆")
-
 func _apply_layout() -> void:
 	var mobile: bool = bool(layout.mobile(self))
-	var target_css_width := (210.0 if expanded else 190.0) if not mobile else (190.0 if expanded else 155.0)
+	var target_css_width := (210.0 if expanded else 190.0) if not mobile else (175.0 if expanded else 138.0)
 	var width := minf(
 		layout.units(self, target_css_width) if mobile else target_css_width,
 		get_viewport_rect().size.x * (0.54 if expanded else 0.42)
 	)
-	var count_text := "+%d" % current_equipment_count
-	var disclosure := "▴" if expanded else "▾"
-	var icon_summary := "".join(current_public_icons.slice(0, 4))
-	if current_public_icons.size() > 4:
-		icon_summary += "…"
-	if icon_summary.is_empty():
-		icon_summary = "—"
+	var disclosure := "ĐÓNG" if expanded else "MỞ"
 	title_button.text = (
-		"BÀI TRÊN BÀN  %s\n♠ %s · TẦM %d\n%s · %s" % [disclosure, current_weapon_name.to_upper(), current_range, icon_summary, count_text]
+		"TRANG BỊ · %s\n%s · TẦM %d · %d LÁ" % [disclosure, current_weapon_name.to_upper(), current_range, current_equipment_count]
 		if mobile
-		else "BÀI TRÊN BÀN  %s\n♠ %s · TẦM %d · %s %s" % [disclosure, current_weapon_name.to_upper(), current_range, icon_summary, count_text]
+		else "TRANG BỊ · %s\n%s · TẦM %d · %d LÁ" % [disclosure, current_weapon_name.to_upper(), current_range, current_equipment_count]
 	)
-	title_button.add_theme_font_size_override("font_size", roundi(layout.units(self, 9.5)) if mobile else 11)
+	title_button.add_theme_font_size_override("font_size", roundi(layout.units(self, 8.5)) if mobile else 11)
 	title_button.custom_minimum_size.y = (
-		layout.units(self, 44.0 if layout.mobile_landscape(self) and expanded else 58.0)
+		layout.units(self, 42.0 if layout.mobile_landscape(self) and expanded else 46.0)
 		if mobile else 52.0
 	)
 	details_scroll.visible = expanded
-	details_scroll.custom_minimum_size.y = (
-		layout.units(self, 44.0 if layout.mobile_landscape(self) else 154.0)
-		if mobile else 174.0
+	var visible_rows: int = mini(items.get_child_count(), 1 if layout.mobile_landscape(self) else 3)
+	var details_height: float = (
+		layout.units(self, maxf(38.0, visible_rows * 38.0))
+		if mobile else minf(174.0, maxf(44.0, visible_rows * 44.0))
 	)
+	details_scroll.custom_minimum_size.y = details_height
 	set_anchors_preset(Control.PRESET_TOP_LEFT, false)
 	var zone: Rect2 = layout.equipment_rect(self, expanded)
 	width = minf(width, zone.size.x)
-	custom_minimum_size = Vector2(width, zone.size.y)
+	var compact_height := zone.size.y
+	if expanded:
+		var header_height: float = title_button.custom_minimum_size.y
+		compact_height = minf(zone.size.y, header_height + details_height + layout.units(self, 10.0))
+	custom_minimum_size = Vector2(width, compact_height)
 	reset_size()
-	size = Vector2(width, zone.size.y)
-	position = Vector2(zone.end.x - width, zone.position.y)
+	size = Vector2(width, compact_height)
+	# Container minimums may make the real panel a few pixels taller than the
+	# requested compact zone. Anchor its actual bottom above the action row so it
+	# can never grow downward across End Turn.
+	position = Vector2(zone.end.x - width, zone.end.y - size.y)
 	visible = has_public_loadout and not modal_blocked

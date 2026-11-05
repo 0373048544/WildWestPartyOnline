@@ -265,7 +265,7 @@ func _on_error(message: String) -> void:
 
 func _update_badge() -> void:
 	if is_instance_valid(toggle_button):
-		toggle_button.text = "CHAT" if unread <= 0 else "💬 %d" % unread
+		toggle_button.text = "CHAT" if unread <= 0 else "CHAT %d" % unread
 
 func _scroll_to_bottom(force: bool) -> void:
 	if not is_instance_valid(message_scroll):
@@ -279,13 +279,13 @@ func layout_chat() -> void:
 	if not is_inside_tree():
 		return
 	var layout: Script = load("res://scripts/ui/MatchLayout.gd")
-	var touch: float = float(layout.units(self, 44.0))
+	var touch: float = float(layout.units(self, 40.0))
 	close_button.custom_minimum_size = Vector2(touch, touch)
 	input.custom_minimum_size.y = touch
 	send_button.custom_minimum_size = Vector2(layout.units(self, 64.0), touch)
 	var button_rect: Rect2 = _journal_button_rect(layout)
 	if layout.mobile(self):
-		button_rect.size.x = minf(button_rect.size.x, layout.units(self, 82.0))
+		button_rect.size.x = minf(button_rect.size.x, layout.units(self, 72.0))
 	toggle_button.position = button_rect.position
 	toggle_button.size = button_rect.size
 	var panel_rect: Rect2 = layout.chat_panel_rect(self)
@@ -317,8 +317,8 @@ func _journal_button_rect(layout: Script) -> Rect2:
 				return Rect2(
 					Vector2(journal.position.x, journal.end.y + layout.units(self, 4.0)),
 					Vector2(
-						minf(journal.size.x, layout.units(self, 82.0)) if layout.mobile(self) else journal.size.x,
-						maxf(layout.units(self, 42.0), journal.size.y)
+						minf(journal.size.x, layout.units(self, 72.0)) if layout.mobile(self) else journal.size.x,
+						maxf(layout.units(self, 40.0), journal.size.y)
 					)
 				)
 	return layout.chat_button_rect(self)

@@ -964,7 +964,7 @@ func build_hand() -> void:
 					str(character.get("display_name", "KỸ NĂNG")), ability_description,
 					"positive", "✦", 4.0
 				)
-		var skill_info := action("ⓘ" if phone_layout else "KỸ NĂNG", show_skill, footer)
+		var skill_info := action("KN" if phone_layout else "KỸ NĂNG", show_skill, footer)
 		skill_info.name = "CharacterSkillInfo"
 		skill_info.tooltip_text = ability_description
 		skill_info.custom_minimum_size.x = layout.units(self, 44.0 if phone_layout else 90.0)
@@ -1062,7 +1062,7 @@ func build_hand() -> void:
 					app.table.targeting.select_target(int(target_picker.get_item_metadata(index)))
 			)
 		action(
-			"× HỦY",
+			"HỦY",
 			cancel_selection,
 			footer
 		).name = "CancelSelection"
@@ -1084,7 +1084,7 @@ func build_hand() -> void:
 
 	if layout.mobile_first_person(self) and request.is_empty() and app.selected < 0:
 		var reset_camera := action(
-			"◎" if phone_layout else "◎ BÀN",
+			"BÀN",
 			func():
 				if is_instance_valid(app.table) and is_instance_valid(app.table.mobile_camera):
 					app.table.mobile_camera.reset_toward_table(),
