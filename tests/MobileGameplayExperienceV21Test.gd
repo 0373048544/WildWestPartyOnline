@@ -62,6 +62,38 @@ func test_mobile_ui_and_targeting() -> void:
 	var controller: TargetingController = table.targeting
 	var chosen: Array[int] = []
 	controller.target_chosen.connect(func(id: int): chosen.append(id))
+
+	# A real selected card keeps the compact picker and Cancel action available.
+	# If two visible nameplates compete for the same touch, no target signal may
+	# be emitted: the player must make the explicit compact-list choice instead.
+	var shoot_uid := -1
+	for card in NetworkManager.private_state.get("hand", []):
+		if str(card.get("card_data_id", "")) == "shoot":
+			shoot_uid = int(card.get("instance_id", -1))
+			break
+	expect(shoot_uid > 0, "fixture exposes a Shoot card for the real mobile selection flow")
+	app.choose_card_action(shoot_uid)
+	await settle()
+	var compact_picker: Node = app.match_hud.find_child("MobileTargetPicker", true, false)
+	var cancel_button: Node = app.match_hud.find_child("CancelSelection", true, false)
+	expect(is_instance_valid(compact_picker) and compact_picker.visible, "mobile targeting exposes a compact explicit target picker")
+	expect(is_instance_valid(cancel_button) and cancel_button.visible, "mobile targeting keeps the Cancel action visible")
+	var old_plate_2: Rect2 = table.nameplates[2].screen_rect
+	var old_plate_3: Rect2 = table.nameplates[3].screen_rect
+	var overlap := Rect2(Vector2(145, 250), Vector2(100, 64))
+	table.nameplates[2].screen_rect = overlap
+	table.nameplates[3].screen_rect = overlap
+	controller.handle_mobile_table_tap(overlap.get_center())
+	expect(chosen.is_empty() and controller.selected_card == shoot_uid, "overlapping target hitboxes never auto-submit a play intent")
+	expect(controller.ambiguous_target_ids.has(2) and controller.ambiguous_target_ids.has(3), "ambiguous touch records every competing opponent")
+	expect(controller.tooltip.visible and controller.tooltip.text.contains("CH\u1eccN M\u1ee4C TI\u00caU"), "ambiguous touch directs the player to the compact target picker")
+	table.nameplates[2].screen_rect = old_plate_2
+	table.nameplates[3].screen_rect = old_plate_3
+	controller.cancel_targeting(false)
+	app.selected = -1
+	app.refresh()
+	await settle()
+
 	table.state_signature = ""
 	table.update_state(NetworkManager.public_state, 1, [2])
 	controller.begin_targeting(99101, 1, [2], {2: {"distance": 1, "range": 1}, 3: {"distance": 2, "range": 1}}, "BANG")

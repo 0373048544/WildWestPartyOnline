@@ -20,6 +20,7 @@ var info_hover: int = 0
 var hover_since: int = 0
 var shot_quiet_until: int = 0
 var hovered_object: Node3D
+var ambiguous_target_ids: Array[int] = []
 
 func quiet_for_shot(duration: int = 230) -> void:
 	shot_quiet_until = Time.get_ticks_msec() + duration
@@ -59,6 +60,7 @@ func begin_targeting(uid: int, owner_id: int, targets: Array, info: Dictionary, 
 	local_player = owner_id
 	valid_target_ids = targets.duplicate()
 	target_info = info
+	ambiguous_target_ids.clear()
 	if not table.avatars.has(local_player) or targets.is_empty():
 		cancel_targeting(false)
 		return
@@ -87,6 +89,7 @@ func cancel_targeting(emit_event: bool = true) -> void:
 	valid_target_ids.clear()
 	hovered_target = 0
 	selected_target = 0
+	ambiguous_target_ids.clear()
 	targeting_arrow.visible = false
 	reticle.visible = false
 	tooltip.visible = false
@@ -179,36 +182,66 @@ func pick_touch_player(at: Vector2, valid_only: bool = true) -> int:
 	# raised. Keep a generous presentation-only touch halo; authority still
 	# validates the selected player and card range.
 	var layout: Script = load("res://scripts/ui/MatchLayout.gd")
-	var best: float = layout.units(self, 40.0 if layout.mobile_first_person(table) else 28.0)
-	var chosen: int = 0
+	var radius: float = layout.units(self, 40.0 if layout.mobile_first_person(table) else 28.0)
+	var ambiguity_margin: float = layout.units(self, 14.0 if layout.mobile_first_person(table) else 9.0)
+	ambiguous_target_ids.clear()
 	# Nameplates are screen-space controls: resolve their full bounds before rays
-	# can hit a different model behind the visible panel.
+	# can hit a different model behind the visible panel. Overlapping plates are
+	# deliberately ambiguous: dictionary order must never decide who gets shot.
+	var plate_hits: Array[Dictionary] = []
 	for id in table.avatars:
 		if (selected_card < 0 or not valid_only or valid_target_ids.has(id)) and table.nameplates[id].screen_rect.has_point(at):
-			return id
+			plate_hits.append({"id": int(id), "distance": 0.0})
+	if plate_hits.size() == 1:
+		return int(plate_hits[0].id)
+	if plate_hits.size() > 1:
+		return _reject_ambiguous_touch(plate_hits)
+
+	var avatar_hits: Array[Dictionary] = []
 	for id in table.avatars:
 		if selected_card >= 0 and valid_only and not valid_target_ids.has(id):
 			continue
 		var center: Vector2 = table.camera.unproject_position(table.avatars[id].global_position+Vector3.UP*1.6)
 		var distance: float = at.distance_to(center)
-		if distance < best:
-			best = distance
-			chosen = id
-	if chosen > 0:
-		return chosen
+		if distance < radius:
+			avatar_hits.append({"id": int(id), "distance": distance})
+	var avatar_choice := _resolve_touch_candidates(avatar_hits, ambiguity_margin)
+	if avatar_choice != 0 or not ambiguous_target_ids.is_empty():
+		return avatar_choice
+
 	var exact: int = pick_at(at)
 	if exact > 0 and (selected_card < 0 or not valid_only or valid_target_ids.has(exact)):
 		return exact
+
+	var edge_hits: Array[Dictionary] = []
 	for id in table.avatars:
 		if selected_card >= 0 and valid_only and not valid_target_ids.has(id):
 			continue
 		var panel: Rect2 = table.nameplates[id].screen_rect
 		var closest := Vector2(clampf(at.x,panel.position.x,panel.end.x),clampf(at.y,panel.position.y,panel.end.y))
 		var distance: float = at.distance_to(closest)
-		if distance < best:
-			best = distance
-			chosen = id
-	return chosen
+		if distance < radius:
+			edge_hits.append({"id": int(id), "distance": distance})
+	return _resolve_touch_candidates(edge_hits, ambiguity_margin)
+
+func _resolve_touch_candidates(candidates: Array[Dictionary], ambiguity_margin: float) -> int:
+	if candidates.is_empty():
+		return 0
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a.distance) < float(b.distance)
+	)
+	if candidates.size() > 1 and float(candidates[1].distance) - float(candidates[0].distance) <= ambiguity_margin:
+		return _reject_ambiguous_touch(candidates, float(candidates[0].distance) + ambiguity_margin)
+	return int(candidates[0].id)
+
+func _reject_ambiguous_touch(candidates: Array[Dictionary], maximum_distance: float = INF) -> int:
+	ambiguous_target_ids.clear()
+	for candidate in candidates:
+		if float(candidate.distance) <= maximum_distance:
+			var id := int(candidate.id)
+			if not ambiguous_target_ids.has(id):
+				ambiguous_target_ids.append(id)
+	return 0
 
 func pick_object(screen_position: Vector2) -> Dictionary:
 	var ray := PhysicsRayQueryParameters3D.create(table.camera.project_ray_origin(screen_position),
@@ -251,6 +284,17 @@ func handle_mobile_table_tap(at: Vector2) -> void:
 				table.nameplates[id].flash_target()
 			AudioManager.play_ui("confirm")
 			confirm_target()
+		elif not ambiguous_target_ids.is_empty():
+			selected_target = 0
+			update_hover_target(0)
+			# Keep the source ASCII-safe because this project is edited by tools with
+			# mixed Windows code pages; Godot resolves these escapes to proper Vietnamese.
+			tooltip.text = "NHI\u1ec0U M\u1ee4C TI\u00caU G\u1ea6N NHAU\nD\u00f9ng danh s\u00e1ch CH\u1eccN M\u1ee4C TI\u00caU"
+			tooltip.modulate = Color("#ffe0a0")
+			tooltip.position = table.camera.project_position(at, 3.8)
+			tooltip.scale = Vector3.ONE * 0.40
+			tooltip.visible = true
+			AudioManager.play_ui("error")
 		else:
 			selected_target = 0
 			update_hover_target(id)

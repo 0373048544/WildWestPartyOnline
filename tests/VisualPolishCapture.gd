@@ -168,6 +168,18 @@ func _ready() -> void:
 		if not app.table.targeting.valid_target_ids.is_empty():
 			app.table.targeting.update_hover_target(int(app.table.targeting.valid_target_ids[0]))
 		await capture("portrait_v21_targeting")
+		if app.table.targeting.valid_target_ids.size() >= 2:
+			var first_target: int = int(app.table.targeting.valid_target_ids[0])
+			var second_target: int = int(app.table.targeting.valid_target_ids[1])
+			var first_rect: Rect2 = app.table.nameplates[first_target].screen_rect
+			var second_rect: Rect2 = app.table.nameplates[second_target].screen_rect
+			var ambiguous_rect := Rect2(Vector2(250, 310), Vector2(100, 64))
+			app.table.nameplates[first_target].screen_rect = ambiguous_rect
+			app.table.nameplates[second_target].screen_rect = ambiguous_rect
+			app.table.targeting.handle_mobile_table_tap(ambiguous_rect.get_center())
+			await capture("portrait_v21_ambiguous_target")
+			app.table.nameplates[first_target].screen_rect = first_rect
+			app.table.nameplates[second_target].screen_rect = second_rect
 		app.match_hud.cancel_selection()
 		var dodge_uid: int = int(GameManager.players[1].hand[1].instance_id)
 		app.reaction_banner.present(app, {

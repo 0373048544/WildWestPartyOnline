@@ -12,7 +12,15 @@ http.createServer((request, response) => {
   if (!filename.startsWith(root + path.sep)) { response.writeHead(403).end(); return; }
   fs.readFile(filename, (error, data) => {
     if (error) { response.writeHead(404).end('not found'); return; }
-    response.writeHead(200, {'Content-Type': mime[path.extname(filename)] || 'application/octet-stream', 'Cache-Control':'no-store'});
+    response.writeHead(200, {
+      'Content-Type': mime[path.extname(filename)] || 'application/octet-stream',
+      'Cache-Control':'no-store',
+      // The current Godot Web export uses worker threads and explicitly requires
+      // cross-origin isolation. Keep the local browser harness equivalent to the
+      // production nginx headers so mobile/Safari-style viewport tests can boot.
+      'Cross-Origin-Opener-Policy':'same-origin',
+      'Cross-Origin-Embedder-Policy':'require-corp'
+    });
     response.end(data);
   });
 }).listen(port, '127.0.0.1', () => console.log(`STATIC READY http://127.0.0.1:${port}`));
