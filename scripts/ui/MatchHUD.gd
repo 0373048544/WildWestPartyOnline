@@ -172,6 +172,7 @@ func initialize(owner_app: Node, snapshot: Dictionary, private: Dictionary) -> v
 	if top_changed:
 		_free_named("TopBar")
 		build_top()
+	_sync_self_health(local_row)
 
 	if state.phase == "CHARACTER_SELECTION":
 		app.table.targeting.blocked = true
@@ -674,6 +675,22 @@ func build_top() -> void:
 			menu.position.x - layout.units(self, 6.0) - strip.position.x
 		)
 		strip.size.x = strip.custom_minimum_size.x
+
+
+# Show local HP in 2D: the seated first-person camera hides the local 3D nameplate.
+func _sync_self_health(local_row: Dictionary) -> void:
+	var health_hud: PanelContainer = get_node_or_null("MobileSelfHealthHUD") as PanelContainer
+	if not layout.mobile_first_person(self) or local_row.is_empty() or str(state.get("phase", "")) == "CHARACTER_SELECTION":
+		if is_instance_valid(health_hud):
+			health_hud.visible = false
+		return
+	if not is_instance_valid(health_hud):
+		health_hud = load("res://scripts/ui/MobileSelfHealthHUD.gd").new() as PanelContainer
+		health_hud.z_index = layout.Z_NAMEPLATE + 10
+		add_child(health_hud)
+	# HP comes from the authoritative public snapshot, never client estimates.
+	health_hud.call("update_health", local_row, layout)
+	health_hud.visible = true
 
 
 func _sync_action_history() -> void:
