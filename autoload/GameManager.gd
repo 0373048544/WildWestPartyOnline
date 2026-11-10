@@ -227,9 +227,19 @@ func handle_intent(sender: int, action: String, args: Dictionary) -> void:
 				if not reactions.active.is_empty() and reactions.active.reaction_type != "survive":
 					fail(sender, "Bạn phải hoàn tất lựa chọn hiện tại trước.")
 					return
+				var survival_active: bool = not reactions.active.is_empty()
+				if survival_active:
+					var owns_request: bool = (
+						int(reactions.active.get("target_player_id", 0)) == sender
+						and int(reactions.active.get("request_id", -1)) == int(args.get("request", -2))
+					)
+					var sid_offered: bool = bool(reactions.active.get("payload", {}).get("sid", false))
+					if not owns_request or not sid_offered:
+						fail(sender, "Yêu cầu cứu mạng không còn hợp lệ.")
+						return
 				var survival_source: int = int(reactions.active.get("context", {}).get("source", 0))
 				if abilities.heal_with_discards(self, sender, args.get("cards", [])):
-					if not reactions.active.is_empty() and reactions.active.target_player_id == sender and reactions.active.reaction_type == "survive":
+					if survival_active:
 						if players[sender].current_hp > 0:
 							reactions.active = {}
 							flow.run()
@@ -308,11 +318,14 @@ func damage(target: int, source: int, amount: int = 1) -> void:
 		return
 	players[target].current_hp -= amount
 	emit_event("DAMAGE", target, {"kind": "damage", "amount": amount, "source": source})
-	network.broadcast_animation(target, "hit", source)
 	record("%s mất %d máu." % [players[target].display_name, amount])
 	abilities.on_damage(self, target, source, amount)
 	if players[target].current_hp <= 0:
 		offer_survival(target, source)
+		# HP <= 0 is only a presentation-level downed state while an authoritative
+		# survival request remains open. PLAYER_DIED is still the sole death signal.
+		if players[target].is_alive and not reactions.active.is_empty() and int(reactions.active.get("target_player_id", 0)) == target and str(reactions.active.get("reaction_type", "")) == "survive":
+			network.broadcast_animation(target, "downed", source)
 
 func heal(id: int, amount: int, presentation_card_id: String = "") -> void:
 	var before: int = players[id].current_hp
@@ -326,7 +339,10 @@ func heal(id: int, amount: int, presentation_card_id: String = "") -> void:
 		if not presentation_card_id.is_empty():
 			details["card_data_id"] = presentation_card_id
 		emit_event("HEAL", id, details)
-		network.broadcast_animation(id, "drink", id)
+		var presentation: String = "iced_tea" if presentation_card_id == "iced_tea" else ("drink" if presentation_card_id == "drink" else "recover")
+		network.broadcast_animation(id, presentation, id)
+		if bool(details.rescued) and presentation in ["drink", "iced_tea"]:
+			network.broadcast_animation(id, "recover", id)
 
 func discard_all(p: PlayerState) -> void:
 	for card in p.hand:

@@ -108,6 +108,11 @@ func build(a: PlayerAvatar, d: Dictionary) -> void:
 	a.gun = a.part(a.box(Vector3(0.13, 0.18, 0.38)), Vector3(0, -0.5, -0.18), Color("#6a7f89"), a.arm)
 	a.bottle = a.part(a.cylinder(0.065, 0.11, 0.34), Vector3(0, -0.55, -0.12), Color("#5aaf88"), a.arm)
 	a.bottle.visible = false
+	# A separate short, wide glass keeps TRÀ ĐÁ readable from the table camera
+	# without adding another skeleton or changing the target/picking rig.
+	a.tea_glass = a.part(a.cylinder(0.105, 0.085, 0.24), Vector3(0, -0.53, -0.13), Color("#8bd8df"), a.arm)
+	a.tea_glass.scale.z = 0.78
+	a.tea_glass.visible = false
 
 func prop(a: PlayerAvatar, d: Dictionary, head_y: float) -> void:
 	var accent := Color(d.accent)

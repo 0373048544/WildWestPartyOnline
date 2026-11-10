@@ -33,6 +33,19 @@ var reaction_target: int = 0
 var state_signature: String = ""
 var targeting_frame: bool = false
 var mobile_camera: Node
+var presented_winner: String = ""
+
+func _role_wins(role: String, result: String) -> bool:
+	match result:
+		"SHERIFF TEAM WINS":
+			return role in ["SHERIFF", "DEPUTY"]
+		"DEPUTY WINS":
+			return role == "DEPUTY"
+		"OUTLAWS WIN", "OUTLAW WINS":
+			return role == "OUTLAW"
+		"RENEGADE WINS":
+			return role == "RENEGADE"
+	return false
 
 func _ready() -> void:
 	AudioManager.table = self
@@ -233,6 +246,7 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 		presentation_queue.clear()
 		seen_presentation.clear()
 		presentation_wait = 0
+		presented_winner = ""
 		hide_context()
 		targeting.cancel_targeting(false)
 		effects.reset_for_match()
@@ -336,6 +350,13 @@ func update_state(state: Dictionary, local_id: int, targets: Array) -> void:
 		nameplates[id].visible = not hide_local
 		if hide_local:
 			rings[id].visible = false
+	var result: String = str(state.get("winner", ""))
+	if not result.is_empty() and result != presented_winner:
+		presented_winner = result
+		for row in state.get("players", []):
+			var winner_id: int = int(row.get("player_id", 0))
+			if bool(row.get("is_alive", false)) and avatars.has(winner_id) and _role_wins(str(row.get("public_role", "")), result):
+				avatars[winner_id].act("victory")
 	turn_marker.visible = (
 		avatars.has(int(state.current_player))
 		and state.winner.is_empty()
@@ -488,6 +509,9 @@ func present_event(event: Dictionary) -> void:
 		"role":
 			effects.floating(at + Vector3.UP * 2.7, TextCatalog.text(event.role), Color("#e7cf91"))
 		"damage":
+			# DAMAGE owns both impact audio and body motion. Keeping them in one
+			# semantic presentation prevents the old queued ~0.42 s desync.
+			avatars[id].act("hit")
 			effects.floating(at + Vector3.UP * 2.7, "−%d MÁU" % event.get("amount", 1), Color("#ff967c"))
 			if id == local_player and nameplates.has(id):
 				nameplates[id].flash_hit()
@@ -592,6 +616,14 @@ func play_animation(actor: int, kind: String, target: int) -> void:
 			# HEAL already owns the single +HP/comedy message. This animation event
 			# supplies only the physical avatar accent and must not duplicate text.
 			effects.spark(at - Vector3(0, 0.4, 0), Color("#99dbad"), 6, 0.4)
+		"iced_tea":
+			effects.spark(at - Vector3(0, 0.4, 0), Color("#8bd8df"), 6, 0.4)
+		"downed":
+			effects.comic(at + Vector3.UP * 0.15, "HẤP HỐI", Color("#e7b06e"), 0.7)
+		"recover":
+			effects.spark(at - Vector3(0, 0.7, 0), Color("#a8e5ad"), 7, 0.48)
+		"victory":
+			effects.starburst(at - Vector3.UP * 0.45, 0.7, 0.42)
 		"dodge":
 			effects.floating(at, TextCatalog.text("DODGE") + "!", Color("#9adce4"))
 			effects.spark(at - Vector3(0, 2.3, 0), Color("#d4c9af"), 5)

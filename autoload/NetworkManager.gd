@@ -389,7 +389,13 @@ func valid_arguments(action: String, args: Dictionary) -> bool:
 		"character":
 			return payload.get("character") is String and args.get("match_id") is int
 		"ability":
-			return payload.get("cards") is Array and payload.cards.size() == 2 and payload.cards.all(func(id): return id is int)
+			return (
+				payload.keys().all(func(key): return key in ["cards", "request"])
+				and payload.get("cards") is Array
+				and payload.cards.size() == 2
+				and payload.cards.all(func(id): return id is int)
+				and (not payload.has("request") or payload.request is int)
+			)
 		"debug":
 			return payload.get("operation") is String and payload.get("target", 1) is int
 	return false

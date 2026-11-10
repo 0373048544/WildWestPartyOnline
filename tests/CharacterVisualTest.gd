@@ -61,12 +61,13 @@ func _ready() -> void:
 		check(avatar.rig.get_instance_id() == rig_id, "snapshot refresh never rebuilds same character")
 		check(avatar.picking_area == area and area.get_meta("player_id") == 88, "cosmetics preserve targeting identity")
 		silhouettes[str([data[id].width, data[id].height, data[id].brim, data[id].crown, data[id].hair_style, data[id].outfit, data[id].prop])] = true
-		for kind in ["targeted", "panic", "shoot", "dodge", "hit", "drink", "death"]:
+		for kind in ["targeted", "panic", "shoot", "dodge", "hit", "drink", "iced_tea", "downed", "recover", "victory", "death"]:
 			avatar.act(kind)
 			check(is_instance_valid(avatar.motion), "animation hook " + kind + " " + id)
 		# Reset the same original model after animation test for the contact sheet.
 		avatar.motion.kill()
 		avatar.dead = false
+		avatar.downed = false
 		avatar.rig.position = Vector3.ZERO
 		avatar.rig.rotation = Vector3.ZERO
 		avatar.rig.scale = Vector3.ONE

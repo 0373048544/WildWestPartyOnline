@@ -1001,12 +1001,14 @@ func build_hand() -> void:
 		action(
 			"HỒI 1 MÁU",
 			func():
+				var ability_args := {
+					"cards": app.sid_cards.duplicate()
+				}
+				if not request.is_empty() and str(request.get("reaction_type", "")) == "survive":
+					ability_args["request"] = int(request.get("request_id", -1))
 				app.intent(
 					"ability",
-					{
-						"cards":
-						app.sid_cards.duplicate()
-					}
+					ability_args
 				)
 
 				app.sid_mode = false

@@ -4,8 +4,10 @@ extends Node3D
 var arm: Node3D
 var left_arm: Node3D
 var bottle: MeshInstance3D
+var tea_glass: MeshInstance3D
 var motion: Tween
 var dead: bool = false
+var downed: bool = false
 var base_y: float = 0.0
 var rig: Node3D
 var hat: Node3D
@@ -47,6 +49,7 @@ func apply_character(id: String, celebrate: bool = true) -> void:
 	visual_preset = preset
 	idle_phase = float(absi(hash(id)) % 1000) / 100.0 + position.x
 	dead = false
+	downed = false
 	load("res://scripts/characters/CharacterParts.gd").new().build(self, preset)
 	apply_weapon_visual(weapon_visual_id,true)
 	if is_instance_valid(picking_area):
@@ -64,11 +67,11 @@ func set_expression(value: String, duration: int = 600) -> void:
 	expression = value
 	expression_until = Time.get_ticks_msec() + duration
 	for index in range(eyes.size()):
-		eyes[index].scale.y = 0.25 if value in ["hit", "death"] else (1.35 if value in ["dodge", "panic", "targeted"] else 1.0)
+		eyes[index].scale.y = 0.25 if value in ["hit", "death", "downed"] else (1.35 if value in ["dodge", "panic", "targeted", "recover", "victory"] else 1.0)
 	for index in range(brows.size()):
-		brows[index].rotation.z = (-1 if index == 0 else 1) * (0.4 if value == "shoot" else (-0.3 if value in ["dodge", "targeted"] else 0.14))
+		brows[index].rotation.z = (-1 if index == 0 else 1) * (0.4 if value in ["shoot", "victory"] else (-0.3 if value in ["dodge", "targeted", "downed"] else 0.14))
 	if is_instance_valid(mouth):
-		mouth.scale = Vector3(0.8, 4.0, 1) if value in ["panic", "dodge", "targeted"] else (Vector3(1.4, 0.7, 1) if value in ["drink","shoot","laugh"] else Vector3.ONE)
+		mouth.scale = Vector3(0.8, 4.0, 1) if value in ["panic", "dodge", "targeted", "downed"] else (Vector3(1.4, 0.7, 1) if value in ["drink", "iced_tea", "shoot", "laugh", "recover", "victory"] else Vector3.ONE)
 		mouth.rotation.z = 0.24 if value == "death" else 0.0
 	for hand in hands:
 		hand.scale = Vector3(1.18,0.85,1.05) if value in ["shoot","panic"] else Vector3.ONE
@@ -296,7 +299,8 @@ func _process(delta: float) -> void:
 	if VisualSettings.reduced_motion and (motion == null or not motion.is_running()):
 		rig.position = Vector3.ZERO
 		rig.scale = Vector3.ONE
-		rig.rotation.x = 0.08 if visual_preset.get("idle", "") == "lean" else 0.0
+		rig.rotation.x = 0.24 if downed else (0.08 if visual_preset.get("idle", "") == "lean" else 0.0)
+		rig.rotation.z = -0.12 if downed else 0.0
 		hat.rotation.z = float(visual_preset.get("tilt", 0))
 		if is_instance_valid(head) and expression == "idle":
 			head.rotation = Vector3.ZERO
@@ -307,15 +311,22 @@ func _process(delta: float) -> void:
 		set_expression("idle", 0)
 	if motion == null or not motion.is_running():
 		var time: float = Time.get_ticks_msec() * 0.002 + position.x + idle_phase
-		rig.position.y = sin(time) * 0.025
-		rig.scale.y = 1.0 + sin(time) * 0.012
+		var idle_style: String = str(visual_preset.get("idle", "steady"))
+		var breath: float = 0.014 if idle_style == "heavy" else (0.009 if idle_style == "elegant" else 0.012)
+		rig.position.y = (-0.08 if downed else 0.0) + sin(time) * (0.012 if downed else 0.025)
+		rig.scale.y = (0.92 if downed else 1.0) + sin(time) * breath
 		hat.rotation.z = float(visual_preset.get("tilt", 0)) + sin(time * 0.7) * 0.025
-		rig.rotation.x = 0.08 if visual_preset.get("idle", "") == "lean" else 0.0
-		if visual_preset.get("idle", "") in ["quick", "lively"]:
+		rig.rotation.x = 0.24 if downed else (0.08 if idle_style == "lean" else 0.0)
+		rig.rotation.z = -0.12 if downed else (sin(time * 0.45) * (0.018 if idle_style in ["elegant", "flourish"] else 0.008))
+		if idle_style in ["quick", "lively"]:
 			arm.rotation.z = sin(time * 1.5) * 0.07
+		elif idle_style == "flourish":
+			arm.rotation.y = sin(time * 0.8) * 0.08
+		elif idle_style == "heavy":
+			arm.rotation.z = sin(time * 0.55) * 0.025
 		if is_instance_valid(head) and expression == "idle":
-			head.rotation.y = sin(time * 0.65) * 0.07
-			head.rotation.z = sin(time * 0.9) * 0.025
+			head.rotation.y = sin(time * (0.9 if idle_style in ["quick", "lively"] else 0.65)) * (0.1 if idle_style == "lively" else 0.07)
+			head.rotation.z = (-0.08 if downed else 0.0) + sin(time * 0.9) * 0.025
 			var blink: bool = fmod(time + idle_phase, 5.3) < 0.09
 			for eye in eyes:
 				eye.scale.y = 0.12 if blink else 1.0
@@ -337,13 +348,16 @@ func act(kind: String) -> void:
 		left_arm.rotation = Vector3.ZERO
 	hat.rotation = Vector3.ZERO
 	bottle.visible = kind == "drink"
-	gun.visible = kind != "drink"
+	if is_instance_valid(tea_glass):
+		tea_glass.visible = kind == "iced_tea"
+	gun.visible = kind not in ["drink", "iced_tea"]
 	set_expression(kind)
 	motion = create_tween()
 	if load("res://scripts/player/AvatarGestures.gd").new().play(self,kind):
 		return
 	match kind:
 		"death":
+			downed = false
 			dead = true
 			motion.tween_property(rig, "position:y", 0.18, 0.12)
 			motion.tween_interval(0.12)
@@ -371,15 +385,47 @@ func act(kind: String) -> void:
 			motion.parallel().tween_property(hat,"rotation:z",0.22,0.12)
 			motion.tween_property(rig,"rotation:z",0.0,0.16)
 			motion.parallel().tween_property(arm,"rotation:z",0.0,0.16)
-		"drink":
-			motion.tween_property(arm, "rotation:x", 2.5, 0.2)
+		"drink", "iced_tea":
+			var lift: float = 2.34 if kind == "iced_tea" else 2.5
+			motion.tween_property(arm, "rotation:x", lift, 0.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 			motion.parallel().tween_property(rig, "rotation:x", -0.15, 0.2)
-			motion.tween_interval(0.2)
+			motion.tween_interval(0.16 if kind == "iced_tea" else 0.2)
 			motion.tween_property(arm, "rotation:x", 0.0, 0.18)
 			motion.parallel().tween_property(rig, "rotation:x", 0.0, 0.18)
 			motion.tween_property(rig, "scale", Vector3(1.08, 0.9, 1.08), 0.1)
-			motion.tween_property(rig, "scale", Vector3.ONE, 0.17)
-			motion.tween_callback(func(): bottle.visible = false; gun.visible = true)
+			motion.tween_property(rig, "scale", Vector3.ONE, 0.17).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			motion.tween_callback(func():
+				bottle.visible = false
+				if is_instance_valid(tea_glass):
+					tea_glass.visible = false
+				gun.visible = true)
+		"downed":
+			downed = true
+			motion.tween_property(rig, "position:y", -0.08, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			motion.parallel().tween_property(rig, "rotation", Vector3(0.24, 0.0, -0.12), 0.16)
+			motion.parallel().tween_property(rig, "scale:y", 0.92, 0.16)
+			motion.parallel().tween_property(head, "rotation", Vector3(-0.12, 0.0, -0.08), 0.16)
+			motion.parallel().tween_property(hat, "rotation:z", float(visual_preset.get("tilt", 0)) - 0.16, 0.16)
+		"recover":
+			downed = false
+			motion.tween_property(rig, "position:y", 0.06, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			motion.parallel().tween_property(rig, "rotation", Vector3.ZERO, 0.18)
+			motion.parallel().tween_property(rig, "scale", Vector3(1.04, 1.04, 1.04), 0.12)
+			motion.parallel().tween_property(head, "rotation", Vector3.ZERO, 0.18)
+			motion.tween_property(rig, "position:y", 0.0, 0.16)
+			motion.parallel().tween_property(rig, "scale", Vector3.ONE, 0.16)
+			motion.parallel().tween_property(hat, "rotation:z", float(visual_preset.get("tilt", 0)), 0.16)
+		"victory":
+			motion.tween_property(rig, "position:y", 0.16, 0.13).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+			motion.parallel().tween_property(arm, "rotation", Vector3(2.35, 0.0, -0.22), 0.16)
+			if is_instance_valid(left_arm):
+				motion.parallel().tween_property(left_arm, "rotation", Vector3(2.1, 0.0, 0.28), 0.16)
+			motion.parallel().tween_property(hat, "position:y", hat_rest_y + 0.12, 0.13)
+			motion.tween_property(rig, "position:y", 0.0, 0.22).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+			motion.parallel().tween_property(arm, "rotation", Vector3.ZERO, 0.25)
+			if is_instance_valid(left_arm):
+				motion.parallel().tween_property(left_arm, "rotation", Vector3.ZERO, 0.25)
+			motion.parallel().tween_property(hat, "position:y", hat_rest_y, 0.25)
 		"dodge":
 			motion.tween_property(rig, "rotation:z", -0.8, 0.12)
 			motion.parallel().tween_property(rig, "scale:y", 0.7, 0.12)

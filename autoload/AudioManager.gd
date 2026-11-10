@@ -320,6 +320,9 @@ func consume_event(event: Dictionary) -> void:
 				schedule("ricochet", 0.04, "Weapons", at, -8, event)
 			if cue == "death":
 				tension_until = Time.get_ticks_msec() + 900
+				# Match the physical fall/thud, not the first anticipation frame.
+				schedule("death", 0.22, "Character", at, 0, event)
+				return
 			if not cue.is_empty():
 				play_sound(cue, "Weapons" if cue == "gatling" else "Character", at)
 		"draw":
