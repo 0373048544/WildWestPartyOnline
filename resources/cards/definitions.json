@@ -26,7 +26,7 @@
   "drink": {
     "id": "drink",
     "name": "UỐNG RƯỢU",
-    "description": "Hồi 1 máu; cứu mạng khi hấp hối. Không có tác dụng khi chỉ còn 2 người.",
+    "description": "Hồi 1 máu cho bản thân, kể cả khi chỉ còn 2 người. Có thể dùng nhiều lá để tự cứu khi hấp hối.",
     "type": 0,
     "target": 0,
     "effect": 2,

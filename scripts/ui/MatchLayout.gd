@@ -102,12 +102,12 @@ static func hand_height(node: Node, targeting: bool = false) -> float:
 	# Portrait keeps the complete card touchable without consuming roughly one
 	# third of a short iPhone viewport.
 	if mobile_portrait(node):
-		return units(node, 116.0 if targeting else 124.0)
+		return units(node, 110.0 if targeting else 116.0)
 	# Landscape is proportional to the short side: a real phone gets 24–28%
 	# instead of the old fixed 142px zone that could consume over one third.
 	var css: Vector2 = css_size(node)
-	var ratio := 0.28 if targeting else 0.32
-	return units(node, clampf(css.y * ratio, 110.0, 125.0))
+	var ratio := 0.27 if targeting else 0.29
+	return units(node, clampf(css.y * ratio, 105.0, 116.0))
 
 static func get_hand_zone_height(node: Node, targeting: bool = false) -> float:
 	return hand_height(node, targeting)
@@ -117,13 +117,13 @@ static func touch_card_width(node: Node) -> float:
 		return units(node, 150.0)
 	if mobile_portrait(node):
 		var css: Vector2 = css_size(node)
-		return units(node, clampf(98.0 + maxf(0.0, css.x - 360.0) * 0.10, 98.0, 105.0))
+		return units(node, clampf(96.0 + maxf(0.0, css.x - 360.0) * 0.08, 96.0, 101.0))
 	if mobile_landscape(node):
 		var css: Vector2 = css_size(node)
 		var targeting: bool = bool(node.get_meta("target_mode", false)) if node != null else false
-		var hand_css := clampf(css.y * (0.28 if targeting else 0.32), 100.0, 128.0)
+		var hand_css := clampf(css.y * (0.27 if targeting else 0.29), 105.0, 116.0)
 		var height_limited := (hand_css - 10.0) * 210.0 / 214.0
-		return units(node, clampf(minf(css.x * 0.105, height_limited), 90.0, 105.0))
+		return units(node, clampf(minf(css.x * 0.105, height_limited), 88.0, 100.0))
 	return 158.0
 
 static func get_mobile_card_width(node: Node) -> float:
@@ -193,11 +193,11 @@ static func chat_panel_rect(node: Node) -> Rect2:
 	var width: float
 	var height: float
 	if mobile_portrait(node):
-		width = safe.size.x * 0.72
-		height = safe.size.y * 0.25
+		width = safe.size.x * 0.68
+		height = safe.size.y * 0.22
 	elif mobile_landscape(node):
-		width = safe.size.x * 0.34
-		height = safe.size.y * 0.38
+		width = safe.size.x * 0.31
+		height = safe.size.y * 0.34
 	else:
 		width = minf(360.0, safe.size.x * 0.30)
 		height = minf(270.0, safe.size.y * 0.30)
@@ -214,15 +214,17 @@ static func equipment_rect(node: Node, expanded: bool = false) -> Rect2:
 	var height: float
 	if mobile(node):
 		width = minf(
-			units(node, 175.0 if expanded else 138.0),
+			units(node, 162.0 if expanded else 128.0),
 			safe.size.x * (0.54 if expanded else 0.42)
 		)
-		var expanded_height := 96.0 if mobile_landscape(node) else 170.0
-		height = minf(units(node, expanded_height), safe.size.y * 0.40) if expanded else units(node, 54.0)
+		var expanded_height := 90.0 if mobile_landscape(node) else 150.0
+		height = minf(units(node, expanded_height), safe.size.y * 0.38) if expanded else units(node, 48.0)
 	else:
 		width = minf(210.0 if expanded else 190.0, safe.size.x * 0.22)
 		height = minf(254.0 if expanded else 76.0, safe.size.y * (0.44 if expanded else 0.16))
-	var action_gap := units(node, 16.0 if mobile(node) else 10.0)
+	# Leave two extra CSS pixels for fractional content scaling/container minimums;
+	# without this gutter the compact panel could touch End Turn by < 1 px.
+	var action_gap := units(node, 18.0 if mobile(node) else 10.0)
 	return Rect2(Vector2(safe.end.x - width, action_zone.position.y - height - action_gap), Vector2(width, height))
 
 static func modal_rect(node: Node) -> Rect2:

@@ -109,6 +109,8 @@ func _add_item(label_text: String, icon: String, card: Dictionary, detail: Strin
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	button.clip_text = true
+	button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	button.add_theme_font_size_override("font_size", roundi(layout.units(self, 9.5)))
 	button.tooltip_text = label_text + "\n" + detail
 	button.add_theme_stylebox_override("normal", SaloonTheme.panel(Color("#26333a"), Color("#806445"), 5))
@@ -121,7 +123,7 @@ func _add_item(label_text: String, icon: String, card: Dictionary, detail: Strin
 
 func _apply_layout() -> void:
 	var mobile: bool = bool(layout.mobile(self))
-	var target_css_width := (210.0 if expanded else 190.0) if not mobile else (175.0 if expanded else 138.0)
+	var target_css_width := (210.0 if expanded else 190.0) if not mobile else (162.0 if expanded else 128.0)
 	var width := minf(
 		layout.units(self, target_css_width) if mobile else target_css_width,
 		get_viewport_rect().size.x * (0.54 if expanded else 0.42)
@@ -132,9 +134,10 @@ func _apply_layout() -> void:
 		if mobile
 		else "TRANG BỊ · %s\n%s · TẦM %d · %d LÁ" % [disclosure, current_weapon_name.to_upper(), current_range, current_equipment_count]
 	)
-	title_button.add_theme_font_size_override("font_size", roundi(layout.units(self, 8.5)) if mobile else 11)
+	title_button.clip_text = true
+	title_button.add_theme_font_size_override("font_size", roundi(layout.units(self, 8.0)) if mobile else 11)
 	title_button.custom_minimum_size.y = (
-		layout.units(self, 42.0 if layout.mobile_landscape(self) and expanded else 46.0)
+		layout.units(self, 40.0 if layout.mobile_landscape(self) and expanded else 42.0)
 		if mobile else 52.0
 	)
 	details_scroll.visible = expanded

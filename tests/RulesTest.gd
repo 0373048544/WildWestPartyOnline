@@ -366,10 +366,13 @@ func test_cards() -> void:
 	setup(2)
 	GameManager.players[1].current_hp = 2
 	var beer := play(1, "drink", 1)
-	check(GameManager.players[1].current_hp == 2 and GameManager.players[1].hand.has(beer), "Beer disabled at two living players")
+	check(GameManager.players[1].current_hp == 3 and not GameManager.players[1].hand.has(beer), "Beer heals at two living players")
 	GameManager.players[1].current_hp = 1
+	beer = give(1, "drink")
 	GameManager.damage(1, 2)
-	check(not GameManager.players[1].is_alive, "two-player Beer cannot save lethal damage")
+	check(GameManager.reactions.active.get("reaction_type", "") == "survive" and GameManager.reactions.active.get("allowed_card_types", []).has(beer.instance_id), "two-player Beer is offered for lethal damage")
+	respond()
+	check(GameManager.players[1].is_alive and GameManager.players[1].current_hp == 1, "two-player Beer saves lethal damage")
 	setup()
 	for p in GameManager.players.values():
 		p.current_hp = 2

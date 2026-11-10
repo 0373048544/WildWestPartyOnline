@@ -278,8 +278,6 @@ func resolve(args: Dictionary) -> bool:
 			card = game.find_card(id, uid)
 			if card.is_empty() or not allowed_ids.has(uid):
 				return false
-			if card.card_data_id == "drink" and not game.beer_enabled():
-				return false
 			if not ["drink", "iced_tea"].has(str(card.card_data_id)):
 				return false
 		else:
@@ -354,7 +352,7 @@ func resolve(args: Dictionary) -> bool:
 					game.record("%s bỏ qua đáp trả ĐẤU SÚNG." % game.players[id].display_name)
 				push({"kind": "damage", "target": id, "source": context.source, "amount": 1}, true)
 		"survive":
-			var valid_heal: bool = accept and (card.card_data_id == "iced_tea" or (card.card_data_id == "drink" and game.beer_enabled()))
+			var valid_heal: bool = accept and ["drink", "iced_tea"].has(str(card.card_data_id))
 			if valid_heal:
 				game.consume(id, card)
 				game.heal(id, 1, str(card.get("card_data_id", "")))

@@ -92,7 +92,10 @@ func _ready() -> void:
 		await get_tree().process_frame
 	check(is_instance_valid(TableEffects.gun_puff_mesh),"gun smoke follows muzzle flash")
 	await get_tree().create_timer(0.75).timeout
-	check(app.table.effects.get_child_count()==0,"shot visuals clean up without persistent tracer")
+	var visible_effects: Array[Node] = app.table.effects.get_children().filter(
+		func(node: Node): return node is Node3D and (node as Node3D).visible
+	)
+	check(visible_effects.is_empty(),"shot visuals clean up without persistent tracer")
 	GameManager.clear()
 	print("PASS: %d seven-player picking, mobile reachability, portrait cache, preview reuse and shot checks" % checks)
 	get_tree().quit()

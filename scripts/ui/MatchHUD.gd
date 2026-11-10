@@ -1,5 +1,7 @@
 extends Control
 
+const MOBILE_SELF_HEALTH_HUD = preload("res://scripts/ui/MobileSelfHealthHUD.gd")
+
 var app: Node
 var state: Dictionary
 var own: Dictionary
@@ -681,16 +683,25 @@ func build_top() -> void:
 func _sync_self_health(local_row: Dictionary) -> void:
 	var health_hud: PanelContainer = get_node_or_null("MobileSelfHealthHUD") as PanelContainer
 	if not layout.mobile_first_person(self) or local_row.is_empty() or str(state.get("phase", "")) == "CHARACTER_SELECTION":
+		if get_viewport().has_meta("self_health_hud_rect"):
+			get_viewport().remove_meta("self_health_hud_rect")
+			if is_instance_valid(app.table):
+				app.table.plate_layout_key = ""
 		if is_instance_valid(health_hud):
 			health_hud.visible = false
 		return
 	if not is_instance_valid(health_hud):
-		health_hud = load("res://scripts/ui/MobileSelfHealthHUD.gd").new() as PanelContainer
+		health_hud = MOBILE_SELF_HEALTH_HUD.new()
 		health_hud.z_index = layout.Z_NAMEPLATE + 10
 		add_child(health_hud)
 	# HP comes from the authoritative public snapshot, never client estimates.
-	health_hud.call("update_health", local_row, layout)
+	health_hud.update_health(local_row, layout)
 	health_hud.visible = true
+	var exclusion: Rect2 = health_hud.get_global_rect().grow(layout.units(self, 4.0))
+	if get_viewport().get_meta("self_health_hud_rect", Rect2()) != exclusion:
+		get_viewport().set_meta("self_health_hud_rect", exclusion)
+		if is_instance_valid(app.table):
+			app.table.plate_layout_key = ""
 
 
 func _sync_action_history() -> void:
@@ -1435,7 +1446,7 @@ func show_preview(card: Dictionary) -> void:
 	preview.z_index = layout.Z_PREVIEW
 
 	var style: StyleBoxFlat = SaloonTheme.card_face(accent, "preview", 9.0 * unit)
-	style.set_corner_radius_all(int(11.0 * unit))
+	style.set_corner_radius_all(int(13.0 * unit))
 	style.shadow_color = Color(0, 0, 0, 0.35)
 	style.shadow_size = VisualSettings.ui_shadow_size(int(4.0 * unit))
 	style.shadow_offset = Vector2(0, 3.0 * unit)
@@ -1500,12 +1511,12 @@ func show_preview(card: Dictionary) -> void:
 	preview.offset_right = left + preview_width
 	preview.offset_bottom = top + preview_height
 
-	var title_band := ColorRect.new()
+	var title_band := Panel.new()
 	title_band.name = "PreviewTitleBand"
-	title_band.color = accent.darkened(0.16)
 	title_band.position = Vector2(6.0, 6.0) * unit
 	title_band.size = Vector2(preview_width / unit - 12.0, 29.0) * unit
 	title_band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	title_band.add_theme_stylebox_override("panel", SaloonTheme.card_header(accent, true))
 	preview.add_child(title_band)
 	var title_glint := ColorRect.new()
 	title_glint.color = Color(1, 0.86, 0.58, 0.28)
@@ -1522,6 +1533,9 @@ func show_preview(card: Dictionary) -> void:
 	card_name.autowrap_mode = TextServer.AUTOWRAP_OFF
 	card_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	card_name.add_theme_color_override("font_color", SaloonTheme.CREAM)
+	card_name.add_theme_font_override("font", SaloonTheme.card_heading_font())
+	card_name.add_theme_color_override("font_outline_color", Color(0.08, 0.04, 0.02, 0.72))
+	card_name.add_theme_constant_override("outline_size", 1)
 	card_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.add_child(card_name)
 
@@ -1532,6 +1546,7 @@ func show_preview(card: Dictionary) -> void:
 	corner.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	corner.add_theme_font_size_override("font_size", int(14.0 * unit) if mobile_preview else 17)
 	corner.add_theme_color_override("font_color", CardInstance.suit_color(card.suit))
+	corner.add_theme_font_override("font", SaloonTheme.card_heading_font())
 	corner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	preview.add_child(corner)
 
@@ -1546,7 +1561,7 @@ func show_preview(card: Dictionary) -> void:
 	artwork_frame.size = Vector2(preview_width / unit - 20.0, artwork_height) * unit
 	artwork_frame.clip_contents = true
 	artwork_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	artwork_frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#30281f"), accent, 2.0 * unit))
+	artwork_frame.add_theme_stylebox_override("panel", SaloonTheme.card_art_frame(accent))
 	preview.add_child(artwork_frame)
 	var artwork := TextureRect.new()
 	artwork.name = "PreviewArtwork"

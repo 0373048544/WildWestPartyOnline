@@ -40,7 +40,7 @@ func valid_targets(game: Node, sender: int, card: Dictionary) -> Array:
 		return result
 	if effect == CardData.EffectType.ATTACK and not game.abilities.can_shoot(p):
 		return result
-	if effect == CardData.EffectType.HEAL and (p.current_hp >= p.max_hp or (card.card_data_id == "drink" and not game.beer_enabled())):
+	if effect == CardData.EffectType.HEAL and p.current_hp >= p.max_hp:
 		return result
 	if effect == CardData.EffectType.DEPARTMENT_STORE and p.department_store_used_this_action_turn:
 		return result
@@ -139,8 +139,6 @@ func disabled_reason(game: Node, sender: int, card: Dictionary) -> String:
 	if effect == CardData.EffectType.ATTACK and not game.abilities.can_shoot(p):
 		return "Bạn đã dùng BẮN trong lượt hành động này."
 	if effect == CardData.EffectType.HEAL:
-		if card.card_data_id == "drink" and not game.beer_enabled():
-			return "Bia không có tác dụng khi chỉ còn 2 người chơi."
 		if p.current_hp >= p.max_hp:
 			return "Bạn đã đầy máu."
 	if effect == CardData.EffectType.DEPARTMENT_STORE and p.department_store_used_this_action_turn:

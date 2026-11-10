@@ -280,11 +280,14 @@ func consume(id: int, card: Dictionary) -> void:
 	abilities.hand_changed(self, id)
 
 func beer_enabled() -> bool:
-	return players.values().filter(func(p): return p.is_alive).size() > 2
+	# Project rule: UỐNG RƯỢU remains legal at every supported player count,
+	# including a two-player endgame. Keep this compatibility helper true so no
+	# legacy caller can silently restore the old BANG! two-survivor restriction.
+	return true
 
 func offer_survival(id: int, source: int) -> void:
 	var p: PlayerState = players[id]
-	var beer: Array = abilities.response_cards(self, id, "drink") if beer_enabled() else []
+	var beer: Array = abilities.response_cards(self, id, "drink")
 	var iced_tea: Array = abilities.response_cards(self, id, "iced_tea")
 	var sid: bool = p.ability_id == "discard_heal" and p.hand.size() >= 2
 	if beer.is_empty() and iced_tea.is_empty() and not sid:

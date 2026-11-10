@@ -366,8 +366,8 @@ func test_iced_tea_survival() -> void:
 	var prompt: Dictionary = GameManager.reactions.private_prompt(1)
 	check(prompt.get("allowed_card_types", []).has(tea.instance_id),
 		"TRÀ ĐÁ is offered while dying with only 2 players alive")
-	check(not prompt.get("allowed_card_types", []).has(beer.instance_id),
-		"existing two-player BIA restriction remains unchanged")
+	check(prompt.get("allowed_card_types", []).has(beer.instance_id),
+		"BIA is offered while dying with only 2 players alive")
 	check(GameManager.flow.resolve({"accept": true, "card": tea.instance_id}),
 		"server accepts TRÀ ĐÁ survival response")
 	check(GameManager.players[1].is_alive and GameManager.players[1].current_hp == 1,

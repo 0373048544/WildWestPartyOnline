@@ -22,6 +22,9 @@ var input: LineEdit
 var send_button: Button
 var close_button: Button
 var preview: Label
+var chat_margin: MarginContainer
+var chat_body: VBoxContainer
+var chat_title: Label
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -47,9 +50,13 @@ func _build() -> void:
 	toggle_button = load("res://scripts/ui/WesternButton.gd").new()
 	toggle_button.name = "ChatToggle"
 	toggle_button.text = "CHAT"
+	toggle_button.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
 	toggle_button.mouse_filter = Control.MOUSE_FILTER_STOP
 	toggle_button.pressed.connect(open_chat)
 	add_child(toggle_button)
+	# WesternButton applies its default ellipsis in _ready(); restore the compact
+	# chat label contract after it has entered the tree.
+	toggle_button.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
 
 	panel = PanelContainer.new()
 	panel.name = "ChatWindow"
@@ -59,24 +66,28 @@ func _build() -> void:
 		if event is InputEventScreenTouch or event is InputEventScreenDrag:
 			accept_event())
 	add_child(panel)
-	var margin := MarginContainer.new()
+	chat_margin = MarginContainer.new()
+	chat_margin.name = "ChatMargin"
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 10)
-	panel.add_child(margin)
-	var body := VBoxContainer.new()
-	body.add_theme_constant_override("separation", 7)
-	margin.add_child(body)
+		chat_margin.add_theme_constant_override("margin_" + side, 10)
+	panel.add_child(chat_margin)
+	chat_body = VBoxContainer.new()
+	chat_body.name = "ChatBody"
+	chat_body.add_theme_constant_override("separation", 7)
+	chat_margin.add_child(chat_body)
 	var header := HBoxContainer.new()
-	body.add_child(header)
-	var title := Label.new()
-	title.text = "TRÒ CHUYỆN"
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title.add_theme_color_override("font_color", SaloonTheme.GOLD)
-	title.add_theme_font_size_override("font_size", 18)
-	header.add_child(title)
+	chat_body.add_child(header)
+	chat_title = Label.new()
+	chat_title.name = "ChatTitle"
+	chat_title.text = "TRÒ CHUYỆN"
+	chat_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	chat_title.text_overrun_behavior = TextServer.OVERRUN_NO_TRIMMING
+	chat_title.add_theme_color_override("font_color", SaloonTheme.GOLD)
+	chat_title.add_theme_font_size_override("font_size", 18)
+	header.add_child(chat_title)
 	close_button = load("res://scripts/ui/WesternButton.gd").new()
 	close_button.name = "ChatClose"
-	close_button.text = "×"
+	close_button.text = "X"
 	close_button.custom_minimum_size = Vector2(44, 44)
 	close_button.pressed.connect(close_chat)
 	header.add_child(close_button)
@@ -87,7 +98,7 @@ func _build() -> void:
 	message_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	message_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	message_scroll.mouse_filter = Control.MOUSE_FILTER_STOP
-	body.add_child(message_scroll)
+	chat_body.add_child(message_scroll)
 	message_list = VBoxContainer.new()
 	message_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	message_list.add_theme_constant_override("separation", 4)
@@ -95,7 +106,7 @@ func _build() -> void:
 
 	var composer := HBoxContainer.new()
 	composer.add_theme_constant_override("separation", 6)
-	body.add_child(composer)
+	chat_body.add_child(composer)
 	input = LineEdit.new()
 	input.name = "ChatInput"
 	input.placeholder_text = "Nhắn gì đó..."
@@ -222,7 +233,8 @@ func append_message(message: Dictionary, _live: bool) -> bool:
 	row.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.text = "%s%s: %s" % ["☠ " if bool(message.get("dead", false)) else "", str(message.get("sender_name", "Cao bồi")), str(message.get("text", ""))]
-	row.add_theme_font_size_override("font_size", 15)
+	var layout: Script = load("res://scripts/ui/MatchLayout.gd")
+	row.add_theme_font_size_override("font_size", roundi(layout.units(self, 13.0)) if layout.mobile(self) else 15)
 	row.add_theme_color_override("font_color", SaloonTheme.CREAM)
 	row.add_theme_stylebox_override("normal", SaloonTheme.inset_panel(6))
 	message_list.add_child(row)
@@ -279,7 +291,21 @@ func layout_chat() -> void:
 	if not is_inside_tree():
 		return
 	var layout: Script = load("res://scripts/ui/MatchLayout.gd")
-	var touch: float = float(layout.units(self, 40.0))
+	var touch: float = float(layout.units(self, 44.0))
+	var compact_mobile: bool = bool(layout.mobile(self))
+	var panel_padding: int = roundi(layout.units(self, 7.0 if compact_mobile else 10.0))
+	for side in ["left", "right", "top", "bottom"]:
+		chat_margin.add_theme_constant_override("margin_" + side, panel_padding)
+	chat_body.add_theme_constant_override("separation", roundi(layout.units(self, 4.0 if compact_mobile else 7.0)))
+	chat_title.add_theme_font_size_override("font_size", roundi(layout.units(self, 15.0)) if compact_mobile else 18)
+	toggle_button.add_theme_font_size_override("font_size", roundi(layout.units(self, 12.0)) if compact_mobile else 16)
+	panel.add_theme_stylebox_override(
+		"panel",
+		SaloonTheme.panel(Color(0.075, 0.052, 0.035, 0.97), SaloonTheme.GOLD, 8.0 if compact_mobile else 14.0)
+	)
+	for row in message_list.get_children():
+		if row is Label:
+			row.add_theme_font_size_override("font_size", roundi(layout.units(self, 13.0)) if compact_mobile else 15)
 	close_button.custom_minimum_size = Vector2(touch, touch)
 	input.custom_minimum_size.y = touch
 	send_button.custom_minimum_size = Vector2(layout.units(self, 64.0), touch)

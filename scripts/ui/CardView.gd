@@ -94,12 +94,12 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	header.clip_contents = true
 	header.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visual.add_child(header)
-	var band := ColorRect.new()
+	var band := Panel.new()
 	band.name = "TitleBand"
-	band.color = Color("#8a7040") if usable else Color("#6f6653")
 	band.position = Vector2.ZERO
 	band.size = HEADER_RECT.size
 	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	band.add_theme_stylebox_override("panel", SaloonTheme.card_header(accent, usable))
 	header.add_child(band)
 	var band_glint := ColorRect.new()
 	band_glint.name = "HeaderGlint"
@@ -127,6 +127,8 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	card_name.clip_text = true
 	card_name.max_lines_visible = 1
 	card_name.z_index = 3
+	card_name.add_theme_color_override("font_outline_color", Color(0.08, 0.04, 0.02, 0.72))
+	card_name.add_theme_constant_override("outline_size", 1)
 	var corner := _add_header_text(CardInstance.corner(card), CORNER_RECT, 16, CardInstance.suit_color(card.suit), header)
 	corner.name = "RankSuitCorner"
 	corner.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -159,7 +161,7 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	artwork_frame.size = ARTWORK_RECT.size
 	artwork_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	artwork_frame.clip_contents = true
-	artwork_frame.add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#2d2722"), accent.darkened(0.15), 3))
+	artwork_frame.add_theme_stylebox_override("panel", SaloonTheme.card_art_frame(accent))
 	visual.add_child(artwork_frame)
 	var artwork := TextureRect.new()
 	artwork.name = "CardArtwork"
@@ -226,9 +228,9 @@ func _apply_dynamic_state(definition: Dictionary, usable: bool, chosen: bool, re
 	if is_instance_valid(panel):
 		var face_state := "selected" if chosen else ("normal" if usable else "disabled")
 		panel.add_theme_stylebox_override("panel", SaloonTheme.card_face(accent, face_state, 10))
-	var band: ColorRect = visual.find_child("TitleBand", true, false) as ColorRect
+	var band: Panel = visual.find_child("TitleBand", true, false) as Panel
 	if is_instance_valid(band):
-		band.color = Color("#8a7040") if usable else Color("#6f6653")
+		band.add_theme_stylebox_override("panel", SaloonTheme.card_header(accent, usable))
 	var rail: ColorRect = visual.get_node_or_null("PlayableRail") as ColorRect
 	if is_instance_valid(rail):
 		rail.color = (SaloonTheme.GOLD if chosen else accent.lightened(0.18)) if usable else Color("#777268")

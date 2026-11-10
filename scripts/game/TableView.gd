@@ -119,7 +119,7 @@ func turns_player() -> int:
 	return int(NetworkManager.public_state.get("current_player", 0))
 
 func layout_nameplates() -> void:
-	var key: String = str(camera.global_transform)+str(get_viewport().get_visible_rect())+str(built_match)+str(get_viewport().get_meta("reaction_banner_rect", Rect2()))
+	var key: String = str(camera.global_transform)+str(get_viewport().get_visible_rect())+str(built_match)+str(get_viewport().get_meta("reaction_banner_rect", Rect2()))+str(get_viewport().get_meta("self_health_hud_rect", Rect2()))
 	for plate in nameplates.values():
 		key += str(plate.get_instance_id())+str(plate.hovered)
 	if key == plate_layout_key:
@@ -155,6 +155,9 @@ func layout_nameplates() -> void:
 	var banner_exclusion: Rect2 = get_viewport().get_meta("reaction_banner_rect", Rect2())
 	if banner_exclusion.has_area():
 		occupied.append(banner_exclusion)
+	var health_exclusion: Rect2 = get_viewport().get_meta("self_health_hud_rect", Rect2())
+	if health_exclusion.has_area():
+		occupied.append(health_exclusion)
 	var width: float = get_viewport().get_visible_rect().size.x
 	var frame_layout: Script = load("res://scripts/ui/MatchLayout.gd")
 	var first_person: bool = mobile_camera.enabled and bool(frame_layout.mobile_first_person(self))

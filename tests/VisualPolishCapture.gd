@@ -80,6 +80,49 @@ func _ready() -> void:
 	app.seen_role = GameManager.match_id
 	app.refresh()
 	await settle()
+	if "--v23-health-hud" in OS.get_cmdline_user_args():
+		await set_view(Vector2i(390, 844), true)
+		await set_hand(7)
+		await capture("portrait_v23_health_4_of_4")
+		GameManager.players[1].current_hp = 1
+		GameManager.publish()
+		app.refresh()
+		await capture("portrait_v23_health_1_of_4")
+		GameManager.players[1].current_hp = 0
+		GameManager.players[1].is_alive = false
+		GameManager.publish()
+		app.refresh()
+		await capture("portrait_v23_health_eliminated")
+		GameManager.players[1].current_hp = GameManager.players[1].max_hp
+		GameManager.players[1].is_alive = true
+		GameManager.publish()
+		app.refresh()
+		await set_view(Vector2i(844, 390), true)
+		await capture("landscape_v23_health_4_of_4")
+		print("VISUAL V23 HEALTH HUD CAPTURE PASS")
+		get_tree().quit(0)
+		return
+	if "--v24-compact-card" in OS.get_cmdline_user_args():
+		await set_view(Vector2i(390, 844), true)
+		await set_hand(10)
+		await capture("portrait_v24_compact_hand")
+		app.match_hud.show_preview(NetworkManager.private_state.hand[0])
+		await capture("portrait_v24_card_preview")
+		app.match_hud.close_preview()
+		app.chat_panel.open_chat()
+		await capture("portrait_v24_chat_compact")
+		app.chat_panel.close_chat()
+		app.match_hud.loadout_panel.title_button.pressed.emit()
+		await capture("portrait_v24_loadout_compact")
+		app.match_hud.loadout_panel.title_button.pressed.emit()
+		await set_view(Vector2i(844, 390), true)
+		await set_hand(10)
+		await capture("landscape_v24_compact_hand")
+		app.match_hud.show_preview(NetworkManager.private_state.hand[0])
+		await capture("landscape_v24_card_preview")
+		print("VISUAL V24 COMPACT CARD CAPTURE PASS")
+		get_tree().quit(0)
+		return
 	if "--v10-focus" in OS.get_cmdline_user_args():
 		await set_view(Vector2i(390, 844), true)
 		await set_hand(7)

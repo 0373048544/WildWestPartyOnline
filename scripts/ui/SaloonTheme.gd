@@ -16,6 +16,20 @@ const WARNING := Color("#d6a552")
 const DANGER := Color("#c86f58")
 const SEATS: Array[Color] = [Color("#df805c"), Color("#66b7be"), Color("#d6b65c"), Color("#ad88c6"), Color("#78ae75"), Color("#d584a4"), Color("#809ede")]
 
+static var _card_heading_font: Font
+
+static func card_heading_font() -> Font:
+	# Slab/serif system fallbacks keep the Western print character while still
+	# allowing the platform to fall back for Vietnamese glyph coverage.
+	if not is_instance_valid(_card_heading_font):
+		var font := SystemFont.new()
+		# Prefer a compact sign-painter face. Serif fallbacks had very tall line
+		# metrics on Web and could grow beyond the fixed mobile card header.
+		font.font_names = PackedStringArray(["Bahnschrift SemiCondensed", "Roboto Condensed", "Arial", "DejaVu Sans"])
+		font.font_weight = 700
+		_card_heading_font = font
+	return _card_heading_font
+
 static func panel(color: Color = INK, border: Color = GOLD, padding: float = 14.0) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = color
@@ -115,10 +129,29 @@ static func card_face(accent: Color, state: String = "normal", padding: float = 
 			border_width = 3
 	var style := panel(background, border, padding)
 	style.set_border_width_all(border_width)
-	style.set_corner_radius_all(11)
+	style.set_corner_radius_all(13)
 	style.shadow_color = Color(0.06, 0.035, 0.02, 0.34 if state != "disabled" else 0.18)
 	style.shadow_size = VisualSettings.ui_shadow_size(7 if state == "selected" else 4)
 	style.shadow_offset = Vector2(0, 3)
+	return style
+
+static func card_header(accent: Color, active: bool = true) -> StyleBoxFlat:
+	var color := accent.darkened(0.25) if active else Color("#6f6653")
+	var style := panel(color, accent.lightened(0.22) if active else Color("#8a8170"), 5.0)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(7)
+	style.content_margin_top = 2
+	style.content_margin_bottom = 2
+	style.shadow_size = 0
+	return style
+
+static func card_art_frame(accent: Color) -> StyleBoxFlat:
+	var style := panel(Color("#30281f"), accent.darkened(0.10), 3.0)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(7)
+	style.content_margin_top = 3
+	style.content_margin_bottom = 3
+	style.shadow_size = 0
 	return style
 
 static func card_badge(accent: Color, active: bool = true) -> StyleBoxFlat:
