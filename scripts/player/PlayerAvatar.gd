@@ -12,6 +12,7 @@ var base_y: float = 0.0
 var rig: Node3D
 var hat: Node3D
 var gun: MeshInstance3D
+var holstered_gun: MeshInstance3D
 var materials: Dictionary = {}
 var aim_yaw: float = 0.0
 var picking_area: Area3D
@@ -29,6 +30,8 @@ var target_dimmed: bool = false
 var idle_phase: float = 0
 var mobile_process_accumulator: float = 0.0
 var weapon_visual_id: String = ""
+var firing_weapon_id: String = ""
+var weapon_pose: String = "stowed"
 static var mesh_cache: Dictionary = {}
 
 func apply_character(id: String, celebrate: bool = true) -> void:
@@ -82,13 +85,68 @@ func apply_weapon_visual(key: String, force: bool = false) -> void:
 	if not is_instance_valid(gun) or (weapon_visual_id == key and not force):
 		return
 	weapon_visual_id = key
-	gun.mesh = load("res://scripts/player/WeaponVisuals.gd").mesh_for(key)
+	var visuals: Script = load("res://scripts/player/WeaponVisuals.gd")
+	gun.mesh = visuals.mesh_for(key)
 	gun.material_override = null
-	gun.rotation.x = -PI/2
-	gun.scale = Vector3.ONE * (0.85 if load("res://scripts/player/WeaponVisuals.gd").profile(key).rifle else 1.0)
+	if is_instance_valid(holstered_gun):
+		holstered_gun.mesh = visuals.mesh_for(key)
+		holstered_gun.material_override = null
+	_configure_weapon_transforms(key)
+	_set_weapon_stowed()
+
+func _configure_weapon_transforms(key: String) -> void:
+	var profile: Dictionary = load("res://scripts/player/WeaponVisuals.gd").profile(key)
+	var rifle: bool = bool(profile.rifle)
+	gun.position = Vector3(0, -0.49, -0.17 if not rifle else -0.23)
+	gun.rotation = Vector3(-PI / 2.0, 0, 0)
+	gun.scale = Vector3.ONE * (0.82 if rifle else 1.0)
+	if not is_instance_valid(holstered_gun):
+		return
+	if rifle:
+		holstered_gun.position = Vector3(-0.31, 1.16, 0.24)
+		holstered_gun.rotation = Vector3(-0.22, 0.34, -0.72)
+		holstered_gun.scale = Vector3.ONE * 0.72
+	else:
+		holstered_gun.position = Vector3(0.46, 0.66, 0.035)
+		holstered_gun.rotation = Vector3(-PI / 2.0, 0.08, -0.20)
+		holstered_gun.scale = Vector3.ONE * 0.82
+
+func _set_weapon_stowed() -> void:
+	weapon_pose = "stowed"
+	if is_instance_valid(gun):
+		gun.visible = false
+	if is_instance_valid(holstered_gun):
+		holstered_gun.visible = true
+
+func _set_weapon_ready() -> void:
+	weapon_pose = "ready"
+	if is_instance_valid(gun):
+		gun.visible = true
+	if is_instance_valid(holstered_gun):
+		holstered_gun.visible = false
+
+func prepare_fire_visual(override_id: String = "") -> void:
+	firing_weapon_id = override_id
+	if not override_id.is_empty():
+		gun.mesh = load("res://scripts/player/WeaponVisuals.gd").mesh_for(override_id)
+		_configure_weapon_transforms(override_id)
+	_set_weapon_stowed()
+
+func finish_fire_visual() -> void:
+	firing_weapon_id = ""
+	gun.mesh = load("res://scripts/player/WeaponVisuals.gd").mesh_for(weapon_visual_id)
+	_configure_weapon_transforms(weapon_visual_id)
+	_set_weapon_stowed()
+
+func active_weapon_id() -> String:
+	return firing_weapon_id if not firing_weapon_id.is_empty() else weapon_visual_id
+
+func fire_delay() -> float:
+	var profile: Dictionary = load("res://scripts/player/WeaponVisuals.gd").profile(active_weapon_id())
+	return float(profile.get("draw_time", 0.075)) + (0.105 if bool(profile.rifle) else 0.09) + 0.018
 
 func muzzle_position() -> Vector3:
-	var profile: Dictionary = load("res://scripts/player/WeaponVisuals.gd").profile(weapon_visual_id)
+	var profile: Dictionary = load("res://scripts/player/WeaponVisuals.gd").profile(active_weapon_id())
 	return gun.to_global(Vector3(0,0.035,-float(profile.length)))
 
 func tailored_mesh(width: float, height: float, style: String, crown: bool = false) -> ArrayMesh:
@@ -350,7 +408,7 @@ func act(kind: String) -> void:
 	bottle.visible = kind == "drink"
 	if is_instance_valid(tea_glass):
 		tea_glass.visible = kind == "iced_tea"
-	gun.visible = kind not in ["drink", "iced_tea"]
+	_set_weapon_stowed()
 	set_expression(kind)
 	motion = create_tween()
 	if load("res://scripts/player/AvatarGestures.gd").new().play(self,kind):
@@ -398,7 +456,7 @@ func act(kind: String) -> void:
 				bottle.visible = false
 				if is_instance_valid(tea_glass):
 					tea_glass.visible = false
-				gun.visible = true)
+				_set_weapon_stowed())
 		"downed":
 			downed = true
 			motion.tween_property(rig, "position:y", -0.08, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)

@@ -106,6 +106,10 @@ func build(a: PlayerAvatar, d: Dictionary) -> void:
 	a.hands.append(a.part(a.sphere(0.15, 0.24), Vector3(0, -0.49, 0), skin, a.arm))
 	a.part(a.sphere(0.07,0.13),Vector3(0.11,-0.47,-0.1),skin,a.arm)
 	a.gun = a.part(a.box(Vector3(0.13, 0.18, 0.38)), Vector3(0, -0.5, -0.18), Color("#6a7f89"), a.arm)
+	# Public equipment is also reflected on the body. The hand copy is only shown
+	# during the short draw/fire presentation; this copy rests in the hip holster
+	# or across the back for rifles.
+	a.holstered_gun = a.part(a.box(Vector3(0.13, 0.18, 0.38)), Vector3(0.46, 0.66, 0.035), Color("#6a7f89"), a.rig)
 	a.bottle = a.part(a.cylinder(0.065, 0.11, 0.34), Vector3(0, -0.55, -0.12), Color("#5aaf88"), a.arm)
 	a.bottle.visible = false
 	# A separate short, wide glass keeps TRÀ ĐÁ readable from the table camera

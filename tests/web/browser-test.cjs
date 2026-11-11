@@ -311,11 +311,13 @@ async function save(page,name) {
       const aim=(await snapshot(page)).avatars[String(target)];
       await clickAt(page,aim.x,aim.y);
       if(mobile){
-        const preview=await snapshot(page);
-        assert.equal(preview.selected,card.instance_id,'first touch does not commit');
-        assert(preview.targeting.guide&&preview.targeting.reticle,'first touch shows aim preview');
-        await save(page,'aim');
-        await clickAt(page,aim.x,aim.y);
+        // V21: an unambiguous valid avatar/nameplate is intentionally one-tap.
+        // Overlapping hitboxes still route through the compact target chooser;
+        // that ambiguity path is covered by MobileGameplayExperienceV21Test.
+        const committed=await snapshot(page);
+        assert.equal(committed.selected,-1,'clear mobile target commits in one touch');
+        assert(!committed.private.hand.some(c=>c.instance_id===card.instance_id),'one-touch target consumes only the selected accepted card');
+        await save(page,'shot');
       }
       await wait(async()=>!(await snapshot(page)).private.hand.some(c=>c.instance_id===card.instance_id),'accepted 3D targeting');
       targeted=true;

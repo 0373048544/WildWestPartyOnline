@@ -2,12 +2,13 @@ extends RefCounted
 
 # Cosmetic dimensions only: never used by targeting/range/damage rules.
 const PROFILES := {
-	"": {"length":0.31,"rifle":false,"body":0.17,"brass":false},
-	"schofield": {"length":0.44,"rifle":false,"body":0.21,"brass":false},
-	"volcanic": {"length":0.28,"rifle":false,"body":0.24,"brass":true},
-	"remington": {"length":0.61,"rifle":true,"body":0.26,"brass":false},
-	"carabine": {"length":0.76,"rifle":true,"body":0.29,"brass":false},
-	"winchester": {"length":0.91,"rifle":true,"body":0.31,"brass":true}
+	"": {"length":0.31,"rifle":false,"body":0.17,"brass":false,"class":"SÚNG NGẮN","recoil":0.19,"draw_time":0.075},
+	"schofield": {"length":0.44,"rifle":false,"body":0.21,"brass":false,"class":"Ổ QUAY NẶNG","recoil":0.24,"draw_time":0.085},
+	"volcanic": {"length":0.28,"rifle":false,"body":0.24,"brass":true,"class":"LẶP NHANH","recoil":0.13,"draw_time":0.055},
+	"remington": {"length":0.61,"rifle":true,"body":0.26,"brass":false,"class":"SÚNG TRƯỜNG","recoil":0.23,"draw_time":0.11},
+	"carabine": {"length":0.76,"rifle":true,"body":0.29,"brass":false,"class":"CARBINE","recoil":0.21,"draw_time":0.115},
+	"winchester": {"length":0.91,"rifle":true,"body":0.31,"brass":true,"class":"ĐÒN BẨY","recoil":0.27,"draw_time":0.125},
+	"gatling": {"length":0.72,"rifle":true,"body":0.36,"brass":true,"class":"LIÊN THANH","recoil":0.16,"draw_time":0.09}
 }
 static var cache: Dictionary = {}
 static var materials: Array = []
@@ -16,6 +17,11 @@ static var tube: CylinderMesh
 
 static func profile(key: String) -> Dictionary:
 	return PROFILES.get(key,PROFILES[""])
+
+static func presentation_class(key: String) -> String:
+	if key == "shoot":
+		key = ""
+	return str(profile(key).get("class", "SÚNG NGẮN"))
 
 static func mesh_for(key: String) -> ArrayMesh:
 	if not PROFILES.has(key):
@@ -51,6 +57,17 @@ static func mesh_for(key: String) -> ArrayMesh:
 		for offset in [-0.065,0.065]:
 			pieces[2].append([false,Vector3(0.018,0.02,0.12),Vector3(offset,-0.11,-0.1),Vector3.ZERO])
 		pieces[2].append([false,Vector3(0.14,0.02,0.02),Vector3(0,-0.11,-0.16),Vector3.ZERO])
+	if key == "schofield":
+		# Tall hammer and squared top strap make the heavy Schofield readable.
+		pieces[0].append([false,Vector3(0.055,0.08,0.07),Vector3(0,0.105,0.015),Vector3(-0.28,0,0)])
+	if key == "remington":
+		pieces[0].append([false,Vector3(0.035,0.045,d.length*0.56),Vector3(0,0.085,-d.length*0.47),Vector3.ZERO])
+	if key == "carabine":
+		pieces[1].append([false,Vector3(0.16,0.10,0.18),Vector3(0,0.015,0.24),Vector3(0.12,0,0)])
+	if key == "gatling":
+		for offset in [-0.055, 0.0, 0.055]:
+			pieces[0].append([true,Vector3(0.035,d.length,0.035),Vector3(offset,0.045,-d.length/2),Vector3(PI/2,0,0)])
+		pieces[2].append([false,Vector3(0.25,0.20,0.24),Vector3(0,0.0,0.02),Vector3.ZERO])
 	var result := ArrayMesh.new()
 	for group in range(3):
 		var surface := SurfaceTool.new()

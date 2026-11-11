@@ -583,6 +583,7 @@ func animate(actor: int, kind: String, target: int) -> void:
 func play_animation(actor: int, kind: String, target: int) -> void:
 	if not avatars.has(actor):
 		return
+	var requested_kind: String = kind
 	var spread_targets: Array = []
 	if kind == "gatling":
 		for id in avatars:
@@ -591,6 +592,10 @@ func play_animation(actor: int, kind: String, target: int) -> void:
 		kind = "shoot"
 	if kind == "shoot" and avatars.has(target):
 		avatars[actor].face_target(avatars[target].global_position)
+	elif requested_kind == "gatling" and not spread_targets.is_empty():
+		avatars[actor].face_target(spread_targets[0])
+	if kind == "shoot":
+		avatars[actor].prepare_fire_visual("gatling" if requested_kind == "gatling" else "")
 	avatars[actor].act(kind)
 	var at: Vector3 = avatars[actor].position + Vector3(0, 2.6, 0)
 	match kind:
@@ -598,10 +603,13 @@ func play_animation(actor: int, kind: String, target: int) -> void:
 			camera_shake = maxf(camera_shake, 0.018) if VisualSettings.camera_motion() else 0.0
 			var shooting_avatar: PlayerAvatar = avatars[actor]
 			var flash_timing := shooting_avatar.create_tween()
-			flash_timing.tween_interval(0.095)
+			flash_timing.tween_interval(shooting_avatar.fire_delay())
 			flash_timing.tween_callback(func():
 				if is_instance_valid(shooting_avatar):
-					var muzzle: Vector3 = shooting_avatar.muzzle_position()
+					# PlayerAvatar returns a global muzzle transform because the hand is
+					# nested under the animated rig. TableEffects owns local-space pooled
+					# nodes, so convert once here before spawning flash/smoke/tracers.
+					var muzzle: Vector3 = effects.to_local(shooting_avatar.muzzle_position())
 					effects.muzzle(muzzle)
 					effects.gun_smoke(muzzle)
 					if avatars.has(target):

@@ -11,6 +11,8 @@ static var smoke_mesh: SphereMesh
 static var smoke_materials: Array[StandardMaterial3D] = []
 static var starburst_mesh: ImmediateMesh
 static var starburst_material: StandardMaterial3D
+static var muzzle_core_mesh: SphereMesh
+static var muzzle_core_material: StandardMaterial3D
 var floating_pool: Array[Label3D] = []
 var bullet_pool: Array[MeshInstance3D] = []
 var puff_pool: Array[MeshInstance3D] = []
@@ -25,6 +27,22 @@ func _presentation_scale(value: float) -> float:
 	# overview camera. Keep transient card presentations readable without letting
 	# them cover opponents, the centre table, or the local hand.
 	return value * 0.16 if is_instance_valid(mobile_camera_node) and bool(mobile_camera_node.get("enabled")) else value
+
+func _camera_safe_origin(at: Vector3) -> Vector3:
+	if _presentation_scale(1.0) >= 0.5:
+		return at
+	var camera := get_viewport().get_camera_3d()
+	if not is_instance_valid(camera):
+		return at
+	var global_at: Vector3 = to_global(at)
+	var offset: Vector3 = global_at - camera.global_position
+	var distance: float = offset.length()
+	# A remote barrel can point directly into the first-person near plane. Moving
+	# only the cosmetic flash along the same view ray preserves its screen source
+	# while preventing perspective from turning a tiny flash into a full overlay.
+	if distance > 0.001 and distance < 1.65:
+		return to_local(camera.global_position + offset / distance * 1.65)
+	return at
 
 func _acquire_mesh() -> MeshInstance3D:
 	var node: MeshInstance3D
@@ -84,6 +102,8 @@ func gun_smoke(at: Vector3) -> void:
 		gun_puff_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		gun_puff_material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 		gun_puff_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var first_person_mobile: bool = _presentation_scale(1.0) < 0.5
+	at = _camera_safe_origin(at)
 	for index in range(2):
 		var puff: MeshInstance3D = puff_pool.pop_back() if not puff_pool.is_empty() else MeshInstance3D.new()
 		puff.mesh = gun_puff_mesh
@@ -95,10 +115,10 @@ func gun_smoke(at: Vector3) -> void:
 		puff.visible = true
 		puff.transparency = 0.0
 		puff.position = at
-		puff.scale = Vector3.ONE * 0.22
+		puff.scale = Vector3.ONE * (0.055 if first_person_mobile else 0.22)
 		var tween := puff.create_tween().set_parallel()
-		tween.tween_property(puff,"position",at+Vector3(0.08*index,0.35+0.12*index,0),0.55)
-		tween.tween_property(puff,"scale",Vector3.ONE*0.65,0.55)
+		tween.tween_property(puff,"position",at+Vector3(0.03*index,0.13+0.05*index,0) if first_person_mobile else at+Vector3(0.08*index,0.35+0.12*index,0),0.55)
+		tween.tween_property(puff,"scale",Vector3.ONE*(0.18 if first_person_mobile else 0.65),0.55)
 		tween.tween_property(puff,"transparency",1.0,0.55)
 		tween.chain().tween_callback(_release_puff.bind(puff))
 
@@ -226,17 +246,46 @@ func smoke(at: Vector3) -> void:
 		tween.chain().tween_callback(_release_mesh.bind(puff))
 
 func muzzle(at: Vector3) -> void:
-	starburst(at, 0.23, 0.12)
-	var flash := OmniLight3D.new()
-	flash.light_color = Color("#ffca70")
-	flash.light_energy = 2.0
-	flash.omni_range = 2.0
-	add_child(flash)
-	flash.position = at
-	var tween := flash.create_tween()
-	tween.tween_property(flash, "light_energy", 0.0, 0.12)
-	tween.tween_callback(flash.queue_free)
-	spark(at, Color("#ffd978"), 5, 0.35)
+	var first_person_mobile: bool = _presentation_scale(1.0) < 0.5
+	at = _camera_safe_origin(at)
+	# A billboard star viewed straight down the barrel grows into a screen-sized
+	# polygon in first-person perspective. Mobile keeps the emissive core, sparks
+	# and smoke; the broader comic star remains a desktop/table-camera accent.
+	if not first_person_mobile:
+		starburst(at, 0.17, 0.075)
+	if not muzzle_core_mesh:
+		muzzle_core_mesh = SphereMesh.new()
+		muzzle_core_mesh.radius = 0.075
+		muzzle_core_mesh.height = 0.15
+		muzzle_core_mesh.radial_segments = 7
+		muzzle_core_mesh.rings = 3
+		muzzle_core_material = StandardMaterial3D.new()
+		muzzle_core_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		muzzle_core_material.albedo_color = Color("#fff0a1")
+		muzzle_core_material.emission_enabled = true
+		muzzle_core_material.emission = Color("#ffb33f")
+		muzzle_core_material.emission_energy_multiplier = 2.2
+	var core := _acquire_mesh()
+	core.mesh = muzzle_core_mesh
+	core.material_override = muzzle_core_material
+	core.position = at
+	core.scale = Vector3(0.065, 0.065, 0.18) if first_person_mobile else Vector3(0.48, 0.48, 1.25)
+	var core_tween := core.create_tween()
+	core_tween.tween_property(core, "scale", Vector3.ONE * 0.01, 0.09).set_trans(Tween.TRANS_QUAD)
+	core_tween.tween_callback(_release_mesh.bind(core))
+	# Dynamic lights are reserved for desktop/high quality; the emissive core keeps
+	# Web/mobile gunfire readable without creating an expensive realtime light.
+	if not VisualSettings.constrained_device():
+		var flash := OmniLight3D.new()
+		flash.light_color = Color("#ffca70")
+		flash.light_energy = 1.8
+		flash.omni_range = 1.8
+		add_child(flash)
+		flash.position = at
+		var tween := flash.create_tween()
+		tween.tween_property(flash, "light_energy", 0.0, 0.10)
+		tween.tween_callback(flash.queue_free)
+	spark(at, Color("#ffd978"), 2 if first_person_mobile else 4, 0.065 if first_person_mobile else 0.31)
 
 func bullet(origin: Vector3, target: Vector3, delay: float = 0) -> void:
 	# No collision, damage or authority. A short moving fleck, never a laser.
