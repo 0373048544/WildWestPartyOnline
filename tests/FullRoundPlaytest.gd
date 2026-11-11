@@ -230,10 +230,10 @@ func run_round(layout_name: String, viewport_size: Vector2i) -> void:
 	var journal_button: Button = app.match_hud.get_node("MatchLog").find_child("ToggleHistory", true, false)
 	var journal_rect := journal_button.get_global_rect()
 	var chat_button_rect := chat.toggle_button.get_global_rect()
-	check(absf(chat_button_rect.position.x - journal_rect.position.x) <= 1.0 and chat_button_rect.position.y >= journal_rect.end.y,
-		layout_name + ": collapsed Chat is stacked directly below Journal (chat=%s journal=%s)" % [chat_button_rect, journal_rect])
-	check(chat_button_rect.size.x <= journal_rect.size.x + 1.0 and chat_button_rect.size.y >= load("res://scripts/ui/MatchLayout.gd").units(chat, 40.0),
-		layout_name + ": Chat button matches Journal width and remains touch-friendly (chat=%s journal=%s)" % [chat_button_rect, journal_rect])
+	check(absf(chat_button_rect.position.y - journal_rect.position.y) <= 1.0 and chat_button_rect.position.x >= journal_rect.end.x,
+		layout_name + ": collapsed Chat shares Journal's compact HUD row (chat=%s journal=%s)" % [chat_button_rect, journal_rect])
+	check(chat_button_rect.size.is_equal_approx(journal_rect.size) and chat_button_rect.size.y >= load("res://scripts/ui/MatchLayout.gd").units(chat, 40.0),
+		layout_name + ": Chat exactly matches Journal size and remains touch-friendly (chat=%s journal=%s)" % [chat_button_rect, journal_rect])
 	chat.append_message({"message_id":"round:%s" % layout_name, "sender_id":3, "sender_name":"Cao Bồi Không Bao Giờ Ngủ", "text":"coi chừng ông bên trái 😂", "timestamp":1}, true)
 	chat.open_chat()
 	await settle(0.05)
