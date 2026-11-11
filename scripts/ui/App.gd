@@ -249,6 +249,19 @@ func refresh() -> void:
 	var state: Dictionary = NetworkManager.public_state
 	_observe_player_connections(state)
 	var in_game: bool = not state.is_empty() and state.get("started", false)
+	# Lobby snapshots (ready toggles, reconnects and roster changes) are frequent.
+	# Keep the mounted lobby, scroll position and focused control alive. The lobby
+	# component performs a keyed diff and updates only changed text/badges.
+	if (
+		not state.is_empty()
+		and not in_game
+		and error_text.is_empty()
+		and is_instance_valid(content)
+		and content.name == "Lobby"
+		and content.has_method("configure")
+	):
+		content.configure(self, state)
+		return
 	# Network snapshots are frequent. Keep the table and HUD alive for the whole
 	# match; MatchHUD invalidates only the sections whose input changed.
 	if (

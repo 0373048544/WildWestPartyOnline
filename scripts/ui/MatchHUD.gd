@@ -616,6 +616,21 @@ func build_top() -> void:
 		if int(player.player_id) == app.local_id() and not bool(player.get("is_alive", true)):
 			title = "ĐANG XEM · LƯỢT CỦA " + current_player_name
 			break
+	# Compact presentation copy only; authoritative phase/turn data is unchanged.
+	# Long Vietnamese status strings were the main source of mobile clipping.
+	if layout.mobile(self):
+		var short_name := current_player_name
+		if short_name.length() > 14:
+			short_name = short_name.left(13) + "…"
+		title = "LƯỢT CỦA BẠN" if state.current_player == app.local_id() else "LƯỢT CỦA " + short_name
+		if app.selected >= 0:
+			title = "CHỌN MỤC TIÊU"
+		elif str(request.get("reaction_type", "")) == "survive":
+			title = "HẤP HỐI — CẦN CỨU"
+		elif not request.is_empty():
+			title = "PHẢN ỨNG"
+		elif int(state.get("choice_player", 0)) > 0 and int(state.get("choice_player", 0)) != app.local_id():
+			title = "CHỜ ĐỐI THỦ"
 
 	var phase: String = TextCatalog.text(
 		state.phase

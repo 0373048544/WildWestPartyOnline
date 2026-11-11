@@ -311,7 +311,7 @@ func layout_chat() -> void:
 	send_button.custom_minimum_size = Vector2(layout.units(self, 64.0), touch)
 	var button_rect: Rect2 = _journal_button_rect(layout)
 	if layout.mobile(self):
-		button_rect.size.x = minf(button_rect.size.x, layout.units(self, 72.0))
+		button_rect.size.x = minf(button_rect.size.x, layout.units(self, 96.0))
 	toggle_button.position = button_rect.position
 	toggle_button.size = button_rect.size
 	var panel_rect: Rect2 = layout.chat_panel_rect(self)
@@ -341,9 +341,9 @@ func _journal_button_rect(layout: Script) -> Rect2:
 			if is_instance_valid(child) and child.is_visible_in_tree():
 				var journal: Rect2 = child.get_global_rect()
 				return Rect2(
-					Vector2(journal.position.x, journal.end.y + layout.units(self, 4.0)),
+					Vector2(journal.end.x + layout.units(self, 6.0), journal.position.y),
 					Vector2(
-						minf(journal.size.x, layout.units(self, 72.0)) if layout.mobile(self) else journal.size.x,
+						journal.size.x if layout.mobile(self) else journal.size.x,
 						maxf(layout.units(self, 40.0), journal.size.y)
 					)
 				)

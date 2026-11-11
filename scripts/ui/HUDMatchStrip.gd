@@ -26,7 +26,8 @@ func configure(title: String, phase: String, remaining: float) -> void:
 	marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(marker)
 	var label := Label.new()
-	label.text = title + "  ·  " + phase
+	label.text = title if phone else title + "  ·  " + phase
+	label.tooltip_text = title + " · " + phase
 	label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	label.clip_text = true
 	label.custom_minimum_size.x = 0.0

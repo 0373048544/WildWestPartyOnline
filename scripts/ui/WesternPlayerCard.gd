@@ -3,7 +3,88 @@ extends PanelContainer
 
 const WesternStatusBadgeScript = preload("res://scripts/ui/WesternStatusBadge.gd")
 
+var _stable_built := false
+var _stable_signature := ""
+var _stable_seat := -1
+var _stable_icon: Label
+var _stable_name: Label
+var _stable_status: Label
+var _stable_host: PanelContainer
+var _stable_ready: PanelContainer
+
 func configure(player: Dictionary, host_id: int, local_id: int, compact: bool = false) -> void:
+	if not _stable_built:
+		_build_stable()
+	var signature := JSON.stringify([
+		player.get("player_id", 0), player.get("display_name", ""),
+		player.get("seat_index", 0), player.get("ready", false),
+		player.get("is_connected", true), host_id, local_id, compact
+	])
+	if signature == _stable_signature:
+		return
+	_stable_signature = signature
+	var id := int(player.get("player_id", 0))
+	var seat := int(player.get("seat_index", 0))
+	var connected := bool(player.get("is_connected", true))
+	var ready := bool(player.get("ready", false)) and connected
+	var is_host := id == host_id
+	name = "Player%d" % id
+	if seat != _stable_seat:
+		_stable_seat = seat
+		var seat_color: Color = SaloonTheme.SEATS[seat % SaloonTheme.SEATS.size()]
+		add_theme_stylebox_override("panel", SaloonTheme.panel(Color("#243238"), seat_color, 8 if compact else 10))
+	_stable_icon.text = "H" if is_host else str(seat + 1)
+	_stable_icon.add_theme_color_override("font_color", SaloonTheme.GOLD if is_host else SaloonTheme.SEATS[seat % SaloonTheme.SEATS.size()].lightened(0.22))
+	_stable_name.text = str(player.get("display_name", "Cao bồi")) + (" · BẠN" if id == local_id else "")
+	_stable_name.tooltip_text = str(player.get("display_name", "Cao bồi"))
+	_stable_status.text = "Mất kết nối · giữ chỗ" if not connected else ("Sẵn sàng" if ready else "Chưa sẵn sàng")
+	_stable_status.add_theme_color_override("font_color", Color("#9fd4ab") if ready else Color("#c9b996"))
+	_stable_host.visible = is_host
+	_stable_ready.configure("MẤT MẠNG" if not connected else ("SẴN SÀNG" if ready else "CHỜ"), "danger" if not connected else ("success" if ready else "warning"))
+	_stable_name.add_theme_font_size_override("font_size", 15 if compact else 17)
+	_stable_status.add_theme_font_size_override("font_size", 11 if compact else 12)
+	custom_minimum_size = Vector2(0, 54 if compact else 60)
+
+func _build_stable() -> void:
+	_stable_built = true
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var row := HBoxContainer.new()
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_theme_constant_override("separation", 7)
+	add_child(row)
+	_stable_icon = Label.new()
+	_stable_icon.custom_minimum_size.x = 24
+	_stable_icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_stable_icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_stable_icon.add_theme_font_size_override("font_size", 16)
+	row.add_child(_stable_icon)
+	var identity := VBoxContainer.new()
+	identity.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	identity.add_theme_constant_override("separation", 0)
+	row.add_child(identity)
+	_stable_name = Label.new()
+	_stable_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_stable_name.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_stable_name.clip_text = true
+	_stable_name.add_theme_color_override("font_color", SaloonTheme.CREAM)
+	identity.add_child(_stable_name)
+	_stable_status = Label.new()
+	_stable_status.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_stable_status.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	_stable_status.clip_text = true
+	identity.add_child(_stable_status)
+	_stable_host = WesternStatusBadgeScript.new()
+	_stable_host.configure("CHỦ", "host")
+	_stable_host.text_label.add_theme_font_size_override("font_size", 10)
+	row.add_child(_stable_host)
+	_stable_ready = WesternStatusBadgeScript.new()
+	_stable_ready.text_label.add_theme_font_size_override("font_size", 10)
+	row.add_child(_stable_ready)
+
+# Kept for compatibility with old serialized/debug callers; production uses the
+# stable row above so ready snapshots never recreate its controls.
+func _legacy_configure(player: Dictionary, host_id: int, local_id: int, compact: bool = false) -> void:
 	name = "Player%d" % int(player.player_id)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var seat_color: Color = SaloonTheme.SEATS[int(player.seat_index) % SaloonTheme.SEATS.size()]

@@ -90,14 +90,14 @@ func _ready() -> void:
 		_finish()
 		return
 	var hud_id: int = hud.get_instance_id()
-	var label: Label = hud.get_node("HealthValue") as Label
-	expect(hud.health_text() == "\u2665 4/4", "4/4 HP renders with a real heart glyph")
+	var label: Label = hud.find_child("HealthValue", true, false) as Label
+	expect(hud.health_text() == "4/4", "4/4 HP renders beside the vector heart")
 	expect(not hud.health_text().contains("\u00c3") and not hud.health_text().contains("\ufffd"), "heart text has no mojibake or replacement glyph")
 	expect(hud.mouse_filter == Control.MOUSE_FILTER_IGNORE and label.mouse_filter == Control.MOUSE_FILTER_IGNORE,
 		"health HUD and child label never block table touch")
 
 	await publish_health(3)
-	expect(health_hud().health_text() == "\u2665 3/4", "damage snapshot updates local HP to 3/4")
+	expect(health_hud().health_text() == "3/4", "damage snapshot updates local HP to 3/4")
 	expect(health_hud().get_instance_id() == hud_id, "HP snapshot updates reuse the existing HUD node")
 
 	# Current turn and opponent HP must never select the displayed health owner.
@@ -106,17 +106,17 @@ func _ready() -> void:
 	GameManager.publish()
 	app.refresh()
 	await settle()
-	expect(health_hud().health_text() == "\u2665 3/4", "HUD reads local player HP, not current-turn or opponent HP")
+	expect(health_hud().health_text() == "3/4", "HUD reads local player HP, not current-turn or opponent HP")
 
 	await publish_health(1)
-	expect(health_hud().health_text() == "\u2665 1/4", "1/4 HP remains readable")
+	expect(health_hud().health_text() == "1/4", "1/4 HP remains readable")
 	expect(label.get_theme_color("font_color").is_equal_approx(Color("#ffaaa0")), "1 HP uses the low-health warning color")
 	await publish_health(0, 4, true)
-	expect(health_hud().health_text() == "\u2665 0/4", "alive zero-HP/dying state is explicit without falsely declaring elimination")
+	expect(health_hud().health_text() == "HẤP HỐI", "alive zero-HP state is explicit without falsely declaring elimination")
 	await publish_health(0, 4, false)
 	expect(health_hud().health_text() == "\u0110\u00c3 LO\u1ea0I", "dead or spectating player sees the eliminated state")
 	await publish_health(2, 4, true)
-	expect(health_hud().health_text() == "\u2665 2/4", "heal/reconnect snapshot restores the authoritative HP value")
+	expect(health_hud().health_text() == "2/4", "heal/reconnect snapshot restores the authoritative HP value")
 
 	# Countdown-only updates must not recreate the persistent HUD.
 	var countdown_private: Dictionary = NetworkManager.private_state.duplicate(true)
@@ -130,7 +130,7 @@ func _ready() -> void:
 	# A new match snapshot updates the same presentation node instead of retaining stale HP.
 	GameManager.match_id += 1
 	await publish_health(4, 4, true)
-	expect(health_hud().health_text() == "\u2665 4/4", "rematch snapshot clears stale HP")
+	expect(health_hud().health_text() == "4/4", "rematch snapshot clears stale HP")
 
 	for viewport_case in [
 		{"size": Vector2i(360, 640), "safe": Vector4(0, 20, 0, 16)},
