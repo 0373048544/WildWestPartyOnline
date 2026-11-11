@@ -31,17 +31,41 @@ func configure(id: String, height: float = 160) -> void:
 	var environment := WorldEnvironment.new()
 	var settings := Environment.new()
 	settings.background_mode = Environment.BG_COLOR
-	settings.background_color = Color("#233f48")
+	settings.background_color = Color("#152b32")
 	settings.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	settings.ambient_light_color = Color("#c1d6dc")
-	settings.ambient_light_energy = 0.6
+	settings.ambient_light_energy = 0.72
 	environment.environment = settings
 	viewport.add_child(environment)
 	var light := DirectionalLight3D.new()
 	viewport.add_child(light)
 	light.rotation_degrees = Vector3(-35, -25, 0)
 	light.light_color = Color("#ffe4bb")
-	light.light_energy = 1.2
+	light.light_energy = 1.35
+	var rim := DirectionalLight3D.new()
+	viewport.add_child(rim)
+	rim.rotation_degrees = Vector3(-18, 150, 0)
+	rim.light_color = Color("#70bbc0")
+	rim.light_energy = 0.48
+	# A tiny portrait stage gives every procedural character a consistent premium
+	# silhouette on desktop and Web/mobile without adding per-frame work.
+	var halo := MeshInstance3D.new()
+	var halo_mesh := CylinderMesh.new()
+	halo_mesh.top_radius = 1.08
+	halo_mesh.bottom_radius = 1.08
+	halo_mesh.height = 0.035
+	halo_mesh.radial_segments = 40
+	halo.mesh = halo_mesh
+	halo.position = Vector3(0, 1.55, 0.42)
+	halo.rotation_degrees = Vector3(90, 0, 0)
+	var halo_material := StandardMaterial3D.new()
+	halo_material.albedo_color = Color("#b77a42")
+	halo_material.emission_enabled = true
+	halo_material.emission = Color("#7b4d2d")
+	halo_material.emission_energy_multiplier = 0.28
+	halo_material.roughness = 0.78
+	halo.material_override = halo_material
+	viewport.add_child(halo)
 
 func react(kind: String = "drink") -> void:
 	var avatar_action: String = {

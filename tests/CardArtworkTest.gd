@@ -12,6 +12,16 @@ func check(value: bool, message: String) -> void:
 
 
 func _ready() -> void:
+	var card_back_path := "res://assets/cards/card_back_western_v2.webp"
+	check(FileAccess.file_exists(card_back_path), "optimized dedicated Western card back exists")
+	var card_back := load(card_back_path) as Texture2D
+	check(is_instance_valid(card_back) and card_back.get_width() == 512 and card_back.get_height() == 768, "card back is Web/mobile optimized at 512x768")
+	var deck_object := TableObject.new()
+	add_child(deck_object)
+	deck_object.configure("card", {"name": "CHỒNG RÚT"}, {"kind": "deck"})
+	deck_object.show_card_back()
+	check(deck_object.get_node_or_null("WesternCardBack") is Sprite3D, "draw pile permanently displays the dedicated card back")
+	deck_object.queue_free()
 	var definitions: Dictionary = CardData.definitions()
 	var expected_ids: Array[String] = [
 		"shoot", "dodge", "drink", "panic", "cat_balou", "showdown",

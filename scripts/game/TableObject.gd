@@ -17,6 +17,7 @@ var spawn_tween: Tween
 var base_color := Color("#446985")
 static var material_cache: Dictionary = {}
 static var mesh_cache: Dictionary = {}
+const CARD_BACK_TEXTURE := preload("res://assets/cards/card_back_western_v2.webp")
 
 func set_face(card: Dictionary) -> void:
 	if not is_instance_valid(corner_label):
@@ -52,6 +53,26 @@ func _set_artwork(card_data_id: String) -> void:
 		add_child(artwork)
 	artwork.texture = CardArt.texture(card_data_id)
 	artwork.visible = artwork.texture != null
+
+func _make_card_back(at: Vector3, yaw: float = 0.0, scale_factor: float = 1.0) -> Sprite3D:
+	var back := Sprite3D.new()
+	back.name = "WesternCardBack"
+	back.texture = CARD_BACK_TEXTURE
+	back.pixel_size = 0.00042 * scale_factor
+	back.position = at
+	back.rotation = Vector3(-PI / 2.0, yaw, 0.0)
+	back.double_sided = true
+	back.no_depth_test = false
+	back.render_priority = 0
+	add_child(back)
+	return back
+
+func show_card_back() -> void:
+	if is_instance_valid(artwork):
+		artwork.visible = false
+	if get_node_or_null("WesternCardBack") == null:
+		var back := _make_card_back(Vector3(0, 0.075, -0.08), 0.0, 1.0)
+		back.name = "WesternCardBack"
 
 func mesh(mesh_data: Mesh, at: Vector3, color: Color) -> MeshInstance3D:
 	var item := MeshInstance3D.new()
@@ -124,8 +145,11 @@ func configure(kind: String, data: Dictionary, metadata: Dictionary) -> void:
 				artwork.pixel_size = 0.001
 		"hand":
 			for index in range(3):
-				var back := box(Vector3(0.26, 0.04, 0.4), Vector3(-0.16 + index * 0.16, 0.09 + index * 0.025, -0.12), Color("#844e46"))
-				back.rotation.y = (index - 1) * 0.16
+				_make_card_back(
+					Vector3(-0.16 + index * 0.16, 0.09 + index * 0.025, -0.12),
+					(index - 1) * 0.16,
+					0.48
+				)
 		"barrel":
 			cylinder(0.18, 0.35, Vector3(0, 0.23, -0.1), Color("#9c7548"))
 			cylinder(0.21,0.2,Vector3(0,0.23,-0.1),Color("#b98c52"))

@@ -122,6 +122,7 @@ func sync(snapshot: Dictionary, owner: int, request: Dictionary) -> void:
 			objects[pile].set_face(top)
 		else:
 			objects[pile].title.text = "CHỒNG RÚT\n%d lá" % state.get("draw_count", 0)
+			objects[pile].show_card_back()
 
 func token_allowed(token: Dictionary) -> bool:
 	if token.get("kind", "") == "market":
