@@ -10,13 +10,17 @@ var body: ScrollContainer
 var rows: VBoxContainer
 var empty_label: Label
 var layout: Script = preload("res://scripts/ui/MatchLayout.gd")
+var expanded_panel_style: StyleBoxFlat
+var collapsed_panel_style: StyleBoxEmpty
 
 func setup(owner_app: Node) -> void:
 	app = owner_app
 	name = "MatchLog"
 	z_index = layout.Z_CHAT - 10
 	mouse_filter = Control.MOUSE_FILTER_STOP
-	add_theme_stylebox_override("panel", SaloonTheme.panel(Color(0.055, 0.075, 0.075, 0.96), SaloonTheme.GOLD.darkened(0.18), 12))
+	expanded_panel_style = SaloonTheme.panel(Color(0.055, 0.075, 0.075, 0.96), SaloonTheme.GOLD.darkened(0.18), 12)
+	collapsed_panel_style = StyleBoxEmpty.new()
+	add_theme_stylebox_override("panel", collapsed_panel_style)
 	var stack := VBoxContainer.new()
 	stack.add_theme_constant_override("separation", 5)
 	add_child(stack)
@@ -81,6 +85,9 @@ func sync_legacy(lines: Array, next_match_id: int, force_collapse: bool = false)
 
 func set_expanded(value: bool) -> void:
 	expanded = value
+	# The collapsed control is only the Western button. A panel background here
+	# created the unwanted black rectangle visible around NHẬT KÝ on mobile.
+	add_theme_stylebox_override("panel", expanded_panel_style if expanded else collapsed_panel_style)
 	if is_instance_valid(app):
 		app.log_expanded = value
 	if not is_instance_valid(body):

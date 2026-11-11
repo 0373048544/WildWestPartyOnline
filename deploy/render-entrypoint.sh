@@ -7,6 +7,10 @@ export WWPO_BIND=127.0.0.1
 
 test -f /app/build/web/index.html || { echo "ERROR: build/web/index.html missing"; exit 1; }
 
+# Expose the exact deployed revision for support/debugging. This contains no
+# secret and is deliberately non-cacheable in nginx.
+printf '%s\n' "${RENDER_GIT_COMMIT:-local}" > /app/build/web/build-version.txt
+
 if [ -f /app/web/network-config.js ]; then
   cp /app/web/network-config.js /app/build/web/network-config.js
 fi

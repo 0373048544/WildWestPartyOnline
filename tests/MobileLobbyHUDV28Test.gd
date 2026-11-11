@@ -142,11 +142,13 @@ func _ready() -> void:
 	app.refresh()
 	await settle()
 	var journal: Button = app.match_hud.get_node("MatchLog").find_child("ToggleHistory", true, false)
+	var journal_panel: PanelContainer = app.match_hud.get_node("MatchLog")
 	var chat: Button = app.chat_panel.get_node("ChatToggle")
 	var health: MobileSelfHealthHUD = app.match_hud.get_node("MobileSelfHealthHUD")
 	check(absf(journal.get_global_rect().position.y - chat.get_global_rect().position.y) <= 2.0, "CHAT and NHẬT KÝ share the second HUD row")
 	check(not journal.get_global_rect().intersects(chat.get_global_rect()), "CHAT and NHẬT KÝ do not overlap")
 	check(not chat.get_global_rect().intersects(health.get_global_rect()), "CHAT does not overlap personal HP")
+	check(journal_panel.get_theme_stylebox("panel") is StyleBoxEmpty, "collapsed NHẬT KÝ has no black outer panel")
 	capture("match_hud_portrait_390x844")
 	GameManager.players[1].current_hp = 0
 	GameManager.players[1].is_alive = true

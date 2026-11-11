@@ -29,6 +29,13 @@ http {
       return 200 "ok\n";
     }
 
+    location = /build-version.txt {
+      access_log off;
+      add_header Content-Type text/plain;
+      add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+      try_files /build-version.txt =404;
+    }
+
     location = /ws {
       if ($http_upgrade = "") {
         return 426;
@@ -53,7 +60,25 @@ http {
       return 404;
     }
 
+    # Godot exports use stable filenames (index.pck/index.wasm/index.js). Safari
+    # can otherwise keep an older game payload after a new Render deployment.
+    # Revalidate binary/static assets and never cache the HTML bootstrap so a
+    # refresh always discovers the current build without downloading unchanged
+    # 38 MB WASM data unnecessarily.
+    location = /index.html {
+      add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+      add_header Pragma "no-cache" always;
+      add_header Expires "0" always;
+      try_files /index.html =404;
+    }
+
+    location ~* \.(?:pck|wasm|js|css)$ {
+      add_header Cache-Control "no-cache, must-revalidate" always;
+      try_files $uri =404;
+    }
+
     location / {
+      add_header Cache-Control "no-cache, must-revalidate" always;
       try_files $uri $uri/ /index.html;
     }
   }
