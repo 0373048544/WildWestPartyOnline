@@ -310,8 +310,9 @@ func layout_chat() -> void:
 	input.custom_minimum_size.y = touch
 	send_button.custom_minimum_size = Vector2(layout.units(self, 64.0), touch)
 	var button_rect: Rect2 = _journal_button_rect(layout)
-	if layout.mobile(self):
-		button_rect.size.x = minf(button_rect.size.x, layout.units(self, 96.0))
+	# Match the measured Journal control exactly. Otherwise WesternButton's touch
+	# minimum can make Chat appear larger after a responsive relayout.
+	toggle_button.custom_minimum_size = button_rect.size
 	toggle_button.position = button_rect.position
 	toggle_button.size = button_rect.size
 	var panel_rect: Rect2 = layout.chat_panel_rect(self)
@@ -342,10 +343,7 @@ func _journal_button_rect(layout: Script) -> Rect2:
 				var journal: Rect2 = child.get_global_rect()
 				return Rect2(
 					Vector2(journal.end.x + layout.units(self, 6.0), journal.position.y),
-					Vector2(
-						journal.size.x if layout.mobile(self) else journal.size.x,
-						maxf(layout.units(self, 40.0), journal.size.y)
-					)
+					journal.size
 				)
 	return layout.chat_button_rect(self)
 

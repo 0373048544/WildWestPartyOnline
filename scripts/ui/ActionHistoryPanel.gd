@@ -157,8 +157,8 @@ func _apply_layout() -> void:
 	)
 	position = Vector2(safe.x + layout.units(self, 8.0), safe.y + layout.get_mobile_banner_height(self) + layout.units(self, 8.0)) if mobile else Vector2(12, 62)
 	var intended_size := Vector2(
-		minf(target_width, layout.units(self, 300.0)) if expanded and mobile else target_width if expanded else layout.units(self, 96.0) if mobile else 118.0,
-		target_height if expanded else layout.units(self, 40.0) if mobile else 42.0
+		minf(target_width, layout.units(self, 300.0)) if expanded and mobile else target_width if expanded else layout.units(self, 88.0) if mobile else 118.0,
+		target_height if expanded else layout.units(self, 44.0) if mobile else 42.0
 	)
 	# Never copy Control.size back into minimum size: Containers may temporarily
 	# clamp it to a stale child minimum during an orientation change.

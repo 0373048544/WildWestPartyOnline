@@ -21,6 +21,7 @@ class HeartIcon extends Control:
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		custom_minimum_size = Vector2(18, 18)
+		size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 	func set_heart_color(value: Color) -> void:
 		if heart_color != value:
@@ -29,10 +30,11 @@ class HeartIcon extends Control:
 
 	func _draw() -> void:
 		# Drawn geometry avoids relying on emoji/symbol fallback fonts in Safari.
-		draw_circle(Vector2(5.5, 5.5), 4.4, heart_color)
-		draw_circle(Vector2(12.5, 5.5), 4.4, heart_color)
+		var offset := (size - Vector2(18, 18)) * 0.5
+		draw_circle(offset + Vector2(5.5, 5.5), 4.4, heart_color)
+		draw_circle(offset + Vector2(12.5, 5.5), 4.4, heart_color)
 		draw_colored_polygon(PackedVector2Array([
-			Vector2(1.4, 6.2), Vector2(16.6, 6.2), Vector2(9.0, 16.2)
+			offset + Vector2(1.4, 6.2), offset + Vector2(16.6, 6.2), offset + Vector2(9.0, 16.2)
 		]), heart_color)
 
 func _ready() -> void:
@@ -60,6 +62,7 @@ func _ready() -> void:
 	_hp_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hp_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_hp_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(_hp_label)
 
 func update_health(row: Dictionary, layout: Script) -> void:
@@ -99,8 +102,8 @@ func update_health(row: Dictionary, layout: Script) -> void:
 	var safe: Vector4 = layout.safe_insets(self)
 	var margin: float = layout.units(self, 8.0)
 	var desired_size := Vector2(
-		layout.units(self, 92.0 if layout.mobile_landscape(self) else 98.0),
-		layout.units(self, 32.0 if layout.mobile_landscape(self) else 34.0)
+		layout.units(self, 88.0),
+		layout.units(self, 44.0)
 	)
 	custom_minimum_size = desired_size
 	size = desired_size

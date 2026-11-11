@@ -172,25 +172,6 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	artwork.texture = CardArt.texture(str(card.get("card_data_id", definition.get("id", ""))))
 	artwork.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	artwork_frame.add_child(artwork)
-	var visual_card_id: String = str(card.get("card_data_id", definition.get("id", "")))
-	if visual_card_id in ["shoot", "schofield", "volcanic", "remington", "carabine", "winchester", "gatling"]:
-		var gun_badge := Panel.new()
-		gun_badge.name = "GunClassBadge"
-		gun_badge.position = Vector2(5, 73)
-		gun_badge.size = Vector2(94, 21)
-		gun_badge.z_index = 4
-		gun_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		gun_badge.add_theme_stylebox_override("panel", SaloonTheme.card_badge(Color("#9b582d"), usable))
-		artwork_frame.add_child(gun_badge)
-		var gun_class := add_text(
-			load("res://scripts/player/WeaponVisuals.gd").presentation_class(visual_card_id),
-			Rect2(3, 1, 88, 18), 10, SaloonTheme.CREAM, gun_badge
-		)
-		gun_class.name = "GunClassText"
-		gun_class.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		gun_class.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		gun_class.autowrap_mode = TextServer.AUTOWRAP_OFF
-		gun_class.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	var type_region := Control.new()
 	type_region.name = "TypeRegion"
 	type_region.position = TYPE_RECT.position

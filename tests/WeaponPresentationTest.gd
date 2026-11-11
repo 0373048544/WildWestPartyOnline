@@ -56,8 +56,7 @@ func _ready() -> void:
 		var card: Button = load("res://scripts/ui/CardView.gd").new()
 		add_child(card)
 		card.configure({"instance_id": 7, "card_data_id": id, "suit": "HEART", "rank": 7}, CardData.data(id), true, false)
-		var badge: Panel = card.visual.find_child("GunClassBadge", true, false) as Panel
-		check(is_instance_valid(badge) and badge.visible, "%s card/preview exposes compact gun-family identity" % id)
+		check(not is_instance_valid(card.visual.find_child("GunClassBadge", true, false)), "%s artwork has no empty overlay strip" % id)
 		card.queue_free()
 
 	var effects := TableEffects.new()

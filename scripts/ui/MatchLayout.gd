@@ -179,8 +179,8 @@ static func chat_button_rect(node: Node) -> Rect2:
 	var safe := safe_rect(node, 8.0)
 	# Matches the collapsed Journal control; ChatPanel replaces this fallback with
 	# the Journal's measured rect once MatchHUD is present.
-	var width := units(node, 72.0 if mobile(node) else 135.0)
-	var height := units(node, 40.0 if mobile(node) else 42.0)
+	var width := units(node, 88.0 if mobile(node) else 135.0)
+	var height := units(node, 44.0 if mobile(node) else 42.0)
 	return Rect2(
 		Vector2(safe.position.x + units(node, 4.0), safe.position.y + units(node, 48.0)),
 		Vector2(width, height)
