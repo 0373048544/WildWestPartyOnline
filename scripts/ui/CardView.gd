@@ -87,6 +87,23 @@ func configure(card: Dictionary, definition: Dictionary, usable: bool, chosen: b
 	var face := SaloonTheme.card_face(accent, face_state, 10)
 	panel.add_theme_stylebox_override("panel", face)
 	visual.add_child(panel)
+	var paper := TextureRect.new()
+	paper.name = "PaperGrain"
+	paper.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	paper.position = Vector2(5, 5)
+	paper.size = CARD_SOURCE_SIZE - Vector2(10, 10)
+	paper.texture = SaloonTheme.card_paper_texture()
+	paper.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	paper.stretch_mode = TextureRect.STRETCH_TILE
+	paper.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	visual.add_child(paper)
+	var inlay := Panel.new()
+	inlay.name = "BrassInlay"
+	inlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	inlay.position = Vector2(5, 5)
+	inlay.size = CARD_SOURCE_SIZE - Vector2(10, 10)
+	inlay.add_theme_stylebox_override("panel", SaloonTheme.card_inlay(accent))
+	visual.add_child(inlay)
 	var header := Control.new()
 	header.name = "HeaderRegion"
 	header.position = HEADER_RECT.position

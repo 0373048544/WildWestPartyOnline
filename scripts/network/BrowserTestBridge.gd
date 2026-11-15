@@ -98,6 +98,8 @@ func collect(node: Node, controls: Array) -> void:
 					var exposed: Rect2 = node.get_global_rect().intersection(node.get_parent().get_global_rect())
 					if not exposed.has_area():
 						return
+					item["w"] = exposed.size.x
+					item["h"] = exposed.size.y
 					item.x = exposed.position.x+minf(30,exposed.size.x/2)
 					item.y = exposed.position.y+minf(60,exposed.size.y/2)
 		else:

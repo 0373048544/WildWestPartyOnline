@@ -7,13 +7,14 @@ export WWPO_BIND=127.0.0.1
 
 test -f /app/build/web/index.html || { echo "ERROR: build/web/index.html missing"; exit 1; }
 
+# Recheck the exact files that nginx is about to serve. Docker normally catches
+# this during image creation; the runtime guard also protects alternate launch
+# paths and makes a broken release fail loudly.
+bash /app/deploy/validate-web-build.sh /app/build/web /app/web
+
 # Expose the exact deployed revision for support/debugging. This contains no
 # secret and is deliberately non-cacheable in nginx.
 printf '%s\n' "${RENDER_GIT_COMMIT:-local}" > /app/build/web/build-version.txt
-
-if [ -f /app/web/network-config.js ]; then
-  cp /app/web/network-config.js /app/build/web/network-config.js
-fi
 
 sed "s/__PORT__/${PUBLIC_PORT}/g" /app/deploy/nginx.conf.template > /tmp/nginx.conf
 nginx -t -c /tmp/nginx.conf

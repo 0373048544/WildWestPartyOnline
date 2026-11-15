@@ -40,6 +40,26 @@ func particle_count(count: int) -> int:
 		factor = minf(factor, 0.25)
 	return maxi(1, int(count * factor))
 
+func geometry_segments(requested: int) -> int:
+	# Compatibility/WebGL meshes stay round enough to read while LOW avoids
+	# spending vertices on silhouettes that occupy only a few phone pixels.
+	var factor: float = {"LOW": 0.55, "MEDIUM": 0.78, "HIGH": 1.0}[level]
+	return maxi(6, int(round(requested * factor)))
+
+func character_update_hz() -> float:
+	return {"LOW": 24.0, "MEDIUM": 30.0, "HIGH": 60.0}[level]
+
+func pooled_vfx_limit() -> int:
+	return {"LOW": 14, "MEDIUM": 24, "HIGH": 32}[level]
+
+func realtime_character_shadows() -> bool:
+	# One directional shadow is reserved for HIGH desktop. Medium iPhone uses
+	# the warm fill/rim setup instead of an expensive realtime shadow map.
+	return level == "HIGH" and not constrained_device()
+
+func fill_light_factor() -> float:
+	return {"LOW": 0.72, "MEDIUM": 0.88, "HIGH": 1.0}[level]
+
 func constrained_device() -> bool:
 	return OS.has_feature("web") or OS.has_feature("mobile")
 

@@ -17,6 +17,8 @@ const DANGER := Color("#c86f58")
 const SEATS: Array[Color] = [Color("#df805c"), Color("#66b7be"), Color("#d6b65c"), Color("#ad88c6"), Color("#78ae75"), Color("#d584a4"), Color("#809ede")]
 
 static var _card_heading_font: Font
+static var _card_style_cache: Dictionary = {}
+static var _card_paper_texture: Texture2D
 
 static func card_heading_font() -> Font:
 	# Slab/serif system fallbacks keep the Western print character while still
@@ -112,6 +114,9 @@ static func input_style(focused: bool = false) -> StyleBoxFlat:
 	return style
 
 static func card_face(accent: Color, state: String = "normal", padding: float = 10.0) -> StyleBoxFlat:
+	var cache_key := "face|%s|%s|%s|%s" % [accent.to_html(), state, padding, VisualSettings.ui_shadow_size(7 if state == "selected" else 4)]
+	if _card_style_cache.has(cache_key):
+		return _card_style_cache[cache_key]
 	var background := PARCHMENT_LIGHT
 	var border := accent.lightened(0.18)
 	var border_width := 2
@@ -133,9 +138,13 @@ static func card_face(accent: Color, state: String = "normal", padding: float = 
 	style.shadow_color = Color(0.06, 0.035, 0.02, 0.34 if state != "disabled" else 0.18)
 	style.shadow_size = VisualSettings.ui_shadow_size(7 if state == "selected" else 4)
 	style.shadow_offset = Vector2(0, 3)
+	_card_style_cache[cache_key] = style
 	return style
 
 static func card_header(accent: Color, active: bool = true) -> StyleBoxFlat:
+	var cache_key := "header|%s|%s" % [accent.to_html(), active]
+	if _card_style_cache.has(cache_key):
+		return _card_style_cache[cache_key]
 	var color := accent.darkened(0.25) if active else Color("#6f6653")
 	var style := panel(color, accent.lightened(0.22) if active else Color("#8a8170"), 5.0)
 	style.set_border_width_all(1)
@@ -143,25 +152,60 @@ static func card_header(accent: Color, active: bool = true) -> StyleBoxFlat:
 	style.content_margin_top = 2
 	style.content_margin_bottom = 2
 	style.shadow_size = 0
+	_card_style_cache[cache_key] = style
 	return style
 
 static func card_art_frame(accent: Color) -> StyleBoxFlat:
+	var cache_key := "art|" + accent.to_html()
+	if _card_style_cache.has(cache_key):
+		return _card_style_cache[cache_key]
 	var style := panel(Color("#30281f"), accent.darkened(0.10), 3.0)
 	style.set_border_width_all(1)
 	style.set_corner_radius_all(7)
 	style.content_margin_top = 3
 	style.content_margin_bottom = 3
 	style.shadow_size = 0
+	_card_style_cache[cache_key] = style
 	return style
 
 static func card_badge(accent: Color, active: bool = true) -> StyleBoxFlat:
+	var cache_key := "badge|%s|%s" % [accent.to_html(), active]
+	if _card_style_cache.has(cache_key):
+		return _card_style_cache[cache_key]
 	var style := badge(accent if active else Color("#777163"), 7)
 	style.bg_color = (accent.darkened(0.34) if active else Color("#625f57"))
 	style.border_color = accent.lightened(0.24) if active else Color("#817d72")
 	style.set_corner_radius_all(7)
 	style.content_margin_top = 2
 	style.content_margin_bottom = 2
+	_card_style_cache[cache_key] = style
 	return style
+
+static func card_inlay(accent: Color) -> StyleBoxFlat:
+	var cache_key := "inlay|" + accent.to_html()
+	if _card_style_cache.has(cache_key):
+		return _card_style_cache[cache_key]
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0)
+	style.border_color = accent.darkened(0.16)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(10)
+	_card_style_cache[cache_key] = style
+	return style
+
+static func card_paper_texture() -> Texture2D:
+	if is_instance_valid(_card_paper_texture):
+		return _card_paper_texture
+	var image := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	for y in range(64):
+		for x in range(64):
+			# Deterministic tiny fibre/speckle variation: one shared 16 KiB texture,
+			# no runtime noise shader and no per-card allocation.
+			var grain := float((x * 17 + y * 31 + x * y * 3) % 23) / 22.0
+			var shade := lerpf(0.82, 1.0, grain)
+			image.set_pixel(x, y, Color(0.91 * shade, 0.80 * shade, 0.59 * shade, 0.22))
+	_card_paper_texture = ImageTexture.create_from_image(image)
+	return _card_paper_texture
 
 static func create() -> Theme:
 	var theme := Theme.new()

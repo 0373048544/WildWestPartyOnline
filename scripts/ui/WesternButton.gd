@@ -3,6 +3,7 @@ extends Button
 var feedback: Tween
 var hovered: bool = false
 var variant: String = "secondary"
+static var _style_cache: Dictionary = {}
 
 func _ready() -> void:
 	var mobile_compact := bool(load("res://scripts/ui/MatchLayout.gd").mobile(self))
@@ -44,11 +45,18 @@ func apply_variant(value: String) -> void:
 			border = Color("#79634b")
 		_:
 			add_theme_font_size_override("font_size", 14 if mobile_compact else 16)
-	add_theme_stylebox_override("normal", SaloonTheme.button_style(normal_color, border, padding))
-	add_theme_stylebox_override("hover", SaloonTheme.button_style(hover_color, border.lightened(0.14), padding))
-	add_theme_stylebox_override("pressed", SaloonTheme.button_style(normal_color.darkened(0.20), border, padding))
-	add_theme_stylebox_override("focus", SaloonTheme.button_style(normal_color.lightened(0.05), Color("#ffe2a0"), padding))
-	add_theme_stylebox_override("disabled", SaloonTheme.button_style(Color("#342f2c"), Color("#655d53"), padding))
+	var style_key := "%s|%s" % [value, mobile_compact]
+	if not _style_cache.has(style_key):
+		_style_cache[style_key] = {
+			"normal": SaloonTheme.button_style(normal_color, border, padding),
+			"hover": SaloonTheme.button_style(hover_color, border.lightened(0.14), padding),
+			"pressed": SaloonTheme.button_style(normal_color.darkened(0.20), border, padding),
+			"focus": SaloonTheme.button_style(normal_color.lightened(0.05), Color("#ffe2a0"), padding),
+			"disabled": SaloonTheme.button_style(Color("#342f2c"), Color("#655d53"), padding)
+		}
+	var styles: Dictionary = _style_cache[style_key]
+	for state in styles:
+		add_theme_stylebox_override(state, styles[state])
 
 func animate_scale(value: Vector2) -> void:
 	if disabled:

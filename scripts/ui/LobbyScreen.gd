@@ -7,6 +7,8 @@ var _built := false
 var _app: Node
 var _layout_signature := ""
 var _state_signature := ""
+var _outer_margin_signature := ""
+var _compact_cards := false
 
 func configure(app: Node, state: Dictionary) -> void:
 	_app = app
@@ -46,6 +48,10 @@ func _sync_outer_margin(viewport_size: Vector2) -> void:
 		return
 	var margin := ancestor as MarginContainer
 	var safe: Vector4 = load("res://scripts/ui/MatchLayout.gd").safe_insets(self)
+	var next_signature := str([viewport_size, safe])
+	if next_signature == _outer_margin_signature:
+		return
+	_outer_margin_signature = next_signature
 	var inset := maxi(int(safe.x + 14), int((viewport_size.x - 940.0) / 2.0))
 	margin.add_theme_constant_override("margin_left", inset)
 	margin.add_theme_constant_override("margin_right", maxi(int(safe.z + 14), inset))
@@ -59,6 +65,7 @@ func _build_lobby(app: Node, state: Dictionary) -> void:
 	var compact := viewport_size.y < 520.0 and viewport_size.x > viewport_size.y
 	var portrait := viewport_size.y > viewport_size.x
 	var phone := viewport_size.x < 600.0
+	_compact_cards = compact or phone
 	add_theme_constant_override("separation", 6 if (compact or phone) else 12)
 
 	var header: Container = HBoxContainer.new()
@@ -133,7 +140,7 @@ func _build_lobby(app: Node, state: Dictionary) -> void:
 		var card: PanelContainer = WesternPlayerCardScript.new()
 		card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		list.add_child(card)
-		card.configure(player, int(state.get("host_player_id", 1)), app.local_id(), compact or phone)
+		card.configure(player, int(state.get("host_player_id", 1)), app.local_id(), _compact_cards)
 		if int(player.player_id) == app.local_id():
 			own_ready = bool(player.ready)
 		if bool(player.get("is_connected", true)):
@@ -231,7 +238,7 @@ func _sync_lobby(state: Dictionary) -> void:
 		if not is_instance_valid(card):
 			card = WesternPlayerCardScript.new()
 			list.add_child(card)
-		card.configure(player, host_id, _app.local_id(), get_viewport_rect().size.x < 600.0)
+		card.configure(player, host_id, _app.local_id(), _compact_cards)
 	for child in list.get_children():
 		if child is WesternPlayerCard:
 			var id := int(String(child.name).trim_prefix("Player"))

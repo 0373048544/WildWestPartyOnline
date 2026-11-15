@@ -11,6 +11,7 @@ let browser,ws,next=1;
 const keepAlive=setInterval(()=>{},1000);
 const mobile=process.argv.includes('--mobile');
 const v19KeyboardOnly=process.argv.includes('--v19-keyboard-only');
+const releaseSmoke=process.argv.includes('--release-smoke');
 const cdpPort=Number(process.env.WWPO_CDP_PORT||9223);
 const touchPages=new Set();
 const testPages=[];
@@ -78,7 +79,10 @@ async function clickCard(page,index) {
   for(let attempt=0;attempt<6;attempt++){
     const s=await snapshot(page);
     const card=s?.controls.find(c=>c.card_index===index&&!c.disabled);
-    if(card){await clickAt(page,card.x,card.y);return;}
+    // A sliver at the clipped edge is technically visible but is not a safe
+    // touch target and may overlap the adjacent card. Scroll until enough of
+    // the requested card is exposed, then perform exactly one activation tap.
+    if(card&&(!card.w||card.w>=44)){await clickAt(page,card.x,card.y);return;}
     const hand=s?.layout?.hand;
     if(!hand)break;
     await dragAt(page,hand.x+hand.w*0.82,hand.y+hand.h*0.45,hand.x+hand.w*0.18,hand.y+hand.h*0.45);
@@ -99,7 +103,7 @@ async function input(page,name,value) {
   }
   await wait(async()=>{const s=await snapshot(page);return s?.controls.some(c=>c.kind==='input'&&(!name||c.name===name)&&c.text===value)},'text input '+name);
 }
-async function newPage(width=1440,height=900) {
+async function newPage(width=1440,height=900,needsBridge=true) {
   if(mobile){width=Number(process.env.WWPO_MOBILE_WIDTH||844);height=Number(process.env.WWPO_MOBILE_HEIGHT||390);}
   const context=await command('Target.createBrowserContext');
   const target=await command('Target.createTarget',{url:'about:blank',browserContextId:context.browserContextId});
@@ -114,7 +118,11 @@ async function newPage(width=1440,height=900) {
   await command('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:width<900},page);
   if(mobile){touchPages.add(page);await command('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:1},page);}
   await command('Page.navigate',{url:(process.env.WWPO_TEST_HTTP || 'http://127.0.0.1:8080/')+'?e2e=1'},page);
-  await wait(async()=>{const s=await snapshot(page);return s?.controls.length;},'Godot loaded',90000);
+  if(needsBridge){
+    await wait(async()=>{const s=await snapshot(page);return s?.controls.length;},'Godot loaded',90000);
+  }else{
+    await wait(async()=>await evaluate(page,"(()=>{const canvas=document.querySelector('#canvas');const status=document.querySelector('#status');return !!canvas&&canvas.width>0&&canvas.height>0&&getComputedStyle(canvas).visibility!=='hidden'&&(!status||getComputedStyle(status).display==='none')})()"),'release Godot canvas',90000);
+  }
   return page;
 }
 async function choose(page) {
@@ -171,6 +179,20 @@ async function save(page,name) {
       if(/SCRIPT ERROR|Parse Error|Invalid call|Nonexistent|Failed to load script/.test(text)) errors.push(text);
     }
   });
+  if(releaseSmoke){
+    const page=await newPage(390,844,false);
+    const smoke=JSON.parse(await evaluate(page,"JSON.stringify((()=>{const canvas=document.querySelector('#canvas').getBoundingClientRect();const vv=window.visualViewport;const viewport=document.querySelectorAll('meta[name=viewport]');return {canvas:{x:canvas.x,y:canvas.y,w:canvas.width,h:canvas.height},visual:{x:vv?.offsetLeft||0,y:vv?.offsetTop||0,w:vv?.width||innerWidth,h:vv?.height||innerHeight},viewportCount:viewport.length,viewportContent:viewport[0]?.content||'',testBridge:typeof window.__WWPO_TEST!=='undefined'}})())"));
+    const close=(a,b)=>Math.abs(a-b)<=1.25;
+    assert.equal(smoke.viewportCount,1,'release contains exactly one viewport meta tag');
+    assert(smoke.viewportContent.includes('viewport-fit=cover'),'release viewport enables safe-area cover');
+    assert(close(smoke.canvas.x,smoke.visual.x)&&close(smoke.canvas.y,smoke.visual.y),'release canvas follows visualViewport origin');
+    assert(close(smoke.canvas.w,smoke.visual.w)&&close(smoke.canvas.h,smoke.visual.h),'release canvas fills visualViewport without a black gap');
+    assert.equal(smoke.testBridge,false,'release does not expose the debug browser bridge');
+    await save(page,'release-smoke');
+    console.log('PASS: release Web canvas boots at 390x844, fills visualViewport, has one viewport-fit=cover tag and exposes no debug bridge');
+    await command('Browser.close');
+    return;
+  }
   const a=await newPage(),b=await newPage();
   await click(a,c=>c.name==='CreateRoomButton');
   const hostName='Tạo Phòng Việt';
@@ -305,6 +327,7 @@ async function save(page,name) {
     const index=current.private.hand.findIndex(c=>c.card_data_id==='shoot'&&(current.private.targets[String(c.instance_id)]||[]).some(id=>id!==current.player_id));
     if(index>=0){
       const card=current.private.hand[index];
+      const retainedCardIds=current.private.hand.filter(c=>c.instance_id!==card.instance_id).map(c=>c.instance_id);
       const target=current.private.targets[String(card.instance_id)][0];
       await clickCard(page,index);
       await wait(async()=>(await snapshot(page)).selected===card.instance_id,'Shoot selection');
@@ -316,10 +339,12 @@ async function save(page,name) {
         // that ambiguity path is covered by MobileGameplayExperienceV21Test.
         const committed=await snapshot(page);
         assert.equal(committed.selected,-1,'clear mobile target commits in one touch');
-        assert(!committed.private.hand.some(c=>c.instance_id===card.instance_id),'one-touch target consumes only the selected accepted card');
         await save(page,'shot');
       }
       await wait(async()=>!(await snapshot(page)).private.hand.some(c=>c.instance_id===card.instance_id),'accepted 3D targeting');
+      const resolved=await snapshot(page);
+      const missingRetained=retainedCardIds.filter(id=>!resolved.private.hand.some(c=>c.instance_id===id));
+      assert.equal(missingRetained.length,0,'one-touch target preserves every non-selected hand card; selected='+card.instance_id+' missing='+JSON.stringify(missingRetained)+' before='+JSON.stringify(current.private.hand.map(c=>[c.instance_id,c.card_data_id]))+' after='+JSON.stringify(resolved.private.hand.map(c=>[c.instance_id,c.card_data_id])));
       targeted=true;
       await save(page,'shot');
     }else{

@@ -40,11 +40,14 @@ func build(a: PlayerAvatar, d: Dictionary) -> void:
 	a.part(a.box(Vector3(0.09,0.18,0.07)),Vector3(0.44*w,0.82*h,0.015),Color("#382f2d"))
 	for side in [-1, 1]:
 		a.part(a.box(Vector3(0.25 * w, 0.34 * h, 0.29)), Vector3(side * 0.21 * w, 0.46 * h, 0), coat.darkened(0.2))
-		var boot := a.part(a.cylinder(0.16 * w, 0.18 * w, 0.25), Vector3(side * 0.21 * w, 0.19, -0.08), Color("#59402f"))
-		boot.scale.z = 1.45
-		boot.rotation.x = -0.12
-		var sole := a.part(a.cylinder(0.185 * w, 0.185 * w, 0.045), Vector3(side * 0.21 * w, 0.08, -0.08), Color("#382f2d"))
-		sole.scale.z = 1.5
+		# Two cached shapes replace the old flat cylinders: a tapered boot shaft
+		# and forward toe make the silhouette readable without adding draw nodes.
+		var boot := a.part(a.tailored_mesh(0.42 * w, 0.31, "boot"), Vector3(side * 0.21 * w, 0.22, -0.025), Color("#59402f"))
+		boot.name = "BootShaft%s" % ("L" if side < 0 else "R")
+		boot.scale.z = 0.82
+		var toe := a.part(a.sphere(0.185 * w, 0.14), Vector3(side * 0.21 * w, 0.075, -0.16), Color("#382f2d"))
+		toe.name = "BootToe%s" % ("L" if side < 0 else "R")
+		toe.scale = Vector3(1.0, 0.72, 1.55)
 	var head_y: float = 1.7 * h
 	var face_start: int = a.rig.get_child_count()
 	a.part(a.sphere(0.49, 0.82), Vector3(0, head_y, -0.035), skin)

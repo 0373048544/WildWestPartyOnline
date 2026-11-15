@@ -347,9 +347,10 @@ func set_hover_state(value: bool) -> void:
 		materials[color].albedo_color = base.lightened(0.12) if value else base
 
 func _process(delta: float) -> void:
-	if VisualSettings.constrained_device():
+	var update_hz: float = VisualSettings.character_update_hz()
+	if update_hz < 59.0:
 		mobile_process_accumulator += delta
-		if mobile_process_accumulator < 1.0 / 30.0:
+		if mobile_process_accumulator < 1.0 / update_hz:
 			return
 		mobile_process_accumulator = 0.0
 	if rig == null or dead:

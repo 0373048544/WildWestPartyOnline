@@ -60,14 +60,40 @@ func _ready() -> void:
 	await wait_for_presentation()
 	for kind in ["shoot", "dodge", "hit", "drink", "iced_tea", "downed", "recover", "victory", "death"]:
 		app.table.animate(2, kind, 3)
-		await get_tree().create_timer(0.65 if kind == "death" else 0.12).timeout
+		await get_tree().create_timer(0.65 if kind == "death" else (0.21 if kind == "shoot" else 0.12)).timeout
 		await capture(kind)
 		await get_tree().create_timer(1.5 if kind == "downed" else 1.0).timeout
 		check(active_effect_count() == 0, kind + " effects cleaned up while bounded pools remain reusable")
 		check(not app.table.avatars[2].motion.is_running(), kind + " tween finishes")
+		if kind == "shoot":
+			# Real render evidence for the longest rifle family, still driven by the
+			# same presentation event rather than a fake screenshot/model viewer.
+			app.table.avatars[2].apply_weapon_visual("winchester", true)
+			app.table.animate(2, "shoot", 3)
+			await get_tree().create_timer(0.28).timeout
+			await capture("shoot-winchester")
+			await get_tree().create_timer(1.0).timeout
+			check(active_effect_count() == 0, "Winchester effects return to their pools")
+			app.table.avatars[2].apply_weapon_visual("", true)
 	check(app.table.avatars[2].dead, "death pose retained")
 	check(app.table.avatars[2].rig.rotation.z > 1.0, "goofy fall reaches final pose")
 	check(not app.table.avatars[3].dead, "other avatar unaffected")
+	var card_layer := CanvasLayer.new()
+	card_layer.layer = 90
+	add_child(card_layer)
+	var hand_card := load("res://scripts/ui/CardView.gd").new() as Button
+	card_layer.add_child(hand_card)
+	var weapon_face := {"instance_id": 3001, "card_data_id": "winchester", "suit": "SPADE", "rank": 8}
+	hand_card.configure(weapon_face, CardData.data("winchester"), true, false)
+	hand_card.touch_compact(128.0)
+	hand_card.position = Vector2(470, 640)
+	var preview_card := load("res://scripts/ui/CardView.gd").new() as Button
+	card_layer.add_child(preview_card)
+	preview_card.configure(weapon_face, CardData.data("winchester"), true, false)
+	preview_card.scale = Vector2.ONE * 1.55
+	preview_card.position = Vector2(720, 440)
+	await capture("weapon-card-hand-preview")
+	card_layer.queue_free()
 	app.table.update_state(NetworkManager.public_state, 1, [3])
 	check(app.table.rings[3].visible, "valid target highlighted")
 	await capture("target")

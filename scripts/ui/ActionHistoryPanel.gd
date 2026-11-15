@@ -12,6 +12,7 @@ var empty_label: Label
 var layout: Script = preload("res://scripts/ui/MatchLayout.gd")
 var expanded_panel_style: StyleBoxFlat
 var collapsed_panel_style: StyleBoxEmpty
+var layout_signature := ""
 
 func setup(owner_app: Node) -> void:
 	app = owner_app
@@ -149,6 +150,10 @@ func _apply_layout() -> void:
 		return
 	var mobile: bool = layout.mobile(self)
 	var safe: Vector4 = layout.safe_insets(self) if mobile else Vector4.ZERO
+	var next_layout_signature := str([expanded, mobile, get_viewport_rect().size, safe])
+	if next_layout_signature == layout_signature:
+		return
+	layout_signature = next_layout_signature
 	var target_width: float = minf(layout.units(self, 360.0) if mobile else 340.0, get_viewport_rect().size.x - safe.x - safe.z - layout.units(self, 16.0))
 	var target_height: float = (
 		minf(layout.units(self, 218.0), get_viewport_rect().size.y * 0.30)

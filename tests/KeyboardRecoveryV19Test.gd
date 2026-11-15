@@ -48,6 +48,11 @@ func _ready() -> void:
 		"browser bootstrap updates geometry before and during Safari viewport changes")
 	expect(not preset.contains("head_include=\"<meta name=\\\"viewport\\\""),
 		"export head include no longer injects a duplicate viewport meta tag")
+	var release_html := FileAccess.get_file_as_string("res://build/web/index.html")
+	expect(release_html.count("<meta name=\"viewport\"") == 1,
+		"committed Web release contains exactly one viewport meta tag")
+	expect(release_html.contains("viewport-fit=cover"),
+		"committed Web release enables iPhone safe-area viewport cover")
 
 	if failures.is_empty():
 		print("PASS: %d Safari keyboard recovery and web shell checks" % checks)

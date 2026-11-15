@@ -146,6 +146,8 @@ func _ready() -> void:
 	var chat: Button = app.chat_panel.get_node("ChatToggle")
 	var health: MobileSelfHealthHUD = app.match_hud.get_node("MobileSelfHealthHUD")
 	check(absf(journal.get_global_rect().position.y - chat.get_global_rect().position.y) <= 2.0, "CHAT and NHẬT KÝ share the second HUD row")
+	check(journal.size.is_equal_approx(chat.size), "CHAT and NHẬT KÝ use the same compact button size")
+	check(absf(health.size.y - chat.size.y) <= 1.0, "personal HP and second-row controls use a consistent height")
 	check(not journal.get_global_rect().intersects(chat.get_global_rect()), "CHAT and NHẬT KÝ do not overlap")
 	check(not chat.get_global_rect().intersects(health.get_global_rect()), "CHAT does not overlap personal HP")
 	check(journal_panel.get_theme_stylebox("panel") is StyleBoxEmpty, "collapsed NHẬT KÝ has no black outer panel")

@@ -1,19 +1,40 @@
 extends Node3D
 
 var materials: Dictionary = {}
+var meshes: Dictionary = {}
 var key_light: DirectionalLight3D
+var rim_light: DirectionalLight3D
+var fill_light: OmniLight3D
+var environment_settings: Environment
 
 func apply_quality() -> void:
 	if key_light:
-		key_light.shadow_enabled = VisualSettings.level == "HIGH" and not OS.has_feature("web")
+		key_light.shadow_enabled = VisualSettings.realtime_character_shadows()
+		key_light.light_energy = 1.08 * VisualSettings.fill_light_factor()
+	if rim_light:
+		rim_light.light_energy = 0.24 * VisualSettings.fill_light_factor()
+	if fill_light:
+		fill_light.light_energy = 0.48 * VisualSettings.fill_light_factor()
+	if environment_settings:
+		environment_settings.ambient_light_energy = 0.66 + 0.08 * VisualSettings.fill_light_factor()
 
-func material(color: Color, glow: bool = false) -> StandardMaterial3D:
-	var key := str(color) + str(glow)
+func material(color: Color, glow: bool = false, finish: String = "wood") -> StandardMaterial3D:
+	var key := "%s|%s|%s" % [color, glow, finish]
 	if materials.has(key):
 		return materials[key]
 	var result := StandardMaterial3D.new()
 	result.albedo_color = color
-	result.roughness = 0.85
+	match finish:
+		"metal":
+			result.metallic = 0.64
+			result.roughness = 0.34
+		"brass":
+			result.metallic = 0.52
+			result.roughness = 0.42
+		"felt", "cloth":
+			result.roughness = 0.96
+		_:
+			result.roughness = 0.76
 	if glow:
 		result.emission_enabled = true
 		result.emission = color
@@ -21,26 +42,33 @@ func material(color: Color, glow: bool = false) -> StandardMaterial3D:
 	materials[key] = result
 	return result
 
-func shape(mesh: Mesh, at: Vector3, color: Color, glow: bool = false) -> MeshInstance3D:
+func shape(mesh: Mesh, at: Vector3, color: Color, glow: bool = false, finish: String = "wood") -> MeshInstance3D:
 	var node := MeshInstance3D.new()
 	node.mesh = mesh
-	node.material_override = material(color, glow)
+	node.material_override = material(color, glow, finish)
 	add_child(node)
 	node.position = at
 	return node
 
-func block(size: Vector3, at: Vector3, color: Color) -> MeshInstance3D:
-	var mesh := BoxMesh.new()
-	mesh.size = size
-	return shape(mesh, at, color)
+func block(size: Vector3, at: Vector3, color: Color, finish: String = "wood") -> MeshInstance3D:
+	var key := "box:" + str(size)
+	if not meshes.has(key):
+		var mesh := BoxMesh.new()
+		mesh.size = size
+		meshes[key] = mesh
+	return shape(meshes[key], at, color, false, finish)
 
-func cylinder(radius: float, height: float, at: Vector3, color: Color, segments: int = 16) -> MeshInstance3D:
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = radius
-	mesh.bottom_radius = radius
-	mesh.height = height
-	mesh.radial_segments = segments
-	return shape(mesh, at, color)
+func cylinder(radius: float, height: float, at: Vector3, color: Color, segments: int = 16, finish: String = "wood") -> MeshInstance3D:
+	var actual_segments: int = VisualSettings.geometry_segments(segments)
+	var key := "cylinder:%s:%s:%s" % [radius, height, actual_segments]
+	if not meshes.has(key):
+		var mesh := CylinderMesh.new()
+		mesh.top_radius = radius
+		mesh.bottom_radius = radius
+		mesh.height = height
+		mesh.radial_segments = actual_segments
+		meshes[key] = mesh
+	return shape(meshes[key], at, color, false, finish)
 
 func _ready() -> void:
 	var environment := WorldEnvironment.new()
@@ -51,6 +79,7 @@ func _ready() -> void:
 	settings.ambient_light_color = Color("#d6c8b4")
 	settings.ambient_light_energy = 0.72
 	settings.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+	environment_settings = settings
 	environment.environment = settings
 	add_child(environment)
 	var light := DirectionalLight3D.new()
@@ -62,7 +91,7 @@ func _ready() -> void:
 	VisualSettings.changed.connect(apply_quality)
 	light.directional_shadow_max_distance = 24
 	add_child(light)
-	var rim_light := DirectionalLight3D.new()
+	rim_light = DirectionalLight3D.new()
 	rim_light.rotation_degrees = Vector3(-24, 145, 0)
 	rim_light.light_color = Color("#9bc8d7")
 	rim_light.light_energy = 0.22
@@ -87,12 +116,13 @@ func _ready() -> void:
 		lantern(wall, Vector3(-4.1, 3.0, -7.15))
 		lantern(wall, Vector3(4.1, 3.0, -7.15))
 	# A single warm fill keeps lantern props inexpensive; their cores are emissive.
-	var fill := OmniLight3D.new()
-	fill.position = Vector3(0, 5.5, 0)
-	fill.light_color = Color("#ffc47e")
-	fill.light_energy = 0.52
-	fill.omni_range = 11
-	add_child(fill)
+	fill_light = OmniLight3D.new()
+	fill_light.position = Vector3(0, 5.5, 0)
+	fill_light.light_color = Color("#ffc47e")
+	fill_light.light_energy = 0.52
+	fill_light.omni_range = 11
+	add_child(fill_light)
+	apply_quality()
 	build_table()
 	for at in [Vector3(-5.8, 0, -5.8), Vector3(5.8, 0, 5.8), Vector3(-5.8, 0, 5.8)]:
 		barrel(at)
@@ -172,10 +202,10 @@ func build_table() -> void:
 	cylinder(0.65, 1.1, Vector3(0, 0.5, 0), Color("#49382c"))
 	for side in [-1, 1]:
 		block(Vector3(3.5, 0.16, 0.3), Vector3(0, 0.12, side * 0.65), Color("#59402d"))
-	cylinder(3.17, 0.28, Vector3(0, 1.13, 0), Color("#714c31"), 48)
-	cylinder(3.18, 0.06, Vector3(0, 1.29, 0), Color("#d3a05c"), 48)
+	cylinder(3.17, 0.28, Vector3(0, 1.13, 0), Color("#714c31"), 48, "wood")
+	cylinder(3.18, 0.06, Vector3(0, 1.29, 0), Color("#d3a05c"), 48, "brass")
 	cylinder(2.98, 0.055, Vector3(0, 1.33, 0), Color("#946a43"), 48)
-	cylinder(2.72, 0.025, Vector3(0, 1.37, 0), Color("#235859"), 48)
+	cylinder(2.72, 0.025, Vector3(0, 1.37, 0), Color("#285f5b"), 48, "felt")
 	for index in range(6):
 		var angle: float = TAU * index / 6.0
 		var at := Vector3(sin(angle) * 2.2, 1.41, cos(angle) * 2.2)
@@ -186,10 +216,10 @@ func build_table() -> void:
 	rim.outer_radius = 2.62
 	rim.rings = 48
 	rim.ring_segments = 8
-	shape(rim, Vector3(0, 1.39, 0), Color("#b29b60"))
+	shape(rim, Vector3(0, 1.39, 0), Color("#b29b60"), false, "brass")
 	for i in range(12):
 		var angle: float = TAU * i / 12.0
-		cylinder(0.035, 0.025, Vector3(sin(angle) * 2.88, 1.38, cos(angle) * 2.88), Color("#e7b66b"), 6)
+		cylinder(0.035, 0.025, Vector3(sin(angle) * 2.88, 1.38, cos(angle) * 2.88), Color("#e7b66b"), 6, "brass")
 	for i in range(5):
 		block(Vector3(0.46, 0.028, 0.65), Vector3(-0.45, 1.42 + i * 0.03, 0), Color("#ddd0ae"))
 	block(Vector3(0.43, 0.01, 0.62), Vector3(-0.45, 1.565, 0), Color("#a14f3c"))

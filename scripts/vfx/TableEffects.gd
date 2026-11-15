@@ -70,7 +70,7 @@ func _release_mesh(node: MeshInstance3D) -> void:
 	node.material_override = null
 	if node.get_parent() != self:
 		node.reparent(self)
-	if mesh_pool.size() < 32:
+	if mesh_pool.size() < VisualSettings.pooled_vfx_limit():
 		mesh_pool.append(node)
 	else:
 		node.queue_free()
@@ -88,7 +88,7 @@ func reset_for_match() -> void:
 	spawned_count = 0
 	created_mesh_count = 0
 
-func gun_smoke(at: Vector3) -> void:
+func gun_smoke(at: Vector3, weapon_id: String = "") -> void:
 	if not gun_puff_mesh:
 		gun_puff_mesh = QuadMesh.new()
 		gun_puff_mesh.size = Vector2.ONE
@@ -103,6 +103,8 @@ func gun_smoke(at: Vector3) -> void:
 		gun_puff_material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 		gun_puff_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	var first_person_mobile: bool = _presentation_scale(1.0) < 0.5
+	var weapon_profile: Dictionary = load("res://scripts/player/WeaponVisuals.gd").profile(weapon_id)
+	var smoke_strength: float = 1.16 if bool(weapon_profile.get("rifle", false)) else (0.78 if weapon_id == "volcanic" else 1.0)
 	at = _camera_safe_origin(at)
 	for index in range(2):
 		var puff: MeshInstance3D = puff_pool.pop_back() if not puff_pool.is_empty() else MeshInstance3D.new()
@@ -115,10 +117,10 @@ func gun_smoke(at: Vector3) -> void:
 		puff.visible = true
 		puff.transparency = 0.0
 		puff.position = at
-		puff.scale = Vector3.ONE * (0.055 if first_person_mobile else 0.22)
+		puff.scale = Vector3.ONE * (0.055 if first_person_mobile else 0.22) * smoke_strength
 		var tween := puff.create_tween().set_parallel()
 		tween.tween_property(puff,"position",at+Vector3(0.03*index,0.13+0.05*index,0) if first_person_mobile else at+Vector3(0.08*index,0.35+0.12*index,0),0.55)
-		tween.tween_property(puff,"scale",Vector3.ONE*(0.18 if first_person_mobile else 0.65),0.55)
+		tween.tween_property(puff,"scale",Vector3.ONE*(0.18 if first_person_mobile else 0.65)*smoke_strength,0.55)
 		tween.tween_property(puff,"transparency",1.0,0.55)
 		tween.chain().tween_callback(_release_puff.bind(puff))
 
@@ -245,14 +247,18 @@ func smoke(at: Vector3) -> void:
 		tween.chain().tween_property(puff, "scale", Vector3.ONE * 0.01, 0.25)
 		tween.chain().tween_callback(_release_mesh.bind(puff))
 
-func muzzle(at: Vector3) -> void:
+func muzzle(at: Vector3, weapon_id: String = "") -> void:
 	var first_person_mobile: bool = _presentation_scale(1.0) < 0.5
+	var weapon_profile: Dictionary = load("res://scripts/player/WeaponVisuals.gd").profile(weapon_id)
+	var flash_strength: float = 1.18 if bool(weapon_profile.get("rifle", false)) else (0.76 if weapon_id == "volcanic" else 1.0)
+	if weapon_id == "gatling":
+		flash_strength = 0.72
 	at = _camera_safe_origin(at)
 	# A billboard star viewed straight down the barrel grows into a screen-sized
 	# polygon in first-person perspective. Mobile keeps the emissive core, sparks
 	# and smoke; the broader comic star remains a desktop/table-camera accent.
 	if not first_person_mobile:
-		starburst(at, 0.17, 0.075)
+		starburst(at, 0.17 * flash_strength, 0.075)
 	if not muzzle_core_mesh:
 		muzzle_core_mesh = SphereMesh.new()
 		muzzle_core_mesh.radius = 0.075
@@ -269,7 +275,7 @@ func muzzle(at: Vector3) -> void:
 	core.mesh = muzzle_core_mesh
 	core.material_override = muzzle_core_material
 	core.position = at
-	core.scale = Vector3(0.065, 0.065, 0.18) if first_person_mobile else Vector3(0.48, 0.48, 1.25)
+	core.scale = (Vector3(0.065, 0.065, 0.18) if first_person_mobile else Vector3(0.48, 0.48, 1.25)) * flash_strength
 	var core_tween := core.create_tween()
 	core_tween.tween_property(core, "scale", Vector3.ONE * 0.01, 0.09).set_trans(Tween.TRANS_QUAD)
 	core_tween.tween_callback(_release_mesh.bind(core))
@@ -285,7 +291,7 @@ func muzzle(at: Vector3) -> void:
 		var tween := flash.create_tween()
 		tween.tween_property(flash, "light_energy", 0.0, 0.10)
 		tween.tween_callback(flash.queue_free)
-	spark(at, Color("#ffd978"), 2 if first_person_mobile else 4, 0.065 if first_person_mobile else 0.31)
+	spark(at, Color("#ffd978"), 2 if first_person_mobile else 4, (0.065 if first_person_mobile else 0.31) * flash_strength)
 
 func bullet(origin: Vector3, target: Vector3, delay: float = 0) -> void:
 	# No collision, damage or authority. A short moving fleck, never a laser.
@@ -318,7 +324,7 @@ func _release_floating(label: Label3D) -> void:
 	if not is_instance_valid(label):
 		return
 	label.visible = false
-	if floating_pool.size() < 12:
+	if floating_pool.size() < mini(12, VisualSettings.pooled_vfx_limit()):
 		label.reparent(self)
 		floating_pool.append(label)
 	else:
@@ -328,7 +334,7 @@ func _release_bullet(node: MeshInstance3D) -> void:
 	if not is_instance_valid(node):
 		return
 	node.visible = false
-	if bullet_pool.size() < 16:
+	if bullet_pool.size() < mini(16, VisualSettings.pooled_vfx_limit()):
 		node.reparent(self)
 		bullet_pool.append(node)
 	else:
@@ -338,7 +344,7 @@ func _release_puff(node: MeshInstance3D) -> void:
 	if not is_instance_valid(node):
 		return
 	node.visible = false
-	if puff_pool.size() < 12:
+	if puff_pool.size() < mini(12, VisualSettings.pooled_vfx_limit()):
 		node.reparent(self)
 		puff_pool.append(node)
 	else:

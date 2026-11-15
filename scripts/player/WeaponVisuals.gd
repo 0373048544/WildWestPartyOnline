@@ -35,11 +35,12 @@ static func mesh_for(key: String) -> ArrayMesh:
 		tube.top_radius = 0.5
 		tube.bottom_radius = 0.5
 		tube.height = 1
-		tube.radial_segments = 8
+		tube.radial_segments = 10
 		for color in [Color("#64727a"),Color("#75462e"),Color("#d1a45b")]:
 			var material := StandardMaterial3D.new()
 			material.albedo_color = color
-			material.roughness = 0.6
+			material.roughness = 0.32 if materials.is_empty() else (0.78 if materials.size() == 1 else 0.38)
+			material.metallic = 0.72 if materials.is_empty() else (0.0 if materials.size() == 1 else 0.64)
 			materials.append(material)
 	var d := profile(key)
 	var pieces: Array = [[],[],[]]
@@ -48,11 +49,19 @@ static func mesh_for(key: String) -> ArrayMesh:
 	pieces[0].append([true,Vector3(0.065,d.length,0.065),Vector3(0,0.035,-d.length/2),Vector3(PI/2,0,0)])
 	pieces[1].append([false,Vector3(0.1,0.2,0.09),Vector3(0,-0.13,0.015),Vector3(-0.25,0,0)])
 	pieces[2].append([false,Vector3(0.025,0.045,0.04),Vector3(0,0.085,-d.length+0.035),Vector3.ZERO])
+	# Muzzle collar, front sight, hammer and trigger are merged into the existing
+	# three material surfaces, so the premium silhouette costs no extra draw call.
+	pieces[metal].append([true,Vector3(0.078,0.045,0.078),Vector3(0,0.035,-d.length+0.025),Vector3(PI/2,0,0)])
+	pieces[0].append([false,Vector3(0.018,0.055,0.026),Vector3(0,0.105,-d.length+0.055),Vector3.ZERO])
+	pieces[0].append([false,Vector3(0.035,0.075,0.04),Vector3(0,0.105,0.015),Vector3(-0.3,0,0)])
+	pieces[2].append([false,Vector3(0.018,0.075,0.018),Vector3(0,-0.105,-0.015),Vector3(0,0,0.55)])
 	if d.rifle:
 		pieces[1].append([false,Vector3(0.12,0.13,0.26),Vector3(0,-0.015,0.16),Vector3(0.15,0,0)])
 		pieces[1].append([false,Vector3(0.09,0.075,d.length*0.42),Vector3(0,-0.055,-d.length*0.5),Vector3.ZERO])
+		pieces[0].append([true,Vector3(0.035,d.length*0.62,0.035),Vector3(0,-0.035,-d.length*0.58),Vector3(PI/2,0,0)])
 	else:
 		pieces[metal].append([true,Vector3(0.14,0.13,0.14),Vector3(0,0,-0.13),Vector3(PI/2,0,0)])
+		pieces[0].append([true,Vector3(0.08,0.035,0.08),Vector3(0,0,-0.13),Vector3(PI/2,0,0)])
 	if key in ["winchester","volcanic"]:
 		for offset in [-0.065,0.065]:
 			pieces[2].append([false,Vector3(0.018,0.02,0.12),Vector3(offset,-0.11,-0.1),Vector3.ZERO])
@@ -60,14 +69,22 @@ static func mesh_for(key: String) -> ArrayMesh:
 	if key == "schofield":
 		# Tall hammer and squared top strap make the heavy Schofield readable.
 		pieces[0].append([false,Vector3(0.055,0.08,0.07),Vector3(0,0.105,0.015),Vector3(-0.28,0,0)])
+		pieces[0].append([false,Vector3(0.14,0.035,0.23),Vector3(0,0.09,-0.12),Vector3.ZERO])
 	if key == "remington":
 		pieces[0].append([false,Vector3(0.035,0.045,d.length*0.56),Vector3(0,0.085,-d.length*0.47),Vector3.ZERO])
+		pieces[1].append([false,Vector3(0.135,0.115,0.23),Vector3(0,-0.025,-0.12),Vector3.ZERO])
 	if key == "carabine":
 		pieces[1].append([false,Vector3(0.16,0.10,0.18),Vector3(0,0.015,0.24),Vector3(0.12,0,0)])
+		pieces[0].append([false,Vector3(0.12,0.12,0.20),Vector3(0,0.02,-0.19),Vector3.ZERO])
+	if key == "winchester":
+		pieces[2].append([true,Vector3(0.12,0.035,0.12),Vector3(0,-0.095,-0.08),Vector3(PI/2,0,0)])
+		pieces[1].append([false,Vector3(0.15,0.12,0.30),Vector3(0,-0.02,-0.22),Vector3.ZERO])
 	if key == "gatling":
-		for offset in [-0.055, 0.0, 0.055]:
-			pieces[0].append([true,Vector3(0.035,d.length,0.035),Vector3(offset,0.045,-d.length/2),Vector3(PI/2,0,0)])
+		for offset in [-0.09, -0.045, 0.0, 0.045, 0.09]:
+			pieces[0].append([true,Vector3(0.026,d.length,0.026),Vector3(offset,0.045,-d.length/2),Vector3(PI/2,0,0)])
 		pieces[2].append([false,Vector3(0.25,0.20,0.24),Vector3(0,0.0,0.02),Vector3.ZERO])
+		pieces[1].append([false,Vector3(0.24,0.13,0.30),Vector3(0,-0.055,0.22),Vector3.ZERO])
+		pieces[2].append([false,Vector3(0.26,0.025,0.025),Vector3(0.17,-0.02,0.13),Vector3(0,0,0.35)])
 	var result := ArrayMesh.new()
 	for group in range(3):
 		var surface := SurfaceTool.new()

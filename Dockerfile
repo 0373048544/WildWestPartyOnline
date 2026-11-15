@@ -34,6 +34,11 @@ COPY . /app
 
 RUN godot --headless --editor --path /app --quit
 
+# The container serves the committed Godot export. Reject stale or malformed
+# releases before an image can be published instead of silently deploying a
+# Safari-incompatible shell.
+RUN bash /app/deploy/validate-web-build.sh /app/build/web /app/web
+
 RUN chmod +x /app/deploy/render-entrypoint.sh \
     && test -f /app/build/web/index.html
 

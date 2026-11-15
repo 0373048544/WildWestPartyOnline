@@ -35,6 +35,13 @@ jobs:
             --output "/tmp/${archive}"
           unzip -q "/tmp/${archive}" -d /tmp/godot
           sudo install -m 0755 "/tmp/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+          template_archive="Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          curl --fail --location --retry 3 \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/${template_archive}" \
+            --output "/tmp/${template_archive}"
+          mkdir -p "/tmp/godot-templates" "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          unzip -q "/tmp/${template_archive}" -d /tmp/godot-templates
+          cp -a /tmp/godot-templates/templates/. "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
           godot --version
 
       - name: Import project and validate scripts
@@ -42,6 +49,10 @@ jobs:
         run: |
           set -euo pipefail
           godot --headless --editor --path . --quit --quit-after 120
+
+      - name: Validate committed Web release
+        shell: pwsh
+        run: ./tools/Validate-WebBuild.ps1
 
       - name: Run gameplay and UI regression scenes
         shell: bash
@@ -66,10 +77,21 @@ jobs:
             AudioReliabilityTest
             StabilizationTest
             ConnectionFailureTest
+            MobileLobbyHUDV28Test
+            MobileSelfHealthHUDTest
+            MobileCompactCardPolishV24Test
+            MobileFirstPersonTest
+            MobileGameplayExperienceV21Test
+            SafariLayoutStabilityTest
+            KeyboardRecoveryV19Test
+            WeaponPresentationTest
+            CharacterAnimationAudioV27Test
+            DrinkSurvivalV25Test
+            PremiumVisualV30Test
           )
           for test_name in "${tests[@]}"; do
             echo "Running ${test_name}"
-            godot --headless --path . "res://tests/${test_name}.tscn"
+            timeout 180s godot --headless --path . "res://tests/${test_name}.tscn"
           done
 
       - name: Run real WebSocket multiplayer tests
@@ -105,6 +127,44 @@ jobs:
           node tests/web/protocol-test.cjs
           node tests/web/room-capacity-test.cjs
           node tests/web/full-match-test.cjs
+
+      - name: Run Chromium mobile-touch integration (not Safari)
+        shell: bash
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          browser="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [[ -z "${browser}" ]]; then
+            echo "No Chromium browser is installed on this runner; browser integration NOT VERIFIED."
+            exit 0
+          fi
+          godot --headless --path . res://server/DedicatedServer.tscn -- --port=17076 > /tmp/wwpo-browser-server.log 2>&1 &
+          game_pid=$!
+          WWPO_HTTP_PORT=18080 node tests/web/static-server.cjs > /tmp/wwpo-static.log 2>&1 &
+          static_pid=$!
+          cleanup() {
+            kill "${game_pid}" "${static_pid}" 2>/dev/null || true
+            wait "${game_pid}" "${static_pid}" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          for _ in $(seq 1 80); do
+            grep -q "ROOM SERVER READY" /tmp/wwpo-browser-server.log && curl --fail --silent http://127.0.0.1:18080/ >/dev/null && break
+            sleep 0.25
+          done
+          grep -q "ROOM SERVER READY" /tmp/wwpo-browser-server.log
+          echo "Smoke-testing the committed production release (debug bridge must be absent)."
+          WWPO_BROWSER="${browser}" \
+          WWPO_TEST_HTTP="http://127.0.0.1:18080/" \
+          WWPO_MOBILE_WIDTH=390 WWPO_MOBILE_HEIGHT=844 WWPO_CDP_PORT=9237 \
+            timeout 180s node tests/web/browser-test.cjs --mobile --release-smoke
+
+          echo "Exporting an isolated debug Web build for full touch/network E2E instrumentation."
+          pwsh -NoProfile -File ./tools/Export-Web.ps1 -Godot "$(command -v godot)"
+          WWPO_BROWSER="${browser}" \
+          WWPO_TEST_URL="ws://127.0.0.1:17076" \
+          WWPO_TEST_HTTP="http://127.0.0.1:18080/" \
+          WWPO_MOBILE_WIDTH=390 WWPO_MOBILE_HEIGHT=844 WWPO_CDP_PORT=9238 \
+            timeout 600s node tests/web/browser-test.cjs --mobile
 
       - name: Upload server log on failure
         if: failure()

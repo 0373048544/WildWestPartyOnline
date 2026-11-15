@@ -610,8 +610,9 @@ func play_animation(actor: int, kind: String, target: int) -> void:
 					# nested under the animated rig. TableEffects owns local-space pooled
 					# nodes, so convert once here before spawning flash/smoke/tracers.
 					var muzzle: Vector3 = effects.to_local(shooting_avatar.muzzle_position())
-					effects.muzzle(muzzle)
-					effects.gun_smoke(muzzle)
+					var weapon_id: String = shooting_avatar.active_weapon_id()
+					effects.muzzle(muzzle, weapon_id)
+					effects.gun_smoke(muzzle, weapon_id)
 					if avatars.has(target):
 						effects.bullet(muzzle, avatars[target].position + Vector3.UP * 1.5, 0.012)
 					for index in range(spread_targets.size()):
