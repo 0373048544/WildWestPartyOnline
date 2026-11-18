@@ -190,16 +190,11 @@ func _build_lobby(app: Node, state: Dictionary) -> void:
 	ready.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	ready.set_variant("secondary" if own_ready else "primary")
 	var can_start: bool = state.players.size() >= 2 and state.players.size() <= 7 and state.players.all(func(p): return p.ready and p.is_connected)
-	if app.local_id() == int(state.get("host_player_id", 1)):
-		var start: Button = app.button("BẮT ĐẦU" if phone else "BẮT ĐẦU GAME", func(): app.intent("start"), primary_actions, not can_start)
-		start.name = "StartButton"
-		start.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		start.set_variant("primary")
-	else:
-		var waiting_host := WesternStatusBadgeScript.new()
-		waiting_host.configure("CHỜ CHỦ PHÒNG", "warning")
-		waiting_host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		primary_actions.add_child(waiting_host)
+	var host_action_slot := HBoxContainer.new()
+	host_action_slot.name = "HostActionSlot"
+	host_action_slot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	primary_actions.add_child(host_action_slot)
+	_sync_host_action(state, can_start)
 	var leave: Button = app.button("RỜI PHÒNG", app.leave, actions)
 	leave.name = "LeaveLobbyButton"
 	leave.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -271,9 +266,7 @@ func _sync_lobby(state: Dictionary) -> void:
 		ready.text = "HỦY SẴN SÀNG" if own_ready else "SẴN SÀNG"
 		ready.set_variant("secondary" if own_ready else "primary")
 	var can_start := ordered.size() >= 2 and ordered.size() <= 7 and ordered.all(func(p): return bool(p.get("ready", false)) and bool(p.get("is_connected", true)))
-	var start := find_child("StartButton", true, false) as Button
-	if is_instance_valid(start):
-		start.disabled = not can_start
+	_sync_host_action(state, can_start)
 	var note_text := get_node_or_null("LobbyNote/LobbyNoteText") as Label
 	if is_instance_valid(note_text):
 		if connected_count < 2:
@@ -284,6 +277,39 @@ func _sync_lobby(state: Dictionary) -> void:
 			note_text.text = "Đang chờ sẵn sàng (%d/%d)." % [ready_count, connected_count]
 		else:
 			note_text.text = "Mọi người đã sẵn sàng."
+
+func _sync_host_action(state: Dictionary, can_start: bool) -> void:
+	var slot := find_child("HostActionSlot", true, false) as Container
+	if not is_instance_valid(slot):
+		return
+	var local_is_host: bool = _app.local_id() == int(state.get("host_player_id", 1))
+	var expected_name := "StartButton" if local_is_host else "WaitingForHostBadge"
+	var current: Control = slot.get_child(0) as Control if slot.get_child_count() > 0 else null
+	if is_instance_valid(current) and current.name != expected_name:
+		slot.remove_child(current)
+		current.queue_free()
+		current = null
+	if not is_instance_valid(current):
+		if local_is_host:
+			var start: Button = _app.button(
+				"BẮT ĐẦU" if _compact_cards else "BẮT ĐẦU GAME",
+				func(): _app.intent("start"),
+				slot,
+				not can_start
+			)
+			start.name = expected_name
+			start.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			start.set_variant("primary")
+			current = start
+		else:
+			var waiting_host := WesternStatusBadgeScript.new()
+			waiting_host.name = expected_name
+			waiting_host.configure("CHỜ CHỦ PHÒNG", "warning")
+			waiting_host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			slot.add_child(waiting_host)
+			current = waiting_host
+	if local_is_host and current is Button:
+		(current as Button).disabled = not can_start
 
 func _sync_empty_slots(list: GridContainer, count: int) -> void:
 	var slots: Array[Node] = []

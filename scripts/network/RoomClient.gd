@@ -45,6 +45,8 @@ func connect_socket() -> void:
 	if not session_token.is_empty():
 		reconnecting = true
 		manager.set_connection_status(NetworkManager.CONNECTION_RECONNECTING)
+	else:
+		manager.set_connection_status(NetworkManager.CONNECTION_CONNECTING)
 	response_deadline = Time.get_ticks_msec() + 12000
 	transport.connect_to_server(NetworkConfig.server_url())
 	manager.updated.emit()

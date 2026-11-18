@@ -10,6 +10,7 @@ signal chat_error(message: String)
 signal connection_status_changed(status: String)
 
 const CONNECTION_IDLE := "IDLE"
+const CONNECTION_CONNECTING := "CONNECTING"
 const CONNECTION_CONNECTED := "CONNECTED"
 const CONNECTION_RECONNECTING := "RECONNECTING"
 const CONNECTION_DISCONNECTED := "DISCONNECTED"

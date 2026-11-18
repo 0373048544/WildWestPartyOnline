@@ -67,6 +67,13 @@ func configure(id: String, height: float = 160) -> void:
 	halo.material_override = halo_material
 	viewport.add_child(halo)
 
+func resize_portrait(height: float) -> void:
+	custom_minimum_size.y = height
+	if is_instance_valid(viewport):
+		# A stretched SubViewportContainer owns the render-target size. Updating the
+		# container minimum is enough and avoids recreating or manually resizing it.
+		viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+
 func react(kind: String = "drink") -> void:
 	var avatar_action: String = {
 		"damage": "hit",

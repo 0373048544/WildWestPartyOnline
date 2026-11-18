@@ -79,6 +79,7 @@ func _ready() -> void:
 	}))
 	NetworkManager.updated.connect(refresh)
 	NetworkManager.error_received.connect(func(message): error_text = message; refresh())
+	NetworkManager.connection_status_changed.connect(_sync_menu_connection_status)
 	NetworkManager.visual_event.connect(func(a, k, t):
 		if is_instance_valid(table):
 			table.animate(a, k, t))
@@ -121,6 +122,7 @@ func _apply_responsive_reflow() -> void:
 	var in_match: bool = not NetworkManager.public_state.is_empty() and bool(NetworkManager.public_state.get("started", false))
 	if in_match and is_instance_valid(match_hud):
 		match_hud.reflow_responsive_layout(change)
+		_reflow_character_selection()
 		if is_instance_valid(reaction_banner):
 			reaction_banner.call_deferred("_apply_layout")
 		if is_instance_valid(chat_panel):
@@ -249,6 +251,18 @@ func refresh() -> void:
 	var state: Dictionary = NetworkManager.public_state
 	_observe_player_connections(state)
 	var in_game: bool = not state.is_empty() and state.get("started", false)
+	# A connection-status tick must not reconstruct the untouched main menu. This
+	# keeps Safari focus/scroll and prevents the hero from replaying its entrance.
+	if (
+		state.is_empty()
+		and error_text.is_empty()
+		and not NetworkManager.connecting
+		and is_instance_valid(content)
+		and content.name == "MainMenu"
+		and str(content.get_meta("menu_screen", "")) == screen
+	):
+		_sync_menu_connection_status(NetworkManager.connection_status)
+		return
 	# Lobby snapshots (ready toggles, reconnects and roster changes) are frequent.
 	# Keep the mounted lobby, scroll position and focused control alive. The lobby
 	# component performs a keyed diff and updates only changed text/badges.
@@ -378,6 +392,8 @@ func refresh() -> void:
 		dismiss.set_variant("danger")
 
 func build_menu() -> void:
+	content.name = "MainMenu"
+	content.set_meta("menu_screen", screen)
 	var short_landscape := root.size.y < 520.0 and root.size.x > root.size.y
 	var portrait_phone := root.size.x < 600.0 and root.size.y >= root.size.x
 	content.add_theme_constant_override("separation", 6 if short_landscape else 10)
@@ -434,9 +450,11 @@ func build_menu() -> void:
 			secondary_button.set_variant("quiet")
 		if not OS.has_feature("web"):
 			button("THOÁT GAME", func(): get_tree().quit()).set_variant("danger")
-		var footer := label("● MÁY CHỦ SẴN SÀNG   •   2–7 NGƯỜI   •   v0.9", 12)
+		var footer := label("", 12)
+		footer.name = "ServerConnectionStatus"
 		footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		footer.add_theme_color_override("font_color", Color("#b9aa8f"))
+		_sync_menu_connection_status(NetworkManager.connection_status)
 		return
 	var section := section_header("TẠO PHÒNG MỚI" if screen == "host" else "VÀO PHÒNG BẰNG MÃ", content, "★" if screen == "host" else "♠")
 	section.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -500,14 +518,27 @@ func build_menu() -> void:
 
 func connect_game() -> void:
 	var now := Time.get_ticks_msec()
-	if now - last_room_submit_at < 500:
+	if NetworkManager.connecting or now - last_room_submit_at < 500:
 		return
-	last_room_submit_at = now
 	error_text = ""
 	var title := name_field.text.strip_edges()
 	menu_name_draft = title
 	var normalized_room := room_field.text.strip_edges().to_upper() if is_instance_valid(room_field) else ""
 	menu_room_draft = normalized_room
+	if title.is_empty() or title.length() > 24:
+		error_text = "Tên cao bồi phải có từ 1 đến 24 ký tự."
+		show_outgame_toast(error_text, "danger")
+		name_field.grab_focus()
+		return
+	if screen == "join":
+		var room_code_pattern := RegEx.new()
+		room_code_pattern.compile("^[A-Z0-9]{6}$")
+		if room_code_pattern.search(normalized_room) == null:
+			error_text = "Mã phòng phải gồm đúng 6 chữ hoặc số."
+			show_outgame_toast(error_text, "danger")
+			room_field.grab_focus()
+			return
+	last_room_submit_at = now
 	finish_text_input()
 	if screen == "host":
 		NetworkManager.create_room(title)
@@ -520,6 +551,60 @@ func arm_mobile_submit(submit: Button) -> void:
 	# connect_game's time guard suppresses the following pressed signal.
 	if OS.has_feature("web") or OS.has_feature("mobile"):
 		submit.button_down.connect(connect_game)
+
+func _connection_status_text(status: String) -> String:
+	return {
+		NetworkManager.CONNECTION_CONNECTING: "● ĐANG KẾT NỐI",
+		NetworkManager.CONNECTION_CONNECTED: "● ĐÃ KẾT NỐI",
+		NetworkManager.CONNECTION_RECONNECTING: "● ĐANG THỬ LẠI",
+		NetworkManager.CONNECTION_DISCONNECTED: "● KHÔNG THỂ KẾT NỐI",
+		NetworkManager.CONNECTION_SESSION_EXPIRED: "● KHÔNG THỂ KẾT NỐI",
+		NetworkManager.CONNECTION_SERVER_UNAVAILABLE: "● KHÔNG THỂ KẾT NỐI"
+	}.get(status, "● CHƯA KẾT NỐI") + "   •   2–7 NGƯỜI   •   v0.9"
+
+func _sync_menu_connection_status(status: String) -> void:
+	if not is_instance_valid(root):
+		return
+	var footer := root.find_child("ServerConnectionStatus", true, false) as Label
+	if not is_instance_valid(footer):
+		return
+	footer.text = _connection_status_text(status)
+	footer.add_theme_color_override(
+		"font_color",
+		Color("#9fd4ab") if status == NetworkManager.CONNECTION_CONNECTED else (
+			Color("#e8c77a") if status in [NetworkManager.CONNECTION_CONNECTING, NetworkManager.CONNECTION_RECONNECTING] else Color("#b9aa8f")
+		)
+	)
+
+func _reflow_character_selection() -> void:
+	if not is_instance_valid(overlay):
+		return
+	var panel := overlay.find_child("CharacterChoicePanel", true, false) as Control
+	if not is_instance_valid(panel):
+		return
+	var layout: Script = load("res://scripts/ui/MatchLayout.gd")
+	var frame := overlay.get_node_or_null("ModalFrame") as PanelContainer
+	if is_instance_valid(frame):
+		var choice_rect: Rect2 = layout.character_choice_rect(root)
+		var landscape_phone: bool = bool(layout.mobile_landscape(root))
+		var padding_css: float = 6.0 if landscape_phone else 8.0
+		var content_padding: float = layout.units(root, padding_css)
+		var padding := frame.get_node_or_null("ModalPadding") as MarginContainer
+		if is_instance_valid(padding):
+			for side in ["left", "right", "top", "bottom"]:
+				padding.add_theme_constant_override("margin_" + side, roundi(content_padding))
+		var modal_content := frame.find_child("ModalContent", true, false) as VBoxContainer
+		if is_instance_valid(modal_content):
+			modal_content.custom_minimum_size.y = maxf(1.0, choice_rect.size.y - content_padding * 2.0 - 20.0)
+			modal_content.add_theme_constant_override("separation", roundi(layout.units(root, 6.0 if landscape_phone else 9.0)))
+		frame.position = choice_rect.position
+		frame.custom_minimum_size = choice_rect.size
+	if panel.has_method("reflow"):
+		panel.reflow()
+	if is_instance_valid(frame):
+		var final_rect: Rect2 = layout.character_choice_rect(root)
+		frame.position = final_rect.position
+		frame.size = final_rect.size
 
 func local_id() -> int:
 	return NetworkManager.local_player_id()

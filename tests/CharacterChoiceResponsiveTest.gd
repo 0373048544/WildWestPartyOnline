@@ -92,6 +92,42 @@ func _ready() -> void:
 			check(options_row.custom_minimum_size.x >= 660.0, "desktop row reserves both 320px cards and gap at %s" % css)
 			check(first_card.global_position.x < second_card.global_position.x and not first_card.get_global_rect().intersects(second_card.get_global_rect()), "desktop cards remain separate at %s" % css)
 			check(not scroll.get_v_scroll_bar().visible, "desktop character choice fits without vertical scroll at %s" % css)
+
+	# Rotate one mounted selection in place. The chosen option, countdown owner and
+	# expensive SubViewport portraits must survive the responsive reflow.
+	var portrait_css := Vector2i(360, 640)
+	get_window().size = portrait_css
+	get_window().content_scale_size = Vector2i(600, 1066)
+	get_viewport().set_meta("match_css_size", Vector2(portrait_css))
+	get_viewport().set_meta("match_safe_insets", Vector4(12, 40, 12, 32))
+	app.clear_game_modal()
+	app.show_character_selection({
+		"character_options": [definitions[0], definitions[1]],
+		"character_remaining": 17.0,
+		"character_chosen": false
+	})
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var persistent_panel: Control = app.root.find_child("CharacterChoicePanel", true, false)
+	var persistent_keys: Array = persistent_panel.cards.keys()
+	persistent_panel.select(str(persistent_keys[0]))
+	var selected_before: String = persistent_panel.selected_id
+	var portrait_instances: Dictionary = {}
+	for key in persistent_keys:
+		portrait_instances[key] = persistent_panel.portraits[key].get_instance_id()
+	var landscape_css := Vector2i(844, 390)
+	get_window().size = landscape_css
+	get_window().content_scale_size = Vector2i(960, 443)
+	get_viewport().set_meta("match_css_size", Vector2(landscape_css))
+	get_viewport().set_meta("match_safe_insets", Vector4(23, 0, 23, 14))
+	app._reflow_character_selection()
+	check(persistent_panel.selected_id == selected_before, "orientation reflow preserves selected character")
+	check(not persistent_panel.carousel_mode and persistent_panel.cards.values().all(func(card): return card.visible), "portrait-to-landscape reflow exposes both choices")
+	for key in persistent_keys:
+		check(persistent_panel.portraits[key].get_instance_id() == portrait_instances[key], "orientation reflow reuses portrait for %s" % key)
+	var rotated_frame: Control = app.root.get_node("GameModal/ModalFrame")
+	var rotated_rect: Rect2 = LAYOUT.character_choice_rect(app.root)
+	check(rotated_frame.position.distance_to(rotated_rect.position) <= 0.5 and rotated_frame.size.distance_to(rotated_rect.size) <= 1.0, "orientation reflow updates modal safe rect actual=%s/%s expected=%s" % [rotated_frame.position, rotated_frame.size, rotated_rect])
 	app.clear_game_modal()
 	print("PASS: %d responsive character-choice checks across %d phone and %d desktop viewports" % [checks, phone_sizes.size(), desktop_sizes.size()])
 	get_tree().quit(1 if failures > 0 else 0)

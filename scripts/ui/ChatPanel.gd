@@ -13,6 +13,8 @@ var last_submit_text := ""
 var last_submit_at := 0
 var preview_generation := 0
 var next_keyboard_poll := 0
+var layout_signature := ""
+static var panel_styles: Dictionary = {}
 
 var toggle_button: Button
 var panel: PanelContainer
@@ -294,21 +296,6 @@ func layout_chat() -> void:
 	var touch: float = float(layout.units(self, 44.0))
 	var compact_mobile: bool = bool(layout.mobile(self))
 	var panel_padding: int = roundi(layout.units(self, 7.0 if compact_mobile else 10.0))
-	for side in ["left", "right", "top", "bottom"]:
-		chat_margin.add_theme_constant_override("margin_" + side, panel_padding)
-	chat_body.add_theme_constant_override("separation", roundi(layout.units(self, 4.0 if compact_mobile else 7.0)))
-	chat_title.add_theme_font_size_override("font_size", roundi(layout.units(self, 15.0)) if compact_mobile else 18)
-	toggle_button.add_theme_font_size_override("font_size", roundi(layout.units(self, 12.0)) if compact_mobile else 16)
-	panel.add_theme_stylebox_override(
-		"panel",
-		SaloonTheme.panel(Color(0.075, 0.052, 0.035, 0.97), SaloonTheme.GOLD, 8.0 if compact_mobile else 14.0)
-	)
-	for row in message_list.get_children():
-		if row is Label:
-			row.add_theme_font_size_override("font_size", roundi(layout.units(self, 13.0)) if compact_mobile else 15)
-	close_button.custom_minimum_size = Vector2(touch, touch)
-	input.custom_minimum_size.y = touch
-	send_button.custom_minimum_size = Vector2(layout.units(self, 64.0), touch)
 	var button_rect: Rect2 = _journal_button_rect(layout)
 	# Match the measured Journal control exactly. Otherwise WesternButton's touch
 	# minimum can make Chat appear larger after a responsive relayout.
@@ -323,6 +310,28 @@ func layout_chat() -> void:
 	panel_rect.position.y = maxf(safe_top, panel_rect.position.y - keyboard_shift)
 	var bottom_limit: float = layout.action_rect(self).position.y - layout.units(self, 8.0)
 	panel_rect.size.y = minf(panel_rect.size.y, maxf(1.0, bottom_limit - panel_rect.position.y))
+	var next_signature := str([
+		compact_mobile, panel_padding, touch, button_rect, panel_rect, bottom_limit,
+		layout.safe_insets(self), expanded, input.has_focus(), message_list.get_child_count()
+	])
+	if next_signature == layout_signature:
+		return
+	layout_signature = next_signature
+	for side in ["left", "right", "top", "bottom"]:
+		chat_margin.add_theme_constant_override("margin_" + side, panel_padding)
+	chat_body.add_theme_constant_override("separation", roundi(layout.units(self, 4.0 if compact_mobile else 7.0)))
+	chat_title.add_theme_font_size_override("font_size", roundi(layout.units(self, 15.0)) if compact_mobile else 18)
+	toggle_button.add_theme_font_size_override("font_size", roundi(layout.units(self, 12.0)) if compact_mobile else 16)
+	var style_key := "compact" if compact_mobile else "desktop"
+	if not panel_styles.has(style_key):
+		panel_styles[style_key] = SaloonTheme.panel(Color(0.075, 0.052, 0.035, 0.97), SaloonTheme.GOLD, 8.0 if compact_mobile else 14.0)
+	panel.add_theme_stylebox_override("panel", panel_styles[style_key])
+	for row in message_list.get_children():
+		if row is Label:
+			row.add_theme_font_size_override("font_size", roundi(layout.units(self, 13.0)) if compact_mobile else 15)
+	close_button.custom_minimum_size = Vector2(touch, touch)
+	input.custom_minimum_size.y = touch
+	send_button.custom_minimum_size = Vector2(layout.units(self, 64.0), touch)
 	panel.position = panel_rect.position
 	panel.custom_minimum_size = panel_rect.size
 	panel.size = panel_rect.size

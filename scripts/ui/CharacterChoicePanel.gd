@@ -136,6 +136,48 @@ func configure(owner_app: Node, options: Array) -> void:
 	if cards.has(app.character_draft):
 		select(app.character_draft)
 
+func reflow() -> void:
+	if not is_inside_tree() or option_order.is_empty():
+		return
+	var layout: Script = load("res://scripts/ui/MatchLayout.gd")
+	var mobile: bool = bool(layout.mobile_portrait(self) or layout.mobile_landscape(self))
+	var landscape_phone: bool = bool(layout.mobile_landscape(self))
+	var next_carousel: bool = bool(layout.character_choice_carousel(self))
+	var css: Vector2 = layout.css_size(self)
+	var gap_css: float = 10.0 if mobile else 20.0
+	var card_width_css: float
+	if next_carousel:
+		card_width_css = minf(360.0, maxf(240.0, css.x - 48.0))
+	elif mobile:
+		card_width_css = clampf((css.x - (48.0 if landscape_phone else 60.0) - gap_css) * 0.5, 150.0, 215.0)
+	else:
+		card_width_css = 320.0
+	var card_width: float = layout.units(self, card_width_css) if mobile else card_width_css
+	var row := get_node_or_null("CharacterCardArea/CharacterOptionsRow") as HBoxContainer
+	if not is_instance_valid(row):
+		return
+	row.add_theme_constant_override("separation", roundi(layout.units(self, gap_css)) if mobile else roundi(gap_css))
+	row.custom_minimum_size.x = card_width * (1 if next_carousel else option_order.size()) + (0.0 if next_carousel else layout.units(self, gap_css))
+	carousel_mode = next_carousel
+	if carousel_mode and not is_instance_valid(navigation):
+		build_carousel_navigation(layout)
+	if is_instance_valid(navigation):
+		navigation.visible = carousel_mode
+	for index in range(option_order.size()):
+		var id: String = option_order[index]
+		var card: Button = cards[id]
+		var card_height_css: float = 370.0
+		if mobile:
+			card_height_css = clampf(css.y - 190.0, 154.0, 236.0) if landscape_phone else (clampf(css.y - 255.0, 360.0, 510.0) if carousel_mode else clampf(css.y - 215.0, 410.0, 640.0))
+		card.custom_minimum_size = Vector2(card_width, layout.units(self, card_height_css) if mobile else card_height_css)
+		card.visible = index == carousel_index if carousel_mode else true
+		var portrait := portraits.get(id) as Control
+		if is_instance_valid(portrait) and portrait.has_method("resize_portrait"):
+			var portrait_css: float = clampf(css.y * 0.22, 70.0, 92.0) if landscape_phone else (clampf(css.y * (0.32 if carousel_mode else 0.27), 112.0, 224.0) if mobile else 145.0)
+			portrait.resize_portrait(layout.units(self, portrait_css) if mobile else portrait_css)
+	if carousel_mode:
+		show_carousel_card(carousel_index, false)
+
 func build_carousel_navigation(layout: Script) -> void:
 	navigation = HBoxContainer.new()
 	navigation.name = "CharacterCarouselNavigation"
